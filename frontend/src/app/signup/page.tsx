@@ -318,14 +318,17 @@ import { useState, useEffect } from "react";
 import L1DialogBox from "@/components/auth/L1DialogBox";
 import L2DialogBox from "@/components/auth/L2DialogBox";
 import L3DialogBox from "@/components/auth/L3DialogBox";
+import CourseOrBranchSelectionDialog from "@/components/auth/CourseOrBranchSelectionDialog";
 import Stepper from "@/components/ui/Stepper";
 
 export default function SignupPage() {
   const [l1DialogOpen, setL1DialogOpen] = useState(false);
+  const [selectionOpen, setSelectionOpen] = useState(false);
   const [l2DialogOpen, setL2DialogOpen] = useState(false);
   const [l3DialogOpen, setL3DialogOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
 
+  const [l2Section, setL2Section] = useState<"course" | "branch">("course");
   const [formData, setFormData] = useState<{ instituteType?: string }>({});
 
   // ✅ Dynamic steps
@@ -352,7 +355,7 @@ export default function SignupPage() {
 
       // restore dialog state
       if (step === 1) setL1DialogOpen(true);
-      if (step === 2) setL2DialogOpen(true);
+      if (step === 2) setSelectionOpen(true); // open selection before L2
       if (step === 3) setL3DialogOpen(true);
     } else {
       setL1DialogOpen(true); // default
@@ -374,10 +377,10 @@ export default function SignupPage() {
     setFormData((prev) => ({ ...prev, instituteType: type }));
   };
 
-  // Handle L1 success → open L2
+  // Handle L1 success → open selection dialog
   const handleL1Success = () => {
     setL1DialogOpen(false);
-    setL2DialogOpen(true);
+    setSelectionOpen(true);
     setCurrentStep(2);
   };
 
@@ -446,12 +449,24 @@ export default function SignupPage() {
         onInstituteTypeChange={handleInstituteTypeChange}
       />
 
+      {/* Selection Dialog between L1 and L2 */}
+      <CourseOrBranchSelectionDialog
+        open={selectionOpen}
+        onOpenChange={setSelectionOpen}
+        onSelection={(choice) => {
+          setSelectionOpen(false);
+          setL2Section(choice);
+          setL2DialogOpen(true);
+        }}
+      />
+
       {/* L2 Dialog Box */}
       <L2DialogBox
         open={l2DialogOpen}
         onOpenChange={setL2DialogOpen}
         onSuccess={handleL2Success}
         onPrevious={handleL2Previous}
+        initialSection={l2Section}
       />
 
       {/* L3 Dialog Box */}

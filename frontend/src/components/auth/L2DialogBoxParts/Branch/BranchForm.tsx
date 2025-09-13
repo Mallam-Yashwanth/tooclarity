@@ -3,6 +3,7 @@
 import { FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import InputField from "@/components/ui/InputField";
+import { Plus } from "lucide-react";
 
 interface Branch {
   id: number;
@@ -18,12 +19,16 @@ interface BranchFormProps {
   selectedBranchId: number;
   setSelectedBranchId: React.Dispatch<React.SetStateAction<number>>;
   handleBranchChange: (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >
   ) => void;
   handleBranchSubmit: (e: FormEvent<HTMLFormElement>) => void;
+  handlePreviousClick?: () => void;
   deleteBranch: (branchId: number) => void;
   addNewBranch: () => void;
   isLoading: boolean;
+  onPrevious?: () => void;
 }
 
 export default function BranchForm({
@@ -31,6 +36,7 @@ export default function BranchForm({
   selectedBranchId,
   handleBranchChange,
   handleBranchSubmit,
+  handlePreviousClick,
   deleteBranch,
   addNewBranch,
   isLoading,
@@ -78,19 +84,26 @@ export default function BranchForm({
           required
         />
       </div>
-
-      <div className="flex justify-center pt-4">
+      <div className="flex flex-col sm:flex-row justify-center pt-4 gap-4 w-full">
+        <button
+          type="button"
+          onClick={() => handlePreviousClick?.()}
+          className="w-full sm:w-[314px] h-[48px] border border-[#697282] text-[#697282] rounded-[12px] font-semibold text-[16px] sm:text-[18px] leading-[22px] flex items-center justify-center shadow-inner"
+        >
+          Previous
+        </button>
         <Button
           type="submit"
           disabled={isLoading}
-          className={`w-full max-w-[400px] h-[48px] rounded-[12px] font-semibold transition-colors
-            ${
-              isLoading
-                ? "opacity-50 cursor-not-allowed bg-gray-600"
-                : "bg-[#6B7280] hover:bg-[#6B7280]/90"
-            } text-white`}
+          className={`w-full sm:max-w-[350px] h-[48px] rounded-[12px] font-semibold transition-colors
+      ${
+        isLoading
+          ? "opacity-50 cursor-not-allowed bg-blue"
+          : "bg-[#6B7280] hover:bg-[#6B7280]/90"
+      } text-white text-[16px] sm:text-[18px]`}
         >
-          {isLoading ? "Saving..." : "Add Branch"}
+          <Plus size={16} />
+          {isLoading ? "Saving..." : "Add Course"}
         </Button>
       </div>
     </form>

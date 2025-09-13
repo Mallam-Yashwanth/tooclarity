@@ -1,8 +1,8 @@
-import * as React from "react"
-import { Slot } from "@radix-ui/react-slot"
-import { cva, type VariantProps } from "class-variance-authority"
+import * as React from "react";
+import { Slot } from "@radix-ui/react-slot";
+import { cva, type VariantProps } from "class-variance-authority";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
@@ -20,9 +20,14 @@ const buttonVariants = cva(
         ghost:
           "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",
-login: "w-25 h-12 p-4 bg-[#FBF9F5] border border-[#0222D7] text-black rounded-md transition-colors duration-200 cursor-pointer font-semibold text-[18px] tracking-[0%] flex items-center justify-center",
-signup: "w-25 h-12 p-4 bg-[#0222D7] text-white rounded-md transition-colors duration-200 cursor-pointer font-semibold text-[18px] leading-[100%] tracking-[0%] flex items-center justify-center",
-
+        login:
+          "w-25 h-12 p-4 bg-[#FBF9F5] border border-[#0222D7] text-black rounded-md transition-colors duration-200 cursor-pointer font-semibold text-[18px] tracking-[0%] flex items-center justify-center",
+        signup:
+          "w-25 h-12 p-4 bg-[#0222D7] text-white rounded-md transition-colors duration-200 cursor-pointer font-semibold text-[18px] leading-[100%] tracking-[0%] flex items-center justify-center",
+        course:
+          "w-[250px] h-[44px] rounded-[8px] font-semibold text-base bg-[#0222D7] hover:bg-[#1D4ED8] text-white flex items-center justify-center gap-2",
+        branch:
+          "w-[250px] h-[44px] rounded-[8px] font-semibold text-base bg-[#0222D7] hover:bg-[#1D4ED8] text-white flex items-center justify-center gap-2",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",
@@ -36,7 +41,7 @@ signup: "w-25 h-12 p-4 bg-[#0222D7] text-white rounded-md transition-colors dura
       size: "default",
     },
   }
-)
+);
 
 function Button({
   className,
@@ -46,9 +51,9 @@ function Button({
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
-    asChild?: boolean
+    asChild?: boolean;
   }) {
-  const Comp = asChild ? Slot : "button"
+  const Comp = asChild ? Slot : "button";
 
   return (
     <Comp
@@ -56,7 +61,7 @@ function Button({
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />
-  )
+  );
 }
 
-export { Button, buttonVariants }
+export { Button, buttonVariants };

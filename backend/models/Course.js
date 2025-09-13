@@ -75,6 +75,13 @@ const courseSchema = new mongoose.Schema(
       required: true, // keep required since course must belong to an institution
       index: true,
     },
+
+    branch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      required: false,
+      index: true,
+    }
   },
   { timestamps: true }
 );

@@ -275,6 +275,16 @@ export const institutionAPI = {
       body: JSON.stringify(institutionData),
     });
   },
+
+  // Upload institution JSON file
+  uploadInstitutionFile: async (file: File): Promise<ApiResponse> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiRequest("/v1/institutions/upload", {
+      method: "POST",
+      body: formData,
+    });
+  },
 };
 
 // Utility functions for institution data management

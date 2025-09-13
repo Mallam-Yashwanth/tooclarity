@@ -3,6 +3,8 @@ const { Institution } = require("../models/Institution");
 const asyncHandler = require("express-async-handler");
 const logger = require("../config/logger");
 const InstituteAdmin = require("../models/InstituteAdmin");
+const  Branch  = require("../models/Branch");
+const  Course  = require("../models/Course");
 
 /**
  * @desc    CREATE L1 Institution (General Info)
@@ -96,7 +98,6 @@ exports.createL1Institution = asyncHandler(async (req, res, next) => {
     session.endSession();
   }
 });
-
 
 /**
  * @desc    UPDATE L2 Institution
@@ -253,5 +254,138 @@ exports.deleteMyInstitution = asyncHandler(async (req, res, next) => {
     next(error);
   } finally {
     session.endSession();
+  }
+});
+
+
+exports.uploadFileData = asyncHandler(async (req, res, next) => {
+  const file = req.file;
+  if (!file) {
+    return res.status(400).json({
+      success: false,
+      message: "No file uploaded.",
+    });
+  }
+
+  const institutionAdmin = await InstituteAdmin.findById(req.userId);
+
+  if (!institutionAdmin) {
+    return res.status(404).json({
+      success: false,
+      message: "Institute admin not found",
+    });
+  }
+
+  // 🚫 If admin already has institution, stop creation
+  if (institutionAdmin.institution) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Institution already exists for this admin. Cannot create a new one.",
+    });
+  }
+
+  // --- Start transaction ---
+  const session = await Institution.startSession();
+  session.startTransaction();
+
+  try {
+    // 1. Parse uploaded file (buffer → JSON)
+    const jsonString = file.buffer.toString("utf-8");
+    const parsed = JSON.parse(jsonString);
+
+    const { institution, courses } = parsed;
+
+    if (!institution) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({
+        success: false,
+        message: "Institution data missing",
+      });
+    }
+
+    institution.owner = req.userId;
+
+    // 2. Save institution
+    const newInstitution = await Institution.create([institution], { session });
+    const institutionId = newInstitution[0]._id;
+
+    // Link institution to admin
+    institutionAdmin.institution = institutionId;
+    await institutionAdmin.save({ session });
+
+    // --- BULK BRANCH + COURSE HANDLING ---
+    let branchDocs = [];
+    let branchToCoursesMap = [];
+    let directCourses = [];
+
+    for (const item of courses || []) {
+      if (item.branchName) {
+        const { courses: branchCourses, ...branchData } = item;
+        branchDocs.push({
+          ...branchData,
+          institution: institutionId,
+        });
+        branchToCoursesMap.push(branchCourses || []);
+      } else if (item.courses) {
+        directCourses.push(
+          ...item.courses.map((course) => ({
+            ...course,
+            institution: institutionId,
+            branch: null,
+          }))
+        );
+      }
+    }
+
+    // Insert branches in bulk
+    const insertedBranches =
+      branchDocs.length > 0
+        ? await Branch.insertMany(branchDocs, { session })
+        : [];
+
+    // Collect all courses
+    let allCourses = [...directCourses];
+
+    insertedBranches.forEach((branch, index) => {
+      const branchCourses = branchToCoursesMap[index];
+      if (branchCourses.length > 0) {
+        const courseDocs = branchCourses.map((course) => ({
+          ...course,
+          institution: institutionId,
+          branch: branch._id,
+        }));
+        allCourses.push(...courseDocs);
+      }
+    });
+
+    // Insert courses in bulk
+    const insertedCourses =
+      allCourses.length > 0
+        ? await Course.insertMany(allCourses, { session })
+        : [];
+
+    // ✅ Commit transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    // ✅ ApiResponse compliant response
+    res.status(201).json({
+      success: true,
+      message: "File processed successfully",
+      data: "Successfully created institution and associated data",
+    });
+  } catch (err) {
+    // ❌ Rollback transaction
+    await session.abortTransaction();
+    session.endSession();
+    console.error("Error processing file:", err);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to process file",
+      data: { error: err.message },
+    });
   }
 });

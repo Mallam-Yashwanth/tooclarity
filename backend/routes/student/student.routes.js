@@ -53,6 +53,6 @@ router.put(
     body('details').isObject(),
   ],
   updateAcademicProfile
-);
+); 
 
 module.exports = router;

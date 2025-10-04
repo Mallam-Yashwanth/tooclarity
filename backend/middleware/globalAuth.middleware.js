@@ -12,7 +12,7 @@ const globalAuthMiddleware = async (req, res, next) => {
   try {
     console.log("➡️ Incoming request:", req.method, req.path);
 
-    const publicPaths = ["/login", "/register", "/otp", "/verify-email","/payment/verify"];
+    const publicPaths = ["/login", "/register", "/otp", "/verify-email","/payment/verify", "/forgot-password", "/reset-password" ];
     if (publicPaths.includes(req.path)) {
       console.log("✅ Public path, skipping auth");
       return next();

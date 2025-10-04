@@ -125,9 +125,6 @@ The TooClarity Team`,
   }
 };
 
-
-// ... (keep your existing generateOtp, sendVerificationToken functions) ...
-
 exports.sendPasswordChangeToken = async (email) => {
   try {
     const otp = this.generateOtp();
@@ -186,5 +183,71 @@ exports.checkPasswordChangeToken = async (email, otp) => {
   } catch (error) {
     logger.error({ err: error, event: "password_otp_check_error", email }, "Password OTP check failed.");
     return false;
+  }
+};
+
+exports.sendPasswordResetLink = async (email, resetURL) => {
+  try {
+    const mailOptions = {
+      from: `"No Reply" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: "Your Password Reset Link (Valid for 15 Mins)",
+      text: `Dear User,
+
+You have requested to reset your password. Please click on the link below to proceed.
+
+${resetURL}
+
+This link is valid for the next 15 minutes.
+For your security, please do not share this link with anyone.
+If you did not request a password change, please ignore this email and contact TooClarity Support immediately.
+
+Best regards,
+The TooClarity Team
+
+---
+Note: This is a system-generated message. Please do not reply to this email.`,
+    };
+
+    await transporter.sendMail(mailOptions);
+    logger.info({ event: "password_reset_link_sent", email }, "Password reset link sent.");
+    return true;
+  } catch (error) {
+    logger.error(
+      { err: error, event: "password_reset_link_failed", email },
+      "Password reset link sending failed."
+    );
+    throw new AppError("Could not send the password reset link.", 500);
+  }
+};
+
+exports.sendPasswordChangedConfirmation = async (email) => {
+  try {
+    const mailOptions = {
+      from: `"Security Alert" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: "Your Password Has Been Changed",
+      text: `Dear User,
+
+This is a confirmation that the password for your account has just been changed.
+
+If you did NOT make this change, please contact our support team immediately to secure your account.
+
+Best regards,
+The TooClarity Team
+
+---
+Note: This is a system-generated message. Please do not reply to this email.`
+,
+    };
+
+    await transporter.sendMail(mailOptions);
+    logger.info({ event: "password_change_confirm_sent", email }, "Password change confirmation email sent.");
+  } catch (error) {
+    logger.error(
+      { err: error, event: "password_change_confirm_failed", email },
+      "Failed to send password change confirmation email."
+    );
+    // Don't throw an error here, as the primary password reset action has already succeeded
   }
 };

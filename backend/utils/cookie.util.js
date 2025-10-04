@@ -56,12 +56,6 @@ class CookieUtil {
    * @param {Object} cookies - { name: value, ... }
    * @param {Object} options - Options applied to all cookies
    */
-  // static setCookies(res, cookies = {}, options = {}) {
-  //   Object.entries(cookies).forEach(([name, value]) => {
-  //     this.setCookie(res, name, value, options);
-  //   });
-  // }
-
   static setCookies(res, name, value, options = {}) {
     res.cookie(name, value, {
       httpOnly: true,

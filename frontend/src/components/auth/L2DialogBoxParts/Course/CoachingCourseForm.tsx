@@ -15,6 +15,8 @@ interface CoachingCourseFormProps {
   selectedCourseId: number;
   // ✅ Add courseErrors prop to receive validation errors
   courseErrors?: Record<string, string>; 
+  labelVariant?: 'course' | 'program';
+
 }
 
 export default function CoachingCourseForm({
@@ -25,6 +27,7 @@ export default function CoachingCourseForm({
   selectedCourseId,
   // ✅ Destructure courseErrors with a default empty object
   courseErrors = {},
+  labelVariant = 'course',
 }: CoachingCourseFormProps) {
   return (
     <div className="grid md:grid-cols-2 gap-6">
@@ -75,11 +78,11 @@ export default function CoachingCourseForm({
       />
 
       <InputField
-        label="Course name"
+        label={labelVariant === 'program' ? 'Program name' : 'Course name'}
         name="courseName"
         value={currentCourse.courseName}
         onChange={handleCourseChange}
-        placeholder="Enter course name"
+        placeholder={labelVariant === 'program' ? 'Enter program name' : 'Enter course name'}
         required
         // ✅ Display validation error for this field
         error={courseErrors.courseName}
@@ -104,7 +107,7 @@ export default function CoachingCourseForm({
       </div>
 
       <InputField
-        label="Course Duration"
+        label={labelVariant === 'program' ? 'Program Duration' : 'Course Duration'}
         name="courseDuration"
         value={currentCourse.courseDuration}
         onChange={handleCourseChange}
@@ -115,11 +118,31 @@ export default function CoachingCourseForm({
       />
 
       <InputField
-        label="Price of Course"
+        label={labelVariant === 'program' ? "Program Start Date" : "Course Start Date"}
+        name="startDate"
+        value={currentCourse.startDate}
+        onChange={handleCourseChange}
+        type="date"
+        error={courseErrors.startDate}
+        required
+      />
+
+      <InputField
+        label={labelVariant === 'program' ? "Program End Date" : "Course End Date"}
+        name="endDate"
+        value={currentCourse.endDate}
+        onChange={handleCourseChange}
+        type="date"
+        error={courseErrors.endDate}
+        required
+      />
+
+      <InputField
+        label={labelVariant === 'program' ? 'Price of Program' : 'Price of Course'}
         name="priceOfCourse"
         value={currentCourse.priceOfCourse}
         onChange={handleCourseChange}
-        placeholder="Enter Course price"
+        placeholder={labelVariant === 'program' ? 'Enter Program price' : 'Enter Course price'}
         type="number"
         required
         // ✅ Display validation error for this field

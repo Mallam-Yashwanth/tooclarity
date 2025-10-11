@@ -12,7 +12,7 @@ const RedisUtil = require("./redis.util");
  */
 const sendTokens = async (user, res, message, options ={}) => {
   const userId = user._id;
-  const username = user.name || user.studentName; // fallback for students
+  const username = user.name; // unified field in InstituteAdmin for all roles
   const role = user.role || "STUDENT"; // default role
 
   // 1. generate tokens

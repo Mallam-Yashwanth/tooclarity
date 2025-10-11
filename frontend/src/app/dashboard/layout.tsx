@@ -7,6 +7,7 @@ import Topbar from "@/components/dashboard/Topbar";
 import { useAuth } from "@/lib/auth-context";
 import { motion } from "framer-motion";
 import AdminDashboard from "@/components/dashboard/AdminDashboard";
+import { SearchProvider } from "@/lib/search-context";
 import StudentDashboard from "@/components/student/StudentDashboard";
 
 export default function DashboardLayout({
@@ -58,25 +59,27 @@ export default function DashboardLayout({
     user.isProfileCompleted === true
   ) {
     return (
-      <div className="min-h-screen w-full">
-        <div className="flex flex-col lg:flex-row gap-2 lg:gap-6">
-          <Sidebar />
-          <motion.main
-            className="flex-1 max-w-[1900px] mr-0 lg:mr-5 px-2 sm:px-4 lg:px-6 ml-0 h-[100dvh] overflow-y-auto scrollbar-hide pb-20 lg:pb-0"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.2 }}
-          >
-            <Topbar
-              userName={profileName || user?.name || user?.admin}
-              onSearch={(query) => console.log("Search:", query)}
-              onNotificationClick={() => console.log("Notifications clicked")}
-              onProfileClick={() => console.log("Profile clicked")}
-            />
-            {children}
-          </motion.main>
+      <SearchProvider>
+        <div className="min-h-screen w-full">
+          <div className="flex flex-col lg:flex-row gap-2 lg:gap-6">
+            <Sidebar />
+            <motion.main
+              className="flex-1 max-w-[1900px] mr-0 lg:mr-5 px-2 sm:px-4 lg:px-6 ml-0 h-[100dvh] overflow-y-auto scrollbar-hide pb-20 lg:pb-0"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Topbar
+                userName={profileName || user?.name || user?.admin}
+                onSearch={(query) => console.log("Search:", query)}
+                onNotificationClick={() => console.log("Notifications clicked")}
+                onProfileClick={() => console.log("Profile clicked")}
+              />
+              {children}
+            </motion.main>
+          </div>
         </div>
-      </div>
+      </SearchProvider>
     );
   }
 

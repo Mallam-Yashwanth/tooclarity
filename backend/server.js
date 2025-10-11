@@ -17,6 +17,7 @@ mongoose.connect(DB).then(() => console.log('✅ MongoDB connection successful!'
 const port = process.env.PORT || 3001;
 const server = app.listen(port, () => {
     console.log(`🚀 App running on port ${port}...`);
+    try { require('./jobs/notification.job').startNotificationWorker(); } catch (e) { console.error('Failed to start notification worker:', e?.message || e); }
 });
 
 // Attach Socket.IO
@@ -28,6 +29,8 @@ const io = new Server(server, {
   }
 });
 app.set('io', io);
+// Socket singleton for workers
+try { require('./utils/socket').setIO(io); } catch {}
 
 io.on('connection', (socket) => {
   // Expect client to join institution room
@@ -37,6 +40,22 @@ io.on('connection', (socket) => {
   // InstitutionAdmin scope room for cross-institution aggregates
   socket.on('joinInstitutionAdmin', (adminId) => {
     if (adminId) socket.join(`institutionAdmin:${adminId}`);
+  });
+  // Student-specific room
+  socket.on('joinStudent', (studentId) => {
+    if (studentId) socket.join(`student:${studentId}`);
+  });
+  // Program-specific room (optional for program pages)
+  socket.on('joinProgram', (programId) => {
+    if (programId) socket.join(`program:${programId}`);
+  });
+  // Admin-specific room (platform admin)
+  socket.on('joinAdmin', (adminId) => {
+    if (adminId) socket.join(`admin:${adminId}`);
+  });
+  // Branch-specific room
+  socket.on('joinBranch', (branchId) => {
+    if (branchId) socket.join(`branch:${branchId}`);
   });
 });
 

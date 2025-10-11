@@ -3,10 +3,33 @@
 let socketInstance: any | null = null;
 
 export async function getSocket(origin?: string) {
+  // Disable Socket.IO in development if backend is not available
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      const backendUrl = origin || process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3001';
+      const response = await fetch(`${backendUrl}/api/health`, { 
+        method: 'HEAD',
+        signal: AbortSignal.timeout(2000)
+      });
+      if (!response.ok) {
+        console.warn('Backend not available, skipping Socket.IO connection');
+        return null;
+      }
+    } catch (error) {
+      console.warn('Backend not available, skipping Socket.IO connection');
+      return null;
+    }
+  }
+
   if (socketInstance && socketInstance.connected) return socketInstance;
   const { io } = await import('socket.io-client');
-  const url = origin || (typeof window !== 'undefined' ? window.location.origin : '');
-  socketInstance = io(url, { withCredentials: true, transports: ['websocket'] });
+  const url = origin || process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3001';
+  socketInstance = io(url, { 
+    withCredentials: true, 
+    transports: ['websocket'],
+    timeout: 5000,
+    forceNew: true
+  });
   return socketInstance;
 } 
 
@@ -35,7 +58,7 @@ class SocketManager {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      this.origin = (process.env.NEXT_PUBLIC_API_URL || '').replace('/api','') || window.location.origin;
+      this.origin = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3001';
       window.addEventListener('online', this.onOnline);
       window.addEventListener('offline', this.onOffline);
       document.addEventListener('visibilitychange', this.onVisibility);
@@ -79,6 +102,11 @@ class SocketManager {
     this.isConnecting = true;
     try {
       this.socket = await getSocket(this.origin);
+      if (!this.socket) {
+        // Socket.IO disabled or backend not available
+        this.isConnecting = false;
+        return;
+      }
       this.isConnecting = false;
       this.backoffAttempts = 0;
       this.bindBaseEvents();
@@ -105,8 +133,12 @@ class SocketManager {
       this.socket = null;
       this.scheduleReconnect();
     });
-    this.socket.on('connect_error', () => {
-      try { this.socket?.disconnect(); } catch (err) { console.error('socketManager: disconnect on connect_error failed', err); }
+    this.socket.on('connect_error', (error: any) => {
+      // Only log in development and reduce noise
+      if (process.env.NODE_ENV === 'development' && this.backoffAttempts < 3) {
+        console.warn('Socket.IO connection error:', error.message);
+      }
+      try { this.socket?.disconnect(); } catch (err) { /* ignore */ }
       this.socket = null;
       this.scheduleReconnect();
     });
@@ -201,4 +233,17 @@ class SocketManager {
 }
 
 export const socketManager = new SocketManager();
+
+// Cleanup function to dispose of existing socket instances
+export function cleanupSocket() {
+  if (socketInstance) {
+    try {
+      socketInstance.disconnect();
+    } catch (e) {
+      // ignore
+    }
+    socketInstance = null;
+  }
+}
+
 export type { RoomKey }; 

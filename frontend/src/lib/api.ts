@@ -188,7 +188,14 @@ export async function apiRequest<T>(
       ...options,
     });
 
-    const data = await response.json();
+    // Safely parse JSON; if non-JSON (e.g., HTML from 404), fallback to text
+    const raw = await response.text();
+    let data: any;
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch {
+      data = { message: raw };
+    }
 
     if (!response.ok) {
       throw new Error(data.message || "Something went wrong");
@@ -625,11 +632,51 @@ export const institutionDetailsAPI = {
 };
 
 // Dashboard data helpers (non-destructive additions)
-export const getMyInstitution = async (): Promise<any> => {
-  const res = await apiRequest<any>("/v1/institutions/me", { method: "GET" });
-  // Support both {success, data} and raw object responses
-  const payload: any = res as any;
-  return payload?.data || payload;
+// Cached loader for /v1/institutions/me to avoid repeated calls across dashboard
+let __myInstitutionCache: any | null = null;
+let __myInstitutionCacheAt = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+export const getMyInstitution = async (forceRefresh = false): Promise<any> => {
+  try {
+    // Check if cache is still valid (not expired)
+    if (!forceRefresh && __myInstitutionCache && (Date.now() - __myInstitutionCacheAt) < CACHE_DURATION) {
+      return __myInstitutionCache;
+    }
+    
+    const res = await apiRequest<any>("/v1/institutions/me", { method: "GET" });
+    const payload: any = res as any;
+    const data = payload?.data || payload;
+    __myInstitutionCache = data;
+    __myInstitutionCacheAt = Date.now();
+    return data;
+  } catch (err) {
+    // on error, do not clear existing cache; return what we have if present
+    if (__myInstitutionCache) return __myInstitutionCache;
+    throw err;
+  }
+};
+
+export const refreshMyInstitution = async (): Promise<any> => {
+  __myInstitutionCache = null;
+  __myInstitutionCacheAt = 0;
+  return getMyInstitution(true);
+};
+
+// Cache invalidation functions
+export const clearMetricsCache = () => {
+  metricsCache.clear();
+};
+
+export const clearEnquiriesCache = () => {
+  enquiriesCache.clear();
+};
+
+export const clearAllCaches = () => {
+  metricsCache.clear();
+  enquiriesCache.clear();
+  __myInstitutionCache = null;
+  __myInstitutionCacheAt = 0;
 };
 
 // Analytics API helpers
@@ -650,7 +697,10 @@ export const analyticsAPI = {
   }
 };
 
-// Unified metrics (views or comparisons)
+// Unified metrics (views or comparisons) with caching
+const metricsCache = new Map<string, { data: any; timestamp: number }>();
+const METRICS_CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
+
 export const metricsAPI = {
   increment: async (institutionId: string, courseId: string, metric: 'views'|'comparisons'): Promise<ApiResponse> => {
     return apiRequest(`/v1/institutions/${institutionId}/courses/${courseId}/metrics?metric=${metric}`, { method: "POST" });
@@ -674,60 +724,248 @@ export const metricsAPI = {
       try { const inst = await getMyInstitution() as any; iid = inst?._id || inst?.data?._id; } catch (err) { console.error('metricsAPI.getInstitutionAdminByRange: resolve institution failed', err); }
     }
     if (!iid) throw new Error('institutionId not available');
-    return apiRequest(`/v1/institutions/${iid}/courses/summary/metrics/institution-admin/range?metric=${metric}&range=${range}`, { method: "GET" });
+    
+    // Check cache first
+    const cacheKey = `range_${iid}_${metric}_${range}`;
+    const cached = metricsCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < METRICS_CACHE_DURATION) {
+      return cached.data;
+    }
+    
+    const response = await apiRequest(`/v1/institutions/${iid}/courses/summary/metrics/institution-admin/range?metric=${metric}&range=${range}`, { method: "GET" });
+    
+    // Cache the response
+    metricsCache.set(cacheKey, { data: response, timestamp: Date.now() });
+    
+    return response;
   },
   getInstitutionAdminSeries: async (
     metric: 'views'|'comparisons'|'leads',
     year?: number,
     institutionId?: string
   ): Promise<ApiResponse> => {
-    const q = [`metric=${metric}`];
-    if (year) q.push(`year=${year}`);
+    const currentYear = year || new Date().getFullYear();
     let iid = institutionId;
     if (!iid) {
       try { const inst = await getMyInstitution() as any; iid = inst?._id || inst?.data?._id; } catch (err) { console.error('metricsAPI.getInstitutionAdminSeries: resolve institution failed', err); }
     }
     if (!iid) throw new Error('institutionId not available');
-    return apiRequest(`/v1/institutions/${iid}/courses/summary/metrics/institution-admin/series?${q.join('&')}`, { method: "GET" });
+    
+    // Check cache first
+    const cacheKey = `series_${iid}_${metric}_${currentYear}`;
+    const cached = metricsCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < METRICS_CACHE_DURATION) {
+      return cached.data;
+    }
+    
+    const q = [`metric=${metric}`, `year=${currentYear}`];
+    const response = await apiRequest(`/v1/institutions/${iid}/courses/summary/metrics/institution-admin/series?${q.join('&')}`, { method: "GET" });
+    
+    // Cache the response
+    metricsCache.set(cacheKey, { data: response, timestamp: Date.now() });
+    
+    return response;
   }
 };
 
-// Enquiries API helpers
+// Enquiries API helpers with caching
+const enquiriesCache = new Map<string, { data: any; timestamp: number }>();
+const ENQUIRIES_CACHE_DURATION = 1 * 60 * 1000; // 1 minute
+
 export const enquiriesAPI = {
   getLeadsSummary: async (): Promise<ApiResponse> => {
-    return apiRequest(`/v1/enquiries/summary/leads`, { method: "GET" });
+    const cacheKey = 'leads_summary';
+    const cached = enquiriesCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < ENQUIRIES_CACHE_DURATION) {
+      return cached.data;
+    }
+    
+    const response = await apiRequest(`/v1/enquiries/summary/leads`, { method: "GET" });
+    enquiriesCache.set(cacheKey, { data: response, timestamp: Date.now() });
+    return response;
   },
   getEnquiriesForChart: async (year?: number): Promise<ApiResponse> => {
+    const currentYear = year || new Date().getFullYear();
+    const cacheKey = `enquiries_chart_${currentYear}`;
+    const cached = enquiriesCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < ENQUIRIES_CACHE_DURATION) {
+      return cached.data;
+    }
+    
     const yearParam = year ? `?year=${year}` : "";
-    return apiRequest(`/v1/enquiries/chart${yearParam}`, { method: "GET" });
+    const response = await apiRequest(`/v1/enquiries/chart${yearParam}`, { method: "GET" });
+    enquiriesCache.set(cacheKey, { data: response, timestamp: Date.now() });
+    return response;
   },
   getRecentEnquiries: async (): Promise<ApiResponse> => {
-    return apiRequest(`/v1/enquiries/recent`, { method: "GET" });
+    const cacheKey = 'recent_enquiries';
+    const cached = enquiriesCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < ENQUIRIES_CACHE_DURATION) {
+      return cached.data;
+    }
+    
+    const response = await apiRequest(`/v1/enquiries/recent`, { method: "GET" });
+    enquiriesCache.set(cacheKey, { data: response, timestamp: Date.now() });
+    return response;
   },
   getRecentEnquiriesWithOffset: async (offset: number, limit: number): Promise<ApiResponse> => {
     const q = [`offset=${Math.max(0, offset)}`, `limit=${Math.max(1, Math.min(100, limit))}`].join('&');
     return apiRequest(`/v1/enquiries/recent?${q}`, { method: "GET" });
   },
+  // Students list for current institution admin's institutions
+  getStudentsWithOffset: async (offset: number, limit: number): Promise<ApiResponse> => {
+    const q = [`offset=${Math.max(0, offset)}`, `limit=${Math.max(1, Math.min(100, limit))}`].join('&');
+    return apiRequest(`/v1/enquiries/students?${q}`, { method: "GET" });
+  },
+  // Students list for institution derived from a specific enquiry id
+  getStudentsByEnquiryId: async (enquiryId: string, offset: number, limit: number): Promise<ApiResponse> => {
+    const q = [`offset=${Math.max(0, offset)}`, `limit=${Math.max(1, Math.min(100, limit))}`].join('&');
+    return apiRequest(`/v1/enquiries/students/by-enquiry/${encodeURIComponent(enquiryId)}?${q}`, { method: 'GET' });
+  },
   getTypeSummary: async (range: 'weekly'|'monthly'|'yearly'): Promise<ApiResponse> => {
-    return apiRequest(`/v1/enquiries/summary/types?range=${range}`, { method: "GET" });
+    const cacheKey = `type_summary_${range}`;
+    const cached = enquiriesCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < ENQUIRIES_CACHE_DURATION) {
+      return cached.data;
+    }
+    
+    const response = await apiRequest(`/v1/enquiries/summary/types?range=${range}`, { method: "GET" });
+    enquiriesCache.set(cacheKey, { data: response, timestamp: Date.now() });
+    return response;
   },
   getTypeSummaryRollups: async (range: 'weekly'|'monthly'|'yearly', type?: 'callback'|'demo'): Promise<ApiResponse> => {
     const q = [`range=${range}`];
     if (type) q.push(`type=${type}`);
-    return apiRequest(`/v1/enquiries/summary/types/range?${q.join('&')}`, { method: "GET" });
+    const cacheKey = `type_rollups_${range}_${type || 'all'}`;
+    const cached = enquiriesCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < ENQUIRIES_CACHE_DURATION) {
+      return cached.data;
+    }
+    
+    const response = await apiRequest(`/v1/enquiries/summary/types/range?${q.join('&')}`, { method: "GET" });
+    enquiriesCache.set(cacheKey, { data: response, timestamp: Date.now() });
+    return response;
   },
   createEnquiry: async (enquiryData: {
-    studentName: string;
-    studentEmail: string;
-    studentPhone: string;
+    student: string;
     institution: string;
     programInterest: string;
     enquiryType: string;
   }): Promise<ApiResponse> => {
-    return apiRequest(`/v1/enquiries`, { 
+    return apiRequest(`/v1/enquiries/createEnquiry`, { 
       method: "POST",
       body: JSON.stringify(enquiryData)
     });
+  },
+  updateEnquiryStatus: async (enquiryId: string, statusData: {
+    status: string;
+    notes?: string;
+  }): Promise<ApiResponse> => {
+    return apiRequest(`/v1/enquiries/${enquiryId}/status`, {
+      method: "PUT",
+      body: JSON.stringify(statusData)
+    });
+  }
+};
+
+// Programs API
+const programsCache = new Map<string, { data: any; timestamp: number }>();
+const PROGRAMS_CACHE_DURATION = 60 * 1000; // 1 min
+
+export const programsAPI = {
+  create: async (payload: any): Promise<ApiResponse> => {
+    const institutionId = String(payload.institution || '');
+    if (!institutionId) throw new Error('institution required');
+    const normalized = { ...payload, type: payload?.type || 'PROGRAM' };
+    const wrapper = { totalCourses: 1, courses: [normalized] };
+    return apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses`, { method: 'POST', body: JSON.stringify(wrapper) });
+  },
+  list: async (institutionId: string): Promise<ApiResponse> => {
+    const cacheKey = `programs_${institutionId}`;
+    const cached = programsCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < PROGRAMS_CACHE_DURATION) return cached.data;
+    const res = await apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses?type=PROGRAM`, { method: 'GET' });
+    const payload: any = res as any;
+    const raw = payload?.data || payload?.courses || [];
+    const arr = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
+    const programs = arr.map((c: any) => ({ ...c, programName: c.programName || c.courseName }));
+    const shaped = { success: true, data: { programs } } as any;
+    programsCache.set(cacheKey, { data: shaped, timestamp: Date.now() });
+    return shaped;
+  },
+  listForInstitutionAdmin: async (institutionId: string): Promise<ApiResponse> => {
+    return programsAPI.list(institutionId);
+  },
+  listForInstitutionAdminWithMetrics: async (institutionId: string): Promise<ApiResponse> => {
+    // Use list() and attach placeholder metrics if none
+    const res = await programsAPI.list(institutionId) as any;
+    const programs = (res?.data?.programs || []).map((p: any) => ({
+      ...p,
+      leadsGenerated: typeof p.leadsGenerated === 'number' ? p.leadsGenerated : 0,
+      status: p.status || 'Live',
+      startDate: p.startDate || p.createdAt,
+      endDate: p.endDate || p.updatedAt,
+    }));
+    return { success: true, data: { programs } } as any;
+  },
+  listBranchesForInstitutionAdmin: async (institutionId: string): Promise<ApiResponse> => {
+    const res = await apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/branches`, { method: 'GET' });
+    const payload: any = res as any;
+    const branches = Array.isArray(payload?.data) ? payload.data : (Array.isArray(payload) ? payload : []);
+    return { success: true, data: { branches } } as any;
+  },
+  update: async (programId: string, payload: any & { institution?: string }): Promise<ApiResponse> => {
+    const institutionId = String(payload?.institution || '');
+    if (!institutionId) throw new Error('institution required');
+    return apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses/${encodeURIComponent(programId)}`, { method: 'PUT', body: JSON.stringify(payload) });
+  },
+  remove: async (programId: string, institutionId: string): Promise<ApiResponse> => {
+    return apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses/${encodeURIComponent(programId)}`, { method: 'DELETE' });
+  },
+  incrementViews: async (programId: string, institutionId: string): Promise<ApiResponse> => {
+    const qs = new URLSearchParams({ metric: 'views' }).toString();
+    return apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses/${encodeURIComponent(programId)}/metrics?${qs}`, { method: 'POST' });
+  },
+  summaryViews: async (institutionId: string, range: 'weekly'|'monthly'|'yearly'): Promise<ApiResponse> => {
+    const cacheKey = `program_summary_${institutionId}_${range}`;
+    const cached = programsCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < PROGRAMS_CACHE_DURATION) return cached.data;
+    const qs = new URLSearchParams({ metric: 'views', range }).toString();
+    const res = await apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses/summary/metrics/institution-admin?${qs}`, { method: 'GET' });
+    programsCache.set(cacheKey, { data: res, timestamp: Date.now() });
+    return res;
+  },
+  summaryComparisons: async (institutionId: string, range: 'weekly'|'monthly'|'yearly'): Promise<ApiResponse> => {
+    const cacheKey = `program_cmp_${institutionId}_${range}`;
+    const cached = programsCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < PROGRAMS_CACHE_DURATION) return cached.data;
+    const qs = new URLSearchParams({ metric: 'comparisons', range }).toString();
+    const res = await apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses/summary/metrics/institution-admin?${qs}`, { method: 'GET' });
+    programsCache.set(cacheKey, { data: res, timestamp: Date.now() });
+    return res;
+  },
+  viewsSeries: async (institutionId: string, year?: number): Promise<ApiResponse> => {
+    const y = year || new Date().getFullYear();
+    const cacheKey = `program_series_${institutionId}_${y}`;
+    const cached = programsCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < PROGRAMS_CACHE_DURATION) return cached.data;
+    const qs = new URLSearchParams({ metric: 'views', year: String(y) }).toString();
+    const res = await apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses/summary/metrics/institution-admin/series?${qs}`, { method: 'GET' });
+    programsCache.set(cacheKey, { data: res, timestamp: Date.now() });
+    return res;
+  },
+  subscriptionHistory: async (institutionId: string): Promise<ApiResponse> => {
+    // Use unified institutions scope with single controller/routes; fallback safe
+    try {
+      return await apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/subscriptions/history`, { method: 'GET' });
+    } catch (_) {
+      return { success: true, data: { items: [] } } as any;
+    }
+  },
+  downloadInvoicePdf: async (subscriptionId: string): Promise<Blob> => {
+    // Placeholder: hook to your backend PDF endpoint if implemented
+    const res: any = await apiRequest(`/v1/payment/invoice/${encodeURIComponent(subscriptionId)}`, { method: 'GET' });
+    return res as Blob;
   }
 };
 
@@ -741,6 +979,25 @@ export const notificationsAPI = {
     institutionAdminId?: string;
     page?: number;
     limit?: number;
+    cursor?: string | null;
+    unread?: boolean;
+    category?: string;
+  } = {}): Promise<ApiResponse> => {
+    const q: string[] = [];
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null) q.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+    });
+    const qs = q.length ? `?${q.join('&')}` : '';
+    return apiRequest(`/v1/notifications${qs}`, { method: 'GET' });
+  },
+  listCursor: async (params: {
+    scope?: 'student'|'institution'|'branch'|'admin';
+    studentId?: string;
+    institutionId?: string;
+    branchId?: string;
+    institutionAdminId?: string;
+    limit?: number;
+    cursor?: string | null;
     unread?: boolean;
     category?: string;
   } = {}): Promise<ApiResponse> => {
@@ -766,9 +1023,6 @@ export const notificationsAPI = {
   },
   markRead: async (ids: string[]): Promise<ApiResponse> => {
     return apiRequest(`/v1/notifications/read`, { method: 'POST', body: JSON.stringify({ ids }) });
-  },
-  markUnread: async (ids: string[]): Promise<ApiResponse> => {
-    return apiRequest(`/v1/notifications/unread`, { method: 'POST', body: JSON.stringify({ ids }) });
   },
   remove: async (ids: string[]): Promise<ApiResponse> => {
     return apiRequest(`/v1/notifications`, { method: 'DELETE', body: JSON.stringify({ ids }) });

@@ -1,6 +1,6 @@
 const Course = require("../models/Course");
 const { Institution } = require("../models/Institution");
-const student = require("../models/Student");
+const InstituteAdminModel = require("../models/InstituteAdmin");
 const AppError = require("../utils/appError");
 const asyncHandler = require("express-async-handler");
 const { uploadStream } = require("../services/upload.service");
@@ -96,7 +96,7 @@ async function institutionAdminLeadsRangeCurrent(userId, range) {
   } else if (range === 'yearly') {
     startDate = new Date(now.getUTCFullYear(), 0, 1); endDate = new Date(now);
   } else { return 0; }
-  return student.countDocuments({ institution: { $in: ids }, createdAt: { $gte: startDate, $lte: endDate } });
+  return InstituteAdminModel.countDocuments({ institution: { $in: ids }, role: 'STUDENT', createdAt: { $gte: startDate, $lte: endDate } });
 }
 
 async function institutionAdminLeadsRangePrevious(userId, range) {
@@ -112,7 +112,7 @@ async function institutionAdminLeadsRangePrevious(userId, range) {
   } else if (range === 'yearly') {
     startDate = new Date(now.getUTCFullYear() - 1, 0, 1); endDate = new Date(now.getUTCFullYear(), 0, 1);
   } else { return 0; }
-  return student.countDocuments({ institution: { $in: ids }, createdAt: { $gte: startDate, $lt: endDate } });
+  return InstituteAdminModel.countDocuments({ institution: { $in: ids }, role: 'STUDENT', createdAt: { $gte: startDate, $lt: endDate } });
 }
 
 // Fixed range calculation function with proper date handling
@@ -255,7 +255,11 @@ exports.getAllCoursesForInstitution = asyncHandler(async (req, res, next) => {
 
   await checkOwnership(institutionId, req.userId);
 
-  const courses = await Course.find({ institution: institutionId });
+  const q = { institution: institutionId };
+  if (req.query.type) {
+    q.type = req.query.type; // optional filter by type: 'PROGRAM' | 'COURSE'
+  }
+  const courses = await Course.find(q);
 
   res.status(200).json({
     success: true,
@@ -349,7 +353,7 @@ exports.deleteCourse = asyncHandler(async (req, res, next) => {
     );
   }
 
-  await course.remove();
+  await Course.deleteOne({ _id: courseId });
 
   res.status(204).json({
     success: true,
@@ -433,14 +437,14 @@ async function countStudentsInRange(userId, startDate, endDate) {
   const institutions = await Institution.find({ institutionAdmin: userId }).select('_id');
   const ids = institutions.map(i => i._id);
   if (ids.length === 0) return 0;
-  return student.countDocuments({ institution: { $in: ids }, createdAt: { $gte: startDate, $lte: endDate } });
+  return InstituteAdminModel.countDocuments({ institution: { $in: ids }, role: 'STUDENT', createdAt: { $gte: startDate, $lte: endDate } });
 }
 
 async function countStudentsTotal(userId) {
   const institutions = await Institution.find({ institutionAdmin: userId }).select('_id');
   const ids = institutions.map(i => i._id);
   if (ids.length === 0) return 0;
-  return student.countDocuments({ institution: { $in: ids } });
+  return InstituteAdminModel.countDocuments({ institution: { $in: ids }, role: 'STUDENT' });
 }
 
 // ----- Unified institutionAdmin metric summary -----
@@ -528,8 +532,9 @@ exports.getInstitutionAdminMetricSeriesUnified = asyncHandler(async (req, res, n
       const startDate = new Date(Date.UTC(year, m, 1));
       const endDate = new Date(Date.UTC(year, m + 1, 0, 23, 59, 59, 999));
       // inclusive end
-      const count = await student.countDocuments({
+      const count = await InstituteAdminModel.countDocuments({
         institution: { $in: ids },
+        role: 'STUDENT',
         createdAt: { $gte: startDate, $lte: endDate }
       });
       series.push(count);

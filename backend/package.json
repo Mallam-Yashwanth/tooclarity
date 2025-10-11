@@ -6,7 +6,9 @@
   "scripts": {
     "test": "cross-env NODE_ENV=test jest --runInBand --detectOpenHandles --forceExit",
     "dev": "cross-env NODE_ENV=development nodemon server.js",
-    "start": "cross-env NODE_ENV=production node server.js"
+    "start": "cross-env NODE_ENV=production node server.js",
+    "seed:analytics": "node scripts/seedAnalyticsData.js",
+    "seed:analytics:advanced": "node scripts/seedAnalyticsDataAdvanced.js"
 
   },
   "keywords": [],

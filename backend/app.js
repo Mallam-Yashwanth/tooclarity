@@ -10,6 +10,7 @@ const authRoutes = require("./routes/auth.routes");
 const institutionRoutes = require("./routes/institution.routes");
 const branchRoutes = require("./routes/branch.routes");
 const courseRoutes = require("./routes/course.routes");
+const subscriptionRoutes = require("./routes/subscription.routes");
 const enquiriesRoutes = require("./routes/enquiries.routes");
 const profileRoutes = require("./routes/profile.routes");
 const notificationRoutes = require("./routes/notification.routes");
@@ -61,6 +62,11 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(cookieParser());
 
+// Health check endpoint for Socket.IO availability
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // The limiter middleware has been commented out as requested.
 // const limiter = rateLimit({
 //     windowMs: 15 * 60 * 1000,
@@ -84,7 +90,7 @@ const requireInstituteAdmin = [authorizeRoles(["INSTITUTE_ADMIN"])];
 const requireAdmin = [authorizeRoles(["ADMIN"])];
 const requireStudent = [authorizeRoles(["STUDENT"])];
 
-app.use("/api/v1/students", studentRoutes, requireStudent); 
+app.use("/api/v1/students", requireStudent, studentRoutes); 
 
 app.use("/api/v1/payment", requireInstituteAdmin, paymentProtectedRoutes);
 app.use("/api/v1/admin/coupon", requireAdmin, adminRoute);
@@ -92,7 +98,7 @@ app.use("/api/v1/coupon", requireInstituteAdmin, InstitutionAdminRoute);
 
 app.use("/api/v1/", profileRoutes);
 
-app.use("/api/v1/enquiries", enquiriesRoutes);
+app.use("/api/v1/enquiries", requireInstituteAdmin, enquiriesRoutes);
 
 app.use("/api/v1/institutions", requireInstituteAdmin, institutionRoutes);
 
@@ -107,6 +113,13 @@ app.use(
   "/api/v1/institutions/:institutionId/courses",
   requireInstituteAdmin,
   courseRoutes
+);
+
+// Unified subscription scope under institution
+app.use(
+  "/api/v1/institutions/:institutionId/subscriptions",
+  requireInstituteAdmin,
+  subscriptionRoutes
 );
 
 app.use("/api/v1/notifications", notificationRoutes);

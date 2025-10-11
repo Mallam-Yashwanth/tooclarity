@@ -7,7 +7,7 @@ import { faArrowUpRightFromSquare } from "@fortawesome/free-solid-svg-icons";
 export interface CoursePerformanceRow {
   sno: number | string;
   name: string;
-  status: "Live" | "Draft" | "Paused";
+  status: "Live" | "Draft" | "Paused" | "Expired";
   views: number;
   leads: number;
   engagementRate: string; // e.g., '3.6%'
@@ -21,7 +21,13 @@ interface AnalyticsTableProps {
 }
 
 const StatusPill: React.FC<{ status: CoursePerformanceRow["status"] }> = ({ status }) => {
-  const color = status === "Live" ? "bg-emerald-100 text-emerald-700" : status === "Draft" ? "bg-gray-100 text-gray-700" : "bg-yellow-100 text-yellow-700";
+  const colorMap = {
+    "Live": "bg-emerald-100 text-emerald-700",
+    "Draft": "bg-gray-100 text-gray-700", 
+    "Paused": "bg-yellow-100 text-yellow-700",
+    "Expired": "bg-red-100 text-red-700"
+  };
+  const color = colorMap[status];
   return (
     <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm ${color}`}>
       <span className={`h-2 w-2 rounded-full ${status==='Live' ? 'bg-emerald-500 animate-pulse' : 'bg-current'}`}></span>
@@ -60,7 +66,7 @@ const AnalyticsTable: React.FC<AnalyticsTableProps> = ({ rows, onAddCourse, titl
                   <td className="p-4 text-gray-900 dark:text-gray-100">{r.leads}</td>
                   <td className="p-4 text-gray-900 dark:text-gray-100">{r.engagementRate}</td>
                   <td className="p-4">
-                    <Button variant="ghost" size="sm" className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
+                    <Button onClick={onAddCourse} variant="ghost" size="sm" className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
                       <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="mr-0"/>
                     </Button>
                   </td>

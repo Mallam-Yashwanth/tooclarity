@@ -26,7 +26,6 @@ interface StudentListProps {
   isLoading?: boolean;
   onStudentClick?: (student: StudentItem) => void;
   onStudentHover?: (student: StudentItem) => void;
-  onStatusChange?: (studentId: string, newStatus: string) => void;
   hideActions?: boolean;
   selectionMode?: 'click' | 'hover';
   statusLabel?: string;
@@ -40,7 +39,6 @@ const StudentList: React.FC<StudentListProps> = ({
   isLoading,
   onStudentClick,
   onStudentHover,
-  onStatusChange,
   hideActions = false,
   selectionMode = 'click',
   statusLabel = 'Status',
@@ -75,6 +73,7 @@ const StudentList: React.FC<StudentListProps> = ({
     'Qualified prospect', 'Demo scheduled'
   ];
 
+
   const filteredAndSortedItems = items
     .filter(item => filterStatus === 'all' || item.status === filterStatus)
     .sort((a, b) => {
@@ -106,8 +105,18 @@ const StudentList: React.FC<StudentListProps> = ({
 
   const getStatusColor = (status: string) => {
     const colors: { [key: string]: string } = {
+      // Merged enquiry type and status system
       'Requested for callback': 'bg-blue-50 text-blue-700',
       'Requested for demo': 'bg-purple-50 text-purple-700',
+      'Contacted': 'bg-indigo-50 text-indigo-700',
+      'Interested': 'bg-green-50 text-green-700',
+      'Demo Scheduled': 'bg-pink-50 text-pink-700',
+      'Follow Up Required': 'bg-yellow-50 text-yellow-700',
+      'Qualified': 'bg-emerald-50 text-emerald-700',
+      'Not Interested': 'bg-red-50 text-red-700',
+      'Converted': 'bg-green-50 text-green-700',
+      // Legacy statuses (fallback)
+      'New Lead': 'bg-blue-50 text-blue-700',
       'Interested in pricing': 'bg-green-50 text-green-700',
       'FollowUp needed': 'bg-yellow-50 text-yellow-700',
       'Hot lead': 'bg-red-50 text-red-700',
@@ -268,13 +277,13 @@ const StudentList: React.FC<StudentListProps> = ({
                         {/* Status */}
                     <div className="text-sm text-gray-700 md:col-span-3 flex justify-start md:justify-left items-center">
                           <span className="md:hidden block text-xs text-gray-500 mb-1">{statusLabel}</span>
-                      <motion.span 
-                        className={`inline-block px-2 text-[0.8rem] md:text-md font-semibold py-1 rounded-full text-xs ${getStatusColor(item.status)}`}
-                        whileHover={{ scale: 1.05 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                {item.status}
-                      </motion.span>
+                          <motion.span 
+                            className={`inline-block px-2 text-[0.8rem] md:text-md font-semibold py-1 rounded-full text-xs ${getStatusColor(item.status)}`}
+                            whileHover={{ scale: 1.05 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            {item.status}
+                          </motion.span>
               </div>
                       </>
                     )}

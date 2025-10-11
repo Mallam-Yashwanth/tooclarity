@@ -5,9 +5,12 @@ const {
   getInstitutionAdminLeadsSummary,
   getInstitutionAdminEnquiriesForChart,
   getInstitutionAdminRecentEnquiries,
+  getInstitutionAdminStudents,
   createEnquiry,
   getInstitutionAdminEnquiryTypeSummary,
-  getInstitutionAdminEnquiryTypeByRangeRollups
+  getInstitutionAdminEnquiryTypeByRangeRollups,
+  updateEnquiryStatus,
+  getStudentsByEnquiryInstitution
 } = require("../controllers/enquiries.controller");
 
 // All routes require authentication
@@ -22,6 +25,8 @@ router.get("/chart", getInstitutionAdminEnquiriesForChart);
 // Get recent enquiries for dashboard
 router.get("/recent", getInstitutionAdminRecentEnquiries);
 
+
+
 // Summary by type for a time range
 router.get("/summary/types", getInstitutionAdminEnquiryTypeSummary);
 
@@ -30,5 +35,8 @@ router.get("/summary/types/range", getInstitutionAdminEnquiryTypeByRangeRollups)
 
 // Create new enquiry
 router.post("/createEnquiry", createEnquiry);
+
+// Update enquiry status
+router.put("/:enquiryId/status", updateEnquiryStatus);
 
 module.exports = router;

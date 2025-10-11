@@ -5,14 +5,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import AnalyticsTable, { CoursePerformanceRow } from "@/components/dashboard/AnalyticsTable";
 import CourseReachChart from "@/components/dashboard/CourseReachChart";
 import LeadTypeAnalytics, { LeadTypeData } from "@/components/dashboard/LeadTypeAnalytics";
-import { analyticsAPI, metricsAPI, enquiriesAPI, authAPI } from "@/lib/api";
+import { analyticsAPI, metricsAPI, enquiriesAPI, authAPI, programsAPI } from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import { withAuth } from "@/lib/auth-context";
 import Loading from "@/components/ui/loading";
 import { motion, AnimatePresence } from "framer-motion";
 import StatCard from "@/components/dashboard/StatCard";
 import TimeRangeToggle, { TimeRangeValue } from "@/components/ui/TimeRangeToggle";
-import { useInstitution } from "@/lib/hooks/dashboard-hooks";
+import { useInstitution, useProgramViews, useProgramsList, useRecentEnquiriesAll } from "@/lib/hooks/dashboard-hooks";
+import { useQueryClient } from "@tanstack/react-query";
+import { getProgramStatus } from "@/lib/utility";
+import { useRouter } from "next/navigation";
 
 function AnalyticsPage() {
 	const [analyticsRange, setAnalyticsRange] = useState<"Weekly"|"Monthly"|"Yearly">("Weekly");
@@ -28,9 +31,17 @@ function AnalyticsPage() {
 	const [isTrendLoading, setIsTrendLoading] = useState<boolean>(false);
 	const [institutionId, setInstitutionId] = useState<string | null>(null);
 	const [institutionAdminId, setInstitutionAdminId] = useState<string | null>(null);
-	// Static first KPI (not linked to backend)
-	const [kpiProfileViews, setKpiProfileViews] = useState<number>(1350);
-	const [kpiProfileDelta] = useState<{value:number; isPositive:boolean}>({ value: 12.5, isPositive: true });
+	const queryClient = useQueryClient();
+	const router = useRouter();
+
+	// Program views KPI via backend summary (range-based)
+	const programViewsRange = analyticsRange.toLowerCase() as 'weekly'|'monthly'|'yearly';
+	const { data: programViewsData } = useProgramViews(programViewsRange);
+	const kpiProgramViews = Array.isArray(programViewsData) ? programViewsData.reduce((sum, p:any) => sum + (Number(p.inRangeViews)||0), 0) : 0;
+
+	// Data for Program Performance Table
+	const { data: programsList } = useProgramsList();
+	const { data: recentEnquiries } = useRecentEnquiriesAll();
 	const { data: institution } = useInstitution();
 
 	// Effect 1: KPIs depend on time range only
@@ -60,22 +71,30 @@ function AnalyticsPage() {
 		return () => { mounted = false; };
 	}, [analyticsRange]);
 
-	// Effect 2: Trends load independently (on mount)
-	useEffect(() => {
-		let mounted = true;
-		(async () => {
-			try {
-				setIsTrendLoading(true);
-				const year = new Date().getFullYear();
-				const [viewsSeries, leadsSeries] = await Promise.all([
-					metricsAPI.getInstitutionAdminSeries('views', year) as any,
-					metricsAPI.getInstitutionAdminSeries('leads', year) as any,
-				]);
-				if (!mounted) return;
+    // Effect 2: Trends load independently but require institution id
+    useEffect(() => {
+        if (!institution?._id) return;
+        let mounted = true;
+        (async () => {
+            try {
+                setIsTrendLoading(true);
+                const year = new Date().getFullYear();
+                const [viewsSeries, leadsSeries] = await Promise.all([
+                    programsAPI.viewsSeries(String(institution._id), year) as any,
+                    metricsAPI.getInstitutionAdminSeries('leads', year) as any,
+                ]);
+                if (!mounted) return;
 				const viewsArr = new Array(12).fill(0);
 				const leadsArr = new Array(12).fill(0);
 				if (viewsSeries?.success && Array.isArray(viewsSeries.data?.series)) {
 					viewsSeries.data.series.forEach((n: number, i: number) => { if (i>=0 && i<12) viewsArr[i] = n || 0; });
+				}
+				// Fallback to course views if program series is empty
+				if (viewsArr.every(n => !n)) {
+					const courseSeries = await metricsAPI.getInstitutionAdminSeries('views', year) as any;
+					if (courseSeries?.success && Array.isArray(courseSeries.data?.series)) {
+						courseSeries.data.series.forEach((n: number, i: number) => { if (i>=0 && i<12) viewsArr[i] = n || 0; });
+					}
 				}
 				if (leadsSeries?.success && Array.isArray(leadsSeries.data?.series)) {
 					leadsSeries.data.series.forEach((n: number, i: number) => { if (i>=0 && i<12) leadsArr[i] = n || 0; });
@@ -86,7 +105,7 @@ function AnalyticsPage() {
 			}
 		})();
 		return () => { mounted = false; };
-	}, []);
+    }, [institution]);
 
 	// Effect 2.5: Fetch identifiers for socket rooms
 	useEffect(() => {
@@ -106,71 +125,89 @@ function AnalyticsPage() {
 		return () => { mounted = false; };
 	}, [institution]);
 
-	// Effect 3: Program performance loads independently (on mount)
+
+	// Build Program Performance Table from programs list + program views summary + recent enquiries
 	useEffect(() => {
-		let mounted = true;
-		(async () => {
-			try {
-				setIsPerfLoading(true);
-				const enquiriesRes = await enquiriesAPI.getRecentEnquiries() as any;
-				if (!mounted) return;
-				if (enquiriesRes?.success && Array.isArray(enquiriesRes.data?.enquiries)) {
-					const grouped: Record<string, { leads: number; lastTs: number | null }> = {};
-					enquiriesRes.data.enquiries.forEach((e: any) => {
-						const p = e.programInterest || 'Unknown Program';
-						const ts = e.createdAt ? new Date(e.createdAt).getTime() : Date.now();
-						if (!grouped[p]) grouped[p] = { leads: 0, lastTs: null };
-						grouped[p].leads += 1;
-						grouped[p].lastTs = Math.max(grouped[p].lastTs || 0, ts);
-					});
-					const NOW = Date.now();
-					const STATUS_WINDOW_DAYS = 30;
-					const WINDOW_MS = STATUS_WINDOW_DAYS * 24 * 60 * 60 * 1000;
-					const rows: CoursePerformanceRow[] = Object.entries(grouped).map(([program, stats], idx) => {
-						let status: 'Live'|'Paused'|'Draft' = 'Draft';
-						if (stats.leads > 0) {
-							if ((stats.lastTs || 0) >= (NOW - WINDOW_MS)) status = 'Live';
-							else status = 'Paused';
-						}
-						return {
-							sno: (idx + 1).toString().padStart(2, '0'),
-							name: program,
-							status,
-							views: 0,
-							leads: stats.leads,
-							engagementRate: '0%'
-						};
-					});
-					const totalLeads = rows.reduce((sum, r) => sum + r.leads, 0) || 1;
-					rows.forEach(r => { r.engagementRate = `${((r.leads / totalLeads) * 100).toFixed(1)}%`; });
-					rows.sort((a, b) => (b.leads - a.leads) || a.name.localeCompare(b.name));
-					const resequenced = rows.map((r, i) => ({ ...r, sno: (i + 1).toString().padStart(2, '0') }));
-					setCoursePerformance(resequenced);
+		try {
+			setIsPerfLoading(true);
+			const programs = Array.isArray(programsList) ? programsList : [];
+			const viewsMap = new Map<string, number>();
+			(Array.isArray(programViewsData) ? programViewsData : []).forEach((p: any) => {
+				viewsMap.set(String(p.programName), Number(p.inRangeViews || 0));
+			});
+			const leadCounts = new Map<string, { leads: number; lastTs: number | null }>();
+			(Array.isArray(recentEnquiries) ? recentEnquiries : []).forEach((e: any) => {
+				const p = e.programInterest || 'Unknown Program';
+				const ts = e.createdAt ? new Date(e.createdAt).getTime() : Date.now();
+				const prev = leadCounts.get(p) || { leads: 0, lastTs: null };
+				prev.leads += 1;
+				prev.lastTs = Math.max(prev.lastTs || 0, ts);
+				leadCounts.set(p, prev);
+			});
+			const NOW = Date.now();
+			const WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+			const rows: CoursePerformanceRow[] = programs.map((pg, idx) => {
+				const name = pg.programName;
+				const views = viewsMap.get(name) || 0;
+				const lead = leadCounts.get(name) || { leads: 0, lastTs: null };
+				
+				// Use new program status logic based on startDate and endDate
+				const programStatus = getProgramStatus(pg.startDate || '', pg.endDate || '');
+				let status: 'Live'|'Paused'|'Draft'|'Expired' = 'Draft';
+				
+				if (programStatus.status === 'active') {
+					status = 'Live';
+				} else if (programStatus.status === 'upcoming') {
+					status = 'Paused';
+				} else if (programStatus.status === 'expired') {
+					status = 'Expired';
 				} else {
-					setCoursePerformance([]);
+					// Fallback to old logic for programs without dates
+					if (lead.leads > 0) status = (lead.lastTs || 0) >= (NOW - WINDOW_MS) ? 'Live' : 'Paused';
 				}
-			} catch (err) { console.error('Analytics: program performance fetch failed', err); } finally {
-				setIsPerfLoading(false);
-			}
-		})();
-		return () => { mounted = false; };
-	}, []);
+				
+				return {
+					sno: (idx + 1).toString().padStart(2, '0'),
+					name,
+					status,
+					views,
+					leads: lead.leads,
+					engagementRate: '0%'
+				};
+			});
+			const totalLeads = rows.reduce((sum, r) => sum + r.leads, 0) || 1;
+			rows.forEach(r => { r.engagementRate = `${((r.leads / totalLeads) * 100).toFixed(1)}%`; });
+			rows.sort((a, b) => (b.leads - a.leads) || b.views - a.views || a.name.localeCompare(b.name));
+			const resequenced = rows.map((r, i) => ({ ...r, sno: (i + 1).toString().padStart(2, '0') }));
+			setCoursePerformance(resequenced);
+		} catch (err) {
+			console.error('Analytics: build program performance failed', err);
+		} finally {
+			setIsPerfLoading(false);
+		}
+	}, [programsList, programViewsData, recentEnquiries]);
 
 	// Effect 4: Lead type totals once; independent of KPI time range
 	useEffect(() => {
 		let mounted = true;
 		(async () => {
-			try {
+            try {
 				const [callbacksDemos, comparisons] = await Promise.all([
-					enquiriesAPI.getTypeSummaryRollups('yearly') as any,
-					metricsAPI.getInstitutionAdminSummary('comparisons') as any
+                    enquiriesAPI.getTypeSummaryRollups('yearly') as any,
+                    // Prefer program comparisons sum; fallback to existing
+                    programsAPI.summaryComparisons(String(institution?._id || ''), 'yearly').catch(()=>null) as any
 				]);
 				if (!mounted) return;
-				setLeadTypes({
-					callBackRequests: Number(callbacksDemos?.data?.callbacks || 0),
-					demoRequests: Number(callbacksDemos?.data?.demos || 0),
-					courseComparisons: Number((comparisons?.data?.totalComparisons) || 0)
-				});
+                let comparisonsTotal = 0;
+                if (comparisons && (comparisons as any).success) {
+                    const arr = (comparisons as any).data?.programs || [];
+                    comparisonsTotal = Array.isArray(arr) ? arr.reduce((s:number,p:any)=> s + (Number(p.inRangeComparisons)||0), 0) : 0;
+                }
+                setLeadTypes({
+                    callBackRequests: Number(callbacksDemos?.data?.callbacks || 0),
+                    demoRequests: Number(callbacksDemos?.data?.demos || 0),
+                    courseComparisons: comparisonsTotal
+                });
 			} catch (err) { console.error('Analytics: lead types fetch failed', err); }
 		})();
 		return () => { mounted = false; };
@@ -212,68 +249,23 @@ function AnalyticsPage() {
 					} catch (err) { console.error('Analytics: realtime courseViews update failed', err); }
 				});
 
-				// When an enquiry is created, refresh leads KPI, leads series, program performance and lead type totals
+				// When an enquiry is created, invalidate caches: leads KPI, series, and recent enquiries used for program table
 				s.on('enquiryCreated', async () => {
 					try {
 						const range = (analyticsRange.toLowerCase() as 'weekly'|'monthly'|'yearly');
-						const [leadsRange, leadsSeries, enquiriesRes, leadTypesRes] = await Promise.all([
-							metricsAPI.getInstitutionAdminByRange('leads', range) as any,
-							metricsAPI.getInstitutionAdminSeries('leads', new Date().getFullYear()) as any,
-							enquiriesAPI.getRecentEnquiries() as any,
-							enquiriesAPI.getTypeSummaryRollups('yearly') as any,
-						]);
-						if (leadsRange?.success) {
-							setKpiLeads(leadsRange.data?.totalLeads || 0);
-							if (leadsRange.data?.trend) setKpiLeadsDelta(leadsRange.data.trend);
-						}
-						if (leadsSeries?.success && Array.isArray(leadsSeries.data?.series)) {
-							const arr = new Array(12).fill(0);
-							leadsSeries.data.series.forEach((n: number, i: number) => { if (i>=0 && i<12) arr[i] = n || 0; });
-							setViewLeadTrends(prev => ({ views: prev?.views || new Array(12).fill(0), leads: arr }));
-						}
-						// Refresh program performance rows
-						if (enquiriesRes?.success && Array.isArray(enquiriesRes.data?.enquiries)) {
-							const grouped: Record<string, { leads: number; lastTs: number | null }> = {};
-							enquiriesRes.data.enquiries.forEach((e: any) => {
-								const p = e.programInterest || 'Unknown Program';
-								const ts = e.createdAt ? new Date(e.createdAt).getTime() : Date.now();
-								if (!grouped[p]) grouped[p] = { leads: 0, lastTs: null };
-								grouped[p].leads += 1;
-								grouped[p].lastTs = Math.max(grouped[p].lastTs || 0, ts);
-							});
-							const NOW = Date.now();
-							const STATUS_WINDOW_DAYS = 30;
-							const WINDOW_MS = STATUS_WINDOW_DAYS * 24 * 60 * 60 * 1000;
-							const rows: CoursePerformanceRow[] = Object.entries(grouped).map(([program, stats], idx) => {
-								let status: 'Live'|'Paused'|'Draft' = 'Draft';
-								if (stats.leads > 0) {
-									if ((stats.lastTs || 0) >= (NOW - WINDOW_MS)) status = 'Live';
-									else status = 'Paused';
-								}
-								return {
-									sno: (idx + 1).toString().padStart(2, '0'),
-									name: program,
-									status,
-									views: 0,
-									leads: stats.leads,
-									engagementRate: '0%'
-								};
-							});
-							const totalLeads = rows.reduce((sum, r) => sum + r.leads, 0) || 1;
-							rows.forEach(r => { r.engagementRate = `${((r.leads / totalLeads) * 100).toFixed(1)}%`; });
-							rows.sort((a, b) => (b.leads - a.leads) || a.name.localeCompare(b.name));
-							const resequenced = rows.map((r, i) => ({ ...r, sno: (i + 1).toString().padStart(2, '0') }));
-							setCoursePerformance(resequenced);
-						}
-						// Refresh lead type totals (yearly, decoupled)
-						if (leadTypesRes?.success) {
-							setLeadTypes({
-								callBackRequests: Number(leadTypesRes.data?.callbacks || 0),
-								demoRequests: Number(leadTypesRes.data?.demos || 0),
-								courseComparisons: 0,
-							});
-						}
-					} catch (err) { console.error('Analytics: realtime enquiryCreated update failed', err); }
+						queryClient.invalidateQueries({ queryKey: ['metrics', 'leads', range, institutionId] });
+						queryClient.invalidateQueries({ queryKey: ['chart-data', 'leads', new Date().getFullYear(), institutionId] });
+						queryClient.invalidateQueries({ queryKey: ['recent-enquiries-all', institutionId] });
+						queryClient.invalidateQueries({ queryKey: ['recent-enquiries', institutionId] });
+					} catch (err) { console.error('Analytics: realtime enquiryCreated invalidation failed', err); }
+				});
+
+				// When program views change, invalidate program-views query to refetch lazily
+				s.on('programViewsUpdated', async () => {
+					try {
+						queryClient.invalidateQueries({ queryKey: ['program-views', institutionId, programViewsRange] });
+						queryClient.invalidateQueries({ queryKey: ['programs-list', institutionId] });
+					} catch (err) { console.error('Analytics: programViews invalidate failed', err); }
 				});
 
 				// When comparisons change, refresh comparisons total inside lead type analysis only
@@ -287,10 +279,15 @@ function AnalyticsPage() {
 				});
 			} catch (err) { console.error('Analytics: socket setup failed', err); }
 		})();
-		return () => { try { mounted = false; s?.off('courseViewsUpdated'); s?.off('enquiryCreated'); s?.off('comparisonsUpdated'); } catch (err) { console.error('Analytics: socket cleanup failed', err); } };
-	}, [institutionId, institutionAdminId, analyticsRange]);
+		return () => { try { mounted = false; s?.off('courseViewsUpdated'); s?.off('enquiryCreated'); s?.off('comparisonsUpdated'); s?.off('programViewsUpdated'); } catch (err) { console.error('Analytics: socket cleanup failed', err); } };
+	}, [institutionId, institutionAdminId, analyticsRange, queryClient, programViewsRange]);
 
 	const rangeText = analyticsRange.toLowerCase();
+
+	// Navigation function for analytics action button
+	const handleAnalyticsAction = () => {
+		router.push('/dashboard/subscription');
+	};
 
 	return (
 		<div className="grid grid-cols-1 gap-6 mb-6 p-2 mt-5 rounded-2xl">
@@ -312,13 +309,13 @@ function AnalyticsPage() {
 						transition={{ duration: 0.5 }}
 					>
 						<AnimatePresence mode="wait">
-							<StatCard 
-								title="Total Program Views"
-								value={kpiProfileViews}
-								trend={kpiProfileDelta}
-								isLoading={isKpiLoading}
-								showFilters={false}
-							/>
+					<StatCard 
+						title="Total Program Views"
+						value={kpiProgramViews}
+						trend={{ value: 0, isPositive: true }}
+						isLoading={isKpiLoading}
+						showFilters={false}
+					/>
 						</AnimatePresence>
 						<AnimatePresence mode="wait">
 							<StatCard 
@@ -349,7 +346,7 @@ function AnalyticsPage() {
 						<Loading size="md" text="Loading program performance..." />
 					</div>
 				) : null}
-				<AnalyticsTable rows={coursePerformance} titleOverride="Program Performance" nameHeaderOverride="Program name" onAddCourse={() => {}} />
+				<AnalyticsTable rows={coursePerformance} titleOverride="Program Performance" nameHeaderOverride="Program name" onAddCourse={handleAnalyticsAction} />
 			</div>
 
 			{/* View & Lead Trends with inner loading */}

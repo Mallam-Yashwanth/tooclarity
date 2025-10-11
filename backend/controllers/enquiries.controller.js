@@ -1,6 +1,6 @@
 const Enquiries = require("../models/Enquiries");
 const { Institution } = require("../models/Institution");
-const student = require("../models/Student"); // legacy; keep import if used elsewhere
+const InstituteAdminModel = require("../models/InstituteAdmin");
 const AppError = require("../utils/appError");
 const asyncHandler = require("express-async-handler");
 
@@ -40,22 +40,6 @@ async function getInstitutionAdminEnquiriesMonthly(institutionAdminId, year) {
   return monthlyData;
 }
 
-async function getRecentEnquiries(institutionAdminId, limit = 4) {
-  const institutions = await Institution.find({ institutionAdmin: institutionAdminId }).select("_id");
-  const ids = institutions.map(i => i._id);
-  if (ids.length === 0) return [];
-  
-  const enquiries = await Enquiries.find({
-    institution: { $in: ids }
-  })
-  .populate("institution", "institutionName headquartersAddress locationURL")
-  .populate("student", "studentAddress")
-  .sort({ createdAt: -1 })
-  .limit(limit)
-  .select("studentName studentEmail studentPhone programInterest enquiryType createdAt institution student");
-  
-  return enquiries;
-}
 
 function getPeriod(range) {
   const now = new Date();
@@ -102,39 +86,235 @@ exports.getInstitutionAdminEnquiriesForChart = asyncHandler(async (req, res, nex
 });
 
 exports.getInstitutionAdminRecentEnquiries = asyncHandler(async (req, res, next) => {
-  const limit = Math.max(1, Math.min(10000, parseInt(req.query.limit) || 1000));
+  const limit = Math.max(1, Math.min(10000, parseInt(req.query.limit) || 10));
   const offset = Math.max(0, parseInt(req.query.offset) || 0);
   const institutions = await Institution.find({ institutionAdmin: req.userId }).select("_id");
   const ids = institutions.map(i => i._id);
+  console.log(`[DEBUG] Institution admin ${req.userId} has ${ids.length} institutions:`, ids);
   if (ids.length === 0) return res.status(200).json({ success: true, data: { enquiries: [] } });
 
+  // Fetch enquiries directly from Enquiries collection for these institutions
   const enquiries = await Enquiries.find({
     institution: { $in: ids }
   })
-  .populate("institution", "institutionName headquartersAddress locationURL")
-  .populate("student", "studentAddress")
   .sort({ createdAt: -1 })
   .skip(offset)
   .limit(limit)
-  .select("studentName studentEmail studentPhone programInterest enquiryType createdAt institution student");
+  .populate('institution', 'institutionName headquartersAddress locationURL')
+  .populate({
+    path: 'student',
+    select: 'name email contactNumber address role',
+    match: { role: 'STUDENT' }
+  });
+
+  console.log(`[DEBUG] getInstitutionAdminRecentEnquiries (direct): offset: ${offset}, limit: ${limit}, found: ${enquiries.length}`);
+  
+  // Debug: Log first enquiry to see populated student data
+  if (enquiries.length > 0) {
+    console.log(`[DEBUG] First enquiry student data:`, {
+      studentId: enquiries[0].student?._id,
+      studentName: enquiries[0].student?.name,
+      studentEmail: enquiries[0].student?.email,
+      studentPhone: enquiries[0].student?.contactNumber
+    });
+  }
 
   res.status(200).json({ 
     success: true, 
-    data: { enquiries } 
+    data: { enquiries }
+  });
+});
+
+// List students belonging to institutions managed by the current institution admin
+exports.getInstitutionAdminStudents = asyncHandler(async (req, res, next) => {
+  const limit = Math.max(1, Math.min(10000, parseInt(req.query.limit) || 10));
+  const offset = Math.max(0, parseInt(req.query.offset) || 0);
+
+  const institutions = await Institution.find({ institutionAdmin: req.userId }).select("_id");
+  const ids = institutions.map(i => i._id);
+  if (ids.length === 0) return res.status(200).json({ success: true, data: { students: [] } });
+
+  const students = await InstituteAdminModel.find({
+    institution: { $in: ids },
+    role: 'STUDENT'
+  })
+  .select('name email contactNumber address createdAt')
+  .sort({ createdAt: -1 })
+  .skip(offset)
+  .limit(limit);
+
+  return res.status(200).json({ success: true, data: { students } });
+});
+
+// Get students that belong to the same institution as a given enquiry
+// Uses Enquiries (to resolve institution) and InstituteAdmin (to fetch role: STUDENT)
+exports.getStudentsByEnquiryInstitution = asyncHandler(async (req, res, next) => {
+  const { enquiryId } = req.params;
+
+  if (!enquiryId) {
+    return res.status(400).json({ success: false, message: 'enquiryId is required' });
+  }
+
+  const enquiry = await Enquiries.findById(enquiryId).select('institution');
+  if (!enquiry || !enquiry.institution) {
+    return res.status(404).json({ success: false, message: 'Enquiry or institution not found' });
+  }
+
+  const limit = Math.max(1, Math.min(10000, parseInt(req.query.limit) || 10));
+  const offset = Math.max(0, parseInt(req.query.offset) || 0);
+
+  const students = await InstituteAdminModel.find({
+    institution: enquiry.institution,
+    role: 'STUDENT'
+  })
+  .select('name email contactNumber address createdAt')
+  .sort({ createdAt: -1 })
+  .skip(offset)
+  .limit(limit);
+
+  return res.status(200).json({ success: true, data: { students } });
+});
+
+exports.updateEnquiryStatus = asyncHandler(async (req, res, next) => {
+  const { enquiryId } = req.params;
+  const { status, notes } = req.body;
+  const userId = req.userId;
+
+  console.log('[DEBUG] updateEnquiryStatus called:', { enquiryId, status, notes, userId });
+
+  // Validate status
+  const validStatuses = [
+    // Initial enquiry types from students
+    "Requested for callback",
+    "Requested for demo",
+    // Progressed statuses by institution admin
+    "Contacted", 
+    "Interested",
+    "Demo Scheduled",
+    "Follow Up Required",
+    "Qualified",
+    "Not Interested",
+    "Converted"
+  ];
+
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({
+      success: false,
+      message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+    });
+  }
+
+  // Find the enquiry and verify it belongs to the institution admin's institutions
+  const enquiry = await Enquiries.findById(enquiryId)
+    .populate('institution', 'institutionAdmin')
+    .populate('student', 'name email');
+
+  if (!enquiry) {
+    return res.status(404).json({
+      success: false,
+      message: 'Enquiry not found'
+    });
+  }
+
+  // Verify the enquiry belongs to the institution admin's institutions
+  const institutions = await Institution.find({ institutionAdmin: userId }).select("_id");
+  const institutionIds = institutions.map(i => i._id);
+
+  if (!institutionIds.some(id => id.toString() === enquiry.institution._id.toString())) {
+    return res.status(403).json({
+      success: false,
+      message: 'You do not have permission to update this enquiry'
+    });
+  }
+
+  // Update status and add to history
+  const oldStatus = enquiry.status;
+  enquiry.status = status;
+  
+  // Add to status history
+  enquiry.statusHistory.push({
+    status: status,
+    changedBy: userId,
+    changedAt: new Date(),
+    notes: notes || ''
+  });
+
+  await enquiry.save();
+
+  console.log('[DEBUG] Enquiry status updated successfully:', { enquiryId, oldStatus, newStatus: status });
+
+  // Emit real-time update
+  try {
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`institution:${enquiry.institution._id}`).emit("enquiryStatusUpdated", { 
+        enquiryId: enquiry._id,
+        oldStatus,
+        newStatus: status,
+        updatedBy: userId,
+        student: enquiry.student
+      });
+      
+      // Notify institution admin
+      if (enquiry.institution.institutionAdmin) {
+        io.to(`institutionAdmin:${enquiry.institution.institutionAdmin}`).emit("enquiryStatusUpdated", {
+          enquiryId: enquiry._id,
+          oldStatus,
+          newStatus: status,
+          updatedBy: userId,
+          student: enquiry.student
+        });
+      }
+    }
+  } catch (err) {
+    console.error('EnquiriesController: emit status update failed', err?.message || err);
+  }
+
+  res.status(200).json({
+    success: true,
+    message: 'Enquiry status updated successfully',
+    data: {
+      enquiryId: enquiry._id,
+      oldStatus,
+      newStatus: status,
+      updatedAt: enquiry.updatedAt
+    }
   });
 });
 
 exports.createEnquiry = asyncHandler(async (req, res, next) => {
-  const { studentName, studentEmail, studentPhone, institution, programInterest, enquiryType } = req.body;
+  const { institution, programInterest, enquiryType } = req.body;
   
+  // If the caller is an authenticated student, always use their id
+  let studentId = req.body.student;
+  if (req.userRole === 'STUDENT') {
+    studentId = req.userId;
+  }
+  if (!studentId) {
+    return res.status(400).json({ success: false, message: 'student id is required' });
+  }
+  if (!institution) {
+    return res.status(400).json({ success: false, message: 'institution id is required' });
+  }
+  if (!programInterest || !enquiryType) {
+    return res.status(400).json({ success: false, message: 'programInterest and enquiryType are required' });
+  }
+
   const enquiry = await Enquiries.create({
-    // studentName,
-    // studentEmail, 
-    // studentPhone,
+    student: studentId,
     institution,
     programInterest,
-    enquiryType
+    enquiryType,
+    status: enquiryType, // Set initial status from enquiryType
+    statusHistory: [{
+      status: enquiryType,
+      changedBy: studentId, // Student who created the enquiry
+      changedAt: new Date(),
+      notes: 'Initial enquiry created'
+    }]
   });
+
+  // No longer push enquiry into student's enquiries array (field removed)
   
   try {
     const io = req.app.get("io");
@@ -178,6 +358,18 @@ exports.createEnquiry = asyncHandler(async (req, res, next) => {
       if (inst?.institutionAdmin) {
         const adminId = String(inst.institutionAdmin);
         io.to(`institutionAdmin:${adminId}`).emit("enquiryCreated", { enquiry });
+        // Notify institution admin via notifications channel
+        try {
+          const { addNotificationJob } = require('../jobs/notification.job');
+          await addNotificationJob({
+            title: 'Callback/Demo requested',
+            description: `${enquiry.enquiryType} - ${enquiry.programInterest}`,
+            category: 'user',
+            recipientType: 'ADMIN',
+            institutionAdmin: adminId,
+            metadata: { enquiryId: String(enquiry._id), institution: String(institution) }
+          });
+        } catch (_) {}
         
         // Emit updated leads total (based on students now)
         const totalLeads = await getInstitutionAdminLeadsTotal(adminId);

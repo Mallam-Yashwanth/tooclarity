@@ -13,6 +13,7 @@ interface UnderPostGraduateFormProps {
   courses: Course[];
   selectedCourseId: number;
   courseErrors: Record<string, string>; 
+  labelVariant?: 'course' | 'program';
 }
 
 export default function UnderPostGraduateForm({
@@ -21,8 +22,10 @@ export default function UnderPostGraduateForm({
   setCourses,
   courses,
   selectedCourseId,
-  courseErrors, 
+  courseErrors,
+  labelVariant = 'course', 
 }: UnderPostGraduateFormProps) {
+  const isProgram = labelVariant === 'program';
   return (
     <div className="grid md:grid-cols-2 gap-6">
       {/* Row 1 */}
@@ -137,7 +140,7 @@ export default function UnderPostGraduateForm({
 
       {/* Row 4 */}
       <InputField
-        label="Course Duration"
+        label={isProgram ? "Program Duration" : "Course Duration"}
         name="courseDuration"
         value={currentCourse.courseDuration}
         onChange={handleCourseChange}
@@ -147,17 +150,38 @@ export default function UnderPostGraduateForm({
       />
 
       <InputField
-        label="Price of Course"
+        label={isProgram ? "Program Start Date" : "Course Start Date"}
+        name="startDate"
+        value={currentCourse.startDate}
+        onChange={handleCourseChange}
+        type="date"
+        error={courseErrors.startDate}
+        required
+      />
+
+      {/* Row 5 */}
+      <InputField
+        label={isProgram ? "Program End Date" : "Course End Date"}
+        name="endDate"
+        value={currentCourse.endDate}
+        onChange={handleCourseChange}
+        type="date"
+        error={courseErrors.endDate}
+        required
+      />
+
+      <InputField
+        label={isProgram ? "Price of Program" : "Price of Course"}
         name="priceOfCourse"
         value={currentCourse.priceOfCourse}
         onChange={handleCourseChange}
-        placeholder="Enter Course price"
+        placeholder={isProgram ? "Enter Program price" : "Enter Course price"}
         type="number"
         required
         error={courseErrors.priceOfCourse}
       />
       
-      {/* Row 5 */}
+      {/* Row 6 */}
       <InputField
         label="Class size"
         name="classSize"

@@ -111,6 +111,34 @@ exports.register = async (req, res, next, options = {}) => {
       options
     );
 
+    // Enqueue welcome notification per role
+    try {
+      const { addNotificationJob } = require('../jobs/notification.job');
+      const title = 'Welcome to TooClarity';
+      const description = `Hi ${newUser.name}, your account has been created.`;
+      if (newUser.role === 'INSTITUTE_ADMIN') {
+        await addNotificationJob({ title, description, category: 'system', recipientType: 'ADMIN', institutionAdmin: newUser._id });
+      } else if (newUser.role === 'STUDENT') {
+        await addNotificationJob({ title, description, category: 'system', recipientType: 'STUDENT', student: newUser._id });
+      } else if (newUser.role === 'ADMIN') {
+        await addNotificationJob({ title, description, category: 'system', recipientType: 'ADMIN', institutionAdmin: newUser._id });
+      }
+    } catch (_) {}
+
+    // Enqueue welcome notification per role
+    try {
+      const { addNotificationJob } = require('../jobs/notification.job');
+      const title = 'Welcome to TooClarity';
+      const description = `Hi ${newUser.name}, your account has been created.`;
+      if (newUser.role === 'INSTITUTE_ADMIN') {
+        await addNotificationJob({ title, description, category: 'system', recipientType: 'ADMIN', institutionAdmin: newUser._id });
+      } else if (newUser.role === 'STUDENT') {
+        await addNotificationJob({ title, description, category: 'system', recipientType: 'STUDENT', student: newUser._id });
+      } else if (newUser.role === 'ADMIN') {
+        await addNotificationJob({ title, description, category: 'system', recipientType: 'ADMIN', institutionAdmin: newUser._id });
+      }
+    } catch (_) {}
+
     // ✅ If Google OAuth flow → return tokens only
     if (options.returnTokens) return tokenData;
 

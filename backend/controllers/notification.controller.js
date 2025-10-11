@@ -15,17 +15,33 @@ function buildScopeFilter(req) {
 
 exports.list = async function(req, res) {
 	try {
-		const { page = 1, limit = 20, unread, category } = req.query;
+    const { page = 1, limit = 20, unread, category, cursor } = req.query;
 		const filter = buildScopeFilter(req);
 		if (typeof unread !== 'undefined') filter.read = unread === 'true' ? false : true;
 		if (category) filter.category = category;
-		const skip = (Math.max(1, parseInt(page)) - 1) * Math.min(100, parseInt(limit));
-		const query = Notification.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Math.min(100, parseInt(limit)));
-		const [items, total] = await Promise.all([
-			query,
-			Notification.countDocuments(filter)
-		]);
-		res.json({ success: true, data: { items, total, page: Number(page), limit: Number(limit) } });
+    const lim = Math.min(100, parseInt(limit));
+
+    // Cursor-based pagination (createdAt desc, _id desc)
+    let items;
+    if (cursor) {
+      try {
+        const [tsStr, idStr] = String(cursor).split('_');
+        const ts = new Date(tsStr);
+        const _id = idStr;
+        const cursorFilter = Object.assign({}, filter, { $or: [
+          { createdAt: { $lt: ts } },
+          { createdAt: ts, _id: { $lt: _id } }
+        ]});
+        items = await Notification.find(cursorFilter).sort({ createdAt: -1, _id: -1 }).limit(lim);
+      } catch {
+        items = await Notification.find(filter).sort({ createdAt: -1, _id: -1 }).limit(lim);
+      }
+    } else {
+      items = await Notification.find(filter).sort({ createdAt: -1, _id: -1 }).limit(lim);
+    }
+
+    const next = items.length === lim ? `${items[items.length - 1].createdAt.toISOString()}_${items[items.length - 1]._id}` : null;
+    res.json({ success: true, data: { items, nextCursor: next, limit: lim } });
 	} catch (e) {
 		res.status(500).json({ success: false, message: e.message });
 	}
@@ -33,7 +49,20 @@ exports.list = async function(req, res) {
 
 exports.create = async function(req, res) {
 	try {
-		const { title, description, category, recipientType, student, institution, branch, institutionAdmin, metadata } = req.body;
+    const { title, description, category, recipientType, student, institution, branch, institutionAdmin, metadata } = req.body;
+    // Basic metadata normalization for production-level deep links
+    const norm = Object.assign({}, metadata || {});
+    if (!norm.type) {
+      // derive type from category if not provided
+      const c = (category || '').toString().toUpperCase();
+      if (c === 'USER') norm.type = 'WELCOME';
+    }
+    if (!norm.route) {
+      const t = (norm.type || '').toString().toUpperCase();
+      if (t === 'CALLBACK_REQUEST') norm.route = '/dashboard/leads';
+      else if (t === 'NEW_STUDENT') norm.route = '/dashboard';
+      else norm.route = '/notifications';
+    }
 		/* Set expiresAt per policy
 		const now = Date.now();
 		const ttlByCategoryMs = {
@@ -48,8 +77,25 @@ exports.create = async function(req, res) {
 		const expiresAt = new Date(now + ttl);
 		const doc = await Notification.create({ title, description, category, recipientType, student, institution, branch, institutionAdmin, metadata, expiresAt });*/
 		// Global policy: 7-day retention handled by TTL on createdAt
-		const doc = await Notification.create({ title, description, category, recipientType, student, institution, branch, institutionAdmin, metadata });
-		res.json({ success: true, data: doc });
+    // Enqueue for async processing (jobs)
+    try {
+      const { addNotificationJob } = require('../jobs/notification.job');
+      await addNotificationJob({ title, description, category, recipientType, student, institution, branch, institutionAdmin, metadata: norm });
+    } catch (e) {
+      console.error('Enqueue notification failed, falling back to direct create');
+      const doc = await Notification.create({ title, description, category, recipientType, student, institution, branch, institutionAdmin, metadata: norm });
+      try {
+        const io = req.app.get('io');
+        if (io) {
+          if (recipientType === 'INSTITUTION' && institution) io.to(`institution:${institution}`).emit('notificationCreated', { notification: doc });
+          if (recipientType === 'ADMIN' && institutionAdmin) io.to(`institutionAdmin:${institutionAdmin}`).emit('notificationCreated', { notification: doc });
+          if (recipientType === 'STUDENT' && student) io.to(`student:${student}`).emit('notificationCreated', { notification: doc });
+          if (recipientType === 'BRANCH' && branch) io.to(`branch:${branch}`).emit('notificationCreated', { notification: doc });
+        }
+      } catch {}
+      return res.json({ success: true, data: doc });
+    }
+    res.json({ success: true, data: { enqueued: true } });
 	} catch (e) {
 		res.status(400).json({ success: false, message: e.message });
 	}
@@ -59,56 +105,38 @@ exports.markRead = async function(req, res) {
 	try {
 		const { ids } = req.body;
 		if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ success: false, message: 'ids required' });
-		await Notification.updateMany({ _id: { $in: ids } }, { $set: { read: true } });
-		res.json({ success: true });
+		const expireAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const result = await Notification.updateMany({ _id: { $in: ids } }, { $set: { read: true, expiresAt: expireAt } });
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        // We cannot easily infer rooms for each id without extra lookup; emit generic update
+        ids.forEach((notificationId) => {
+          io.emit('notificationUpdated', { notificationId, read: true });
+        });
+      }
+    } catch (_) {}
+    res.json({ success: true, data: { updated: result.modifiedCount } });
 	} catch (e) {
 		res.status(400).json({ success: false, message: e.message });
 	}
 };
 
-exports.markUnread = async function(req, res) {
-	try {
-		const { ids } = req.body;
-		if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ success: false, message: 'ids required' });
-		await Notification.updateMany({ _id: { $in: ids } }, { $set: { read: false } });
-		res.json({ success: true });
-	} catch (e) {
-		res.status(400).json({ success: false, message: e.message });
-	}
-};
+// markUnread removed per policy
 
 exports.remove = async function(req, res) {
 	try {
 		const { ids } = req.body;
 		if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ success: false, message: 'ids required' });
-		await Notification.deleteMany({ _id: { $in: ids } });
-		res.json({ success: true });
+    const result = await Notification.deleteMany({ _id: { $in: ids } });
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        ids.forEach((notificationId) => io.emit('notificationRemoved', { notificationId }));
+      }
+    } catch (_) {}
+    res.json({ success: true, data: { removed: result.deletedCount } });
 	} catch (e) {
 		res.status(400).json({ success: false, message: e.message });
 	}
 };
-
-// Optional: retention compactor for categories (defensive cleanup)
-exports.compact = async function(req, res) {
-	try {
-		const retentionDays = {
-			otp: 0, // handled by TTL 5m
-			system: 60,
-			billing: 365,
-			security: 180,
-			user: 90,
-			other: 90
-		};
-		const now = Date.now();
-		const ops = Object.entries(retentionDays).map(async ([cat, days]) => {
-			if (!days) return { cat, deleted: 0 };
-			const cutoff = new Date(now - days * 24 * 60 * 60 * 1000);
-			const r = await Notification.deleteMany({ category: cat, createdAt: { $lt: cutoff } });
-			return { cat, deleted: r.deletedCount || 0 };
-		});
-		const results = await Promise.all(ops);
-		res.json({ success: true, data: { results } });
-	} catch (e) {
-		res.status(500).json({ success: false, message: e.message });
-	}
-}; 

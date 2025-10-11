@@ -1,5 +1,4 @@
 const InstituteAdmin = require('../models/InstituteAdmin');
-const Student = require('../models/Student');
 
 /**
  * Find or create a user (InstituteAdmin or Student) based on Google profile and userType.
@@ -9,13 +8,14 @@ const Student = require('../models/Student');
  */
 async function findOrCreateGoogleUser(profile, userType) {
   if (userType === 'student') {
-    let user = await Student.findOne({ googleId: profile.id });
+    let user = await InstituteAdmin.findOne({ googleId: profile.id, role: 'STUDENT' });
     if (!user) {
-      user = await Student.create({
+      user = await InstituteAdmin.create({
         googleId: profile.id,
-        studentName: profile.displayName,
-        studentEmail: profile.emails[0].value,
-        // You may want to set institution or other fields here
+        name: profile.displayName,
+        email: profile.emails[0].value,
+        role: 'STUDENT',
+        isEmailVerified: true,
       });
     }
     user._userType = 'student';

@@ -3,6 +3,8 @@ export type CourseRecord = {
   courseName: string;
   aboutCourse?: string;
   courseDuration?: string;
+  startDate?: string;
+  endDate?: string;
   mode?: string;
   priceOfCourse?: string;
   location?: string;

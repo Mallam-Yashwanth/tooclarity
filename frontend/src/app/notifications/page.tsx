@@ -27,7 +27,7 @@ export default function NotificationsPage() {
   const [query, setQuery] = React.useState("");
 
   const { data: items = [], isLoading } = useNotifications();
-  const { markRead, markUnread, remove } = useNotificationActions();
+  const { markRead, remove } = useNotificationActions();
 
   const unreadCount = React.useMemo(() => items.filter(i => !i.read).length, [items]);
 
@@ -67,9 +67,6 @@ export default function NotificationsPage() {
     await markRead.mutateAsync([id]);
   };
 
-  const markUnreadOne = async (id: string) => {
-    await markUnread.mutateAsync([id]);
-  };
 
   const removeIds = async (ids: string[]) => {
     await remove.mutateAsync(ids);
@@ -173,7 +170,6 @@ export default function NotificationsPage() {
           <div>{selectedIds.size} selected</div>
           <div className="flex items-center gap-2">
             <button className="px-2 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-700" onClick={() => markRead.mutate(Array.from(selectedIds))}>Mark read</button>
-            <button className="px-2 py-1 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800" onClick={() => markUnread.mutate(Array.from(selectedIds))}>Mark unread</button>
             <button className="px-2 py-1 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800" onClick={() => removeIds(Array.from(selectedIds))}>Delete</button>
           </div>
         </div>
@@ -221,10 +217,8 @@ export default function NotificationsPage() {
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
-                  {!n.read ? (
+                  {!n.read && (
                     <button className="text-xs px-2 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-700" onClick={() => markReadOne(n.id)}>Mark read</button>
-                  ) : (
-                    <button className="text-xs px-2 py-1 rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800" onClick={() => markUnreadOne(n.id)}>Mark unread</button>
                   )}
                   <button className="text-xs px-2 py-1 rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800" onClick={() => removeIds([n.id])}>Delete</button>
                 </div>

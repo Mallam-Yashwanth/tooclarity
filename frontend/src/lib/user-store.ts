@@ -17,6 +17,7 @@ export interface User {
   isPaymentDone?: boolean;
   isProfileCompleted?: boolean;
   role: string;
+  googleId?: string;
 }
 
 interface UserStoreState {
@@ -80,6 +81,7 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
             isPaymentDone: data.isPaymentDone ?? false,
             isProfileCompleted: data.isProfileCompleted ?? false,
             role: data.role || "",
+            googleId: data.googleId,
           };
           get().setUser(user);
           return true;
@@ -122,6 +124,7 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
           isPaymentDone: response.data.isPaymentDone || false,
           isProfileCompleted: response.data.isProfileCompleted || false,
           role: response.data.role || "",
+          googleId: response.data.googleId,
         };
         set({ user: u, isAuthenticated: true });
       } else {

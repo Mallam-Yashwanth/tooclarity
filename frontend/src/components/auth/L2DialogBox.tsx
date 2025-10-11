@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, ChangeEvent, FormEvent } from "react";
+import React from "react";
+import { programsAPI } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,6 +49,7 @@ import {
 import { L2Schemas } from "@/lib/validations/L2Schema";
 import { createdBranchRule } from "@/lib/validations/ValidationRules";
 import { uploadToS3 } from "@/lib/awsUpload";
+import AppSelect from "@/components/ui/AppSelect";
 
 interface L2DialogBoxProps {
   trigger?: React.ReactNode;
@@ -55,12 +58,23 @@ interface L2DialogBoxProps {
   onSuccess?: () => void;
   onPrevious?: () => void;
   initialSection?: "course" | "branch";
+  // New: render inline (non-dialog) for subscription page usage
+  renderMode?: "dialog" | "inline";
+  // New: subscription mode for Program creation flow on Subscription page
+  mode?: "default" | "subscriptionProgram" | "settingsEdit";
+  institutionId?: string;
+  // New: for editing existing programs in settings
+  editMode?: boolean;
+  existingCourseData?: any;
+  onEditSuccess?: () => void;
 }
 export interface Course {
   id: number;
   courseName: string;
   aboutCourse: string;
   courseDuration: string;
+  startDate: string;
+  endDate: string;
   mode: string;
   priceOfCourse: string;
   location: string;
@@ -115,6 +129,12 @@ export default function L2DialogBox({
   onPrevious,
 
   initialSection: initialSectionProp,
+  renderMode = "dialog",
+  mode = "default",
+  institutionId,
+  editMode = false,
+  existingCourseData,
+  onEditSuccess,
 }: L2DialogBoxProps) {
   const router = useRouter();
   const [isCoursrOrBranch, setIsCourseOrBranch] = useState<string | null>(null);
@@ -148,6 +168,25 @@ export default function L2DialogBox({
   const [selectedCourseId, setSelectedCourseId] = useState(1);
   const [showCourseAfterBranch, setShowCourseAfterBranch] = useState(false);
   const [branchOptions, setBranchOptions] = useState<string[]>([]);
+  const [remoteBranches, setRemoteBranches] = useState<Array<{ _id: string; branchName: string }>>([]);
+  const [selectedBranchIdForProgram, setSelectedBranchIdForProgram] = useState<string>("");
+  const [programBranchError, setProgramBranchError] = useState<string>("");
+
+  const uniqueRemoteBranches = React.useMemo(() => {
+    const seenNames = new Set<string>();
+    const seenIds = new Set<string>();
+    const result: Array<{ _id: string; branchName: string }> = [];
+    for (const b of remoteBranches) {
+      const id = String(b?._id || "");
+      const name = (b?.branchName || "Branch").trim();
+      const keyName = name.toLowerCase();
+      if (!id || seenIds.has(id) || seenNames.has(keyName)) continue;
+      seenIds.add(id);
+      seenNames.add(keyName);
+      result.push({ _id: id, branchName: name });
+    }
+    return result.sort((a,b)=> a.branchName.localeCompare(b.branchName));
+  }, [remoteBranches]);
 
   // ✅ 1. Add state to hold validation errors for each branch
   const [branchErrors, setBranchErrors] = useState<
@@ -161,6 +200,13 @@ export default function L2DialogBox({
       try {
         const all = await getAllBranchesFromDB();
         setBranchOptions(all.map((b) => b.branchName).filter(Boolean));
+        if (isSubscriptionProgram) {
+          try {
+            const res: any = await programsAPI.listBranchesForInstitutionAdmin(String(institutionId||''));
+            const branches = (res?.data?.branches || []) as Array<any>;
+            setRemoteBranches(branches.map((b:any)=> ({ _id: String(b._id), branchName: b.branchName || "Branch" })));
+          } catch (e) {}
+        }
       } catch (err) {
         console.error("Failed to load branches from IndexedDB", err);
       }
@@ -168,15 +214,67 @@ export default function L2DialogBox({
   }, []);
 
   // Get institution type from localStorage
-  const [courses, setCourses] = useState([
-    {
+  const [courses, setCourses] = useState(() => {
+    if (editMode && existingCourseData) {
+      // Convert existing course data to the expected format
+      return [{
+        id: 1,
+        courseName: existingCourseData.courseName || "",
+        aboutCourse: existingCourseData.aboutCourse || "",
+        courseDuration: existingCourseData.courseDuration || "",
+        startDate: existingCourseData.startDate || "",
+        endDate: existingCourseData.endDate || "",
+        mode: existingCourseData.mode || "Offline",
+        priceOfCourse: existingCourseData.priceOfCourse || "",
+        eligibilityCriteria: existingCourseData.eligibilityCriteria || "",
+        location: existingCourseData.location || "",
+        image: null as File | null,
+        imageUrl: existingCourseData.imageUrl || "",
+        imagePreviewUrl: "",
+        brochureUrl: existingCourseData.brochureUrl || "",
+        brochure: null as File | null,
+        brochurePreviewUrl: "",
+        // Additional fields for Under Graduate/Post graduate
+        graduationType: existingCourseData.graduationType || "",
+        streamType: existingCourseData.streamType || "",
+        selectBranch: existingCourseData.selectBranch || "",
+        aboutBranch: existingCourseData.aboutBranch || "",
+        educationType: existingCourseData.educationType || "Full time",
+        classSize: existingCourseData.classSize || "",
+        // Additional fields for Coaching centers
+        categoriesType: existingCourseData.categoriesType || "",
+        domainType: existingCourseData.domainType || "",
+        // Additional fields for Study Hall
+        seatingOption: existingCourseData.seatingOption || "",
+        openingTime: existingCourseData.openingTime || "",
+        closingTime: existingCourseData.closingTime || "",
+        operationalDays: existingCourseData.operationalDays || [],
+        totalSeats: existingCourseData.totalSeats || "",
+        availableSeats: existingCourseData.availableSeats || "",
+        pricePerSeat: existingCourseData.pricePerSeat || "",
+        hasWifi: existingCourseData.hasWifi || "",
+        hasChargingPoints: existingCourseData.hasChargingPoints || "",
+        hasAC: existingCourseData.hasAC || "",
+        hasPersonalLocker: existingCourseData.hasPersonalLocker || "",
+        // Additional fields for Tuition Centers
+        tuitionType: existingCourseData.tuitionType || "",
+        instructorProfile: existingCourseData.instructorProfile || "",
+        subject: existingCourseData.subject || "",
+        createdBranch: existingCourseData.createdBranch || "",
+      }];
+    }
+    
+    // Default initialization for new courses
+    return [{
       id: 1,
       courseName: "",
       aboutCourse: "",
       courseDuration: "",
+      startDate: "",
+      endDate: "",
       mode: "Offline",
       priceOfCourse: "",
-      eligibilityCriteria: "", // Add this line
+      eligibilityCriteria: "",
       location: "",
       image: null as File | null,
       imageUrl: "",
@@ -202,20 +300,20 @@ export default function L2DialogBox({
       totalSeats: "",
       availableSeats: "",
       pricePerSeat: "",
-      hasWifi: "", // Changed from null
-      hasChargingPoints: "", // Changed from null
-      hasAC: "", // Changed from null
-      hasPersonalLocker: "", // Changed from null
+      hasWifi: "",
+      hasChargingPoints: "",
+      hasAC: "",
+      hasPersonalLocker: "",
       // Additional fields for Tuition Centers
       tuitionType: "",
       instructorProfile: "",
       subject: "",
       createdBranch: "",
-    },
-  ]);
+    }];
+  });
 
-  // Handle controlled open state
-  const dialogOpen = open !== undefined ? open : isOpen;
+  // Handle controlled open state; in inline mode we treat it as always open
+  const dialogOpen = renderMode === "inline" ? true : (open !== undefined ? open : isOpen);
   const setDialogOpen = onOpenChange || setIsOpen;
 
   // Get current course
@@ -387,7 +485,7 @@ export default function L2DialogBox({
 
     // Calculate the new array of operational days
     const newOperationalDays = courseToUpdate.operationalDays.includes(day)
-      ? courseToUpdate.operationalDays.filter((d) => d !== day)
+      ? courseToUpdate.operationalDays.filter((d: string) => d !== day)
       : [...courseToUpdate.operationalDays, day];
 
     // 1. Update the state for the UI
@@ -444,6 +542,8 @@ export default function L2DialogBox({
       courseName: "",
       aboutCourse: "",
       courseDuration: "",
+      startDate: "",
+      endDate: "",
       mode: "Offline",
       priceOfCourse: "",
       location: "",
@@ -604,6 +704,13 @@ export default function L2DialogBox({
     }
   }, [dialogOpen]); // Dependency on dialogOpen is the key.
 
+  // Auto-select branch for edit mode
+  useEffect(() => {
+    if (editMode && existingCourseData && existingCourseData.branch) {
+      setSelectedBranchIdForProgram(String(existingCourseData.branch));
+    }
+  }, [editMode, existingCourseData]);
+
   // Inside L2DialogBox.tsx
 
   const getSchemaKey = (): keyof typeof L2Schemas => {
@@ -719,10 +826,50 @@ export default function L2DialogBox({
         }
       }
 
-      // --- 3️⃣ Joi Validation ---
+      // --- 3️⃣ Custom Date Validation ---
       const allCourseErrors: Record<number, Record<string, string>> = {};
       let hasErrors = false;
 
+      // Custom date validation before Joi validation
+      for (const course of uploadedCourses) {
+        const courseErrors: Record<string, string> = {};
+        
+        // Validate startDate
+        if (!course.startDate || course.startDate.trim() === "") {
+          courseErrors.startDate = "Start date is required";
+          hasErrors = true;
+        } else {
+          const startDate = new Date(course.startDate);
+          if (isNaN(startDate.getTime())) {
+            courseErrors.startDate = "Start date must be a valid date";
+            hasErrors = true;
+          }
+        }
+        
+        // Validate endDate
+        if (!course.endDate || course.endDate.trim() === "") {
+          courseErrors.endDate = "End date is required";
+          hasErrors = true;
+        } else {
+          const endDate = new Date(course.endDate);
+          if (isNaN(endDate.getTime())) {
+            courseErrors.endDate = "End date must be a valid date";
+            hasErrors = true;
+          } else if (course.startDate && course.startDate.trim() !== "") {
+            const startDate = new Date(course.startDate);
+            if (!isNaN(startDate.getTime()) && endDate <= startDate) {
+              courseErrors.endDate = "End date must be after start date";
+              hasErrors = true;
+            }
+          }
+        }
+        
+        if (Object.keys(courseErrors).length > 0) {
+          allCourseErrors[course.id] = courseErrors;
+        }
+      }
+
+      // --- 4️⃣ Joi Validation ---
       let schema = L2Schemas[getSchemaKey()];
       if (!showCourseAfterBranch) {
         schema = schema.fork("createdBranch", (field) =>
@@ -749,8 +896,10 @@ export default function L2DialogBox({
             return acc;
           }, {} as Record<string, string>);
 
-          allCourseErrors[course.id] = fieldErrors;
-          console.warn("❌ Validation errors:", fieldErrors);
+          // Merge with existing custom date errors
+          const existingErrors = allCourseErrors[course.id] || {};
+          allCourseErrors[course.id] = { ...existingErrors, ...fieldErrors };
+          console.warn("❌ Validation errors:", allCourseErrors[course.id]);
         } else {
           console.log("✅ Course passed validation!");
         }
@@ -769,6 +918,64 @@ export default function L2DialogBox({
       console.log("✅ All courses validated successfully.");
 
       // --- 4️⃣ Prepare and Save in IndexedDB ---
+    // Subscription Program mode: create PROGRAMs via backend and exit
+    if (isSubscriptionProgram) {
+      if (!institutionId) {
+        throw new Error("institutionId required for subscription program mode");
+      }
+      if (uniqueRemoteBranches.length > 0 && !selectedBranchIdForProgram) {
+        setProgramBranchError("Please select a branch");
+        setIsLoading(false);
+        return;
+      }
+      const toCreate = courses.map((c) => {
+        const programName = (c.courseName || "").trim();
+        const programSlug = programName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+        return {
+          institution: String(institutionId),
+          branch: selectedBranchIdForProgram || null, // Allow null for new users without branches
+          // Program-style fields
+          mode: c.mode || "Offline",
+          classSize: c.classSize || "",
+          location: c.location || "",
+          // Unified Course model expectations for type PROGRAM
+          type: 'PROGRAM',
+          courseName: programName,
+          aboutCourse: c.aboutCourse || "",
+          courseDuration: c.courseDuration || "",
+          startDate: c.startDate || undefined,
+          endDate: c.endDate || undefined,
+          priceOfCourse: c.priceOfCourse ? Number(c.priceOfCourse) : undefined,
+          // keep location for Course model too
+          // additional optional mirrors
+          graduationType: c.graduationType || undefined,
+          streamType: c.streamType || undefined,
+          selectBranch: c.selectBranch || undefined,
+        } as any;
+      }).filter((p) => p.courseName && p.courseName.length > 0);
+
+      for (const payload of toCreate) {
+        if (editMode && existingCourseData) {
+          // Update existing course
+          await programsAPI.update(existingCourseData._id, payload);
+        } else {
+          // Create new course
+          await programsAPI.create(payload);
+        }
+      }
+
+      if (editMode) {
+        onEditSuccess?.();
+      } else {
+        onSuccess?.();
+      }
+      setIsLoading(false);
+      return;
+    }
+
       const allBranches = await getAllBranchesFromDB();
       const branchMap = new Map(
         allBranches.map((b) => [
@@ -960,7 +1167,7 @@ export default function L2DialogBox({
 
     setIsLoading(true);
     try {
-      // --- YOUR EXISTING SAVE LOGIC CAN GO HERE ---
+      // Save branch to backend for subscriptions flow (and general use)
       const payload = {
         branchName: currentBranch.branchName,
         branchAddress: currentBranch.branchAddress,
@@ -968,41 +1175,31 @@ export default function L2DialogBox({
         locationUrl: currentBranch.locationUrl,
       };
 
-      if ((currentBranch as any).dbId) {
-        await updateBranchInDB({ id: (currentBranch as any).dbId, ...payload });
-      } else {
-        const [newId] = await addBranchesToDB([payload]);
-        setBranches((prev) =>
-          prev.map((b) =>
-            b.id === selectedBranchId ? { ...b, dbId: newId } : b
-          )
-        );
-      }
-
-      const all = await getAllBranchesFromDB();
-      setBranchOptions(all.map((b) => b.branchName).filter(Boolean));
-      setShowCourseAfterBranch(true);
-      // --- END OF YOUR SAVE LOGIC ---
-    } catch (err) {
-      console.error("Error saving branch:", err);
-    } finally {
-      setIsLoading(false);
+    if ((currentBranch as any).dbId) {
+      await updateBranchInDB({ id: (currentBranch as any).dbId, ...payload });
+    } else {
+      const [newId] = await addBranchesToDB([payload]);
+      setBranches((prev) =>
+        prev.map((b) => (b.id === selectedBranchId ? { ...b, dbId: newId } : b))
+      );
     }
-  };
 
-  return (
-    <>
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
+    const all = await getAllBranchesFromDB();
+    setBranchOptions(all.map((b) => b.branchName).filter(Boolean));
+    setShowCourseAfterBranch(true);
+    // --- END OF YOUR SAVE LOGIC ---
+  } catch (err) {
+    console.error("Error saving branch:", err);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
-        <DialogContent
-          className="w-[95vw] sm:w-[90vw] md:w-[800px] lg:w-[900px] xl:max-w-4xl scrollbar-hide"
-          showCloseButton={false}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-          onInteractOutside={(e) => e.preventDefault()}
-        >
-          <Card className="w-full sm:p-6 rounded-[24px] bg-white border-0 shadow-none">
-            <CardContent className="space-y-6">
+  const isSubscriptionProgram = mode === "subscriptionProgram" || mode === "settingsEdit";
+
+  const content = (
+    <Card className="w-full sm:p-6 rounded-[24px] bg-white border-0 shadow-none">
+      <CardContent className="space-y-6">
               {/* Render based on initialSection */}
               {initialSection === "course" ? (
                 <div className="space-y-6">
@@ -1012,6 +1209,8 @@ export default function L2DialogBox({
                         ? "Study Hall"
                         : isTutionCenter
                         ? "Tuition Hall"
+                        : isSubscriptionProgram
+                        ? "Program Details"
                         : "Course Details"}
                     </h3>
                     <p className="text-[#697282] text-sm">
@@ -1019,6 +1218,8 @@ export default function L2DialogBox({
                         ? "Enter the details of the study hall."
                         : isTutionCenter
                         ? "Enter the details of the tuition hall."
+                        : isSubscriptionProgram
+                        ? "Enter the programs your institution offers."
                         : "Enter the courses your institution offers."}
                     </p>
                   </div>
@@ -1044,6 +1245,8 @@ export default function L2DialogBox({
                                   ? `Hall ${course.id}`
                                   : isTutionCenter
                                   ? `Hall ${course.id}`
+                                  : isSubscriptionProgram
+                                  ? `Program ${course.id}`
                                   : `Course ${course.id}`)}
                             </span>
                             {courses.length > 1 && (
@@ -1070,11 +1273,38 @@ export default function L2DialogBox({
                         ? "Add Hall"
                         : isTutionCenter
                         ? "Add Hall"
+                        : isSubscriptionProgram
+                        ? "Add Program"
                         : "Add Course"}
                     </Button>
                   </div>
 
                   <form onSubmit={handleCourseSubmit} className="space-y-6">
+                    {/* Branch Selection - Only show for subscription programs and when branches exist */}
+                    {isSubscriptionProgram && uniqueRemoteBranches.length > 0 && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Select Branch</label>
+                        <AppSelect
+                          value={selectedBranchIdForProgram}
+                          onChange={(val)=> { setSelectedBranchIdForProgram(val); setProgramBranchError(""); }}
+                          options={uniqueRemoteBranches.map(b=> ({ label: b.branchName, value: b._id }))}
+                          placeholder="Select Branch"
+                          variant="white"
+                          size="md"
+                          rounded="lg"
+                          className="w-full"
+                        />
+                        {programBranchError && <p className="text-red-600 text-xs mt-1">{programBranchError}</p>}
+                      </div>
+                    )}
+                    {/*isSubscriptionProgram && uniqueRemoteBranches.length === 0 && (
+                      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-sm text-blue-700">
+                          <strong>Note:</strong> You don't have any branches yet. You can add a branch first, or the program will be added to your main institution.
+                        </p>
+                      </div>
+                    )}*/}
+                    
                     {isCoachingCenter ? (
                       <CoachingCourseForm
                         currentCourse={currentCourse}
@@ -1095,6 +1325,7 @@ export default function L2DialogBox({
                         courses={courses}
                         selectedCourseId={selectedCourseId}
                         courseErrors={courseErrorsById[currentCourse.id] || {}}
+                        labelVariant={isSubscriptionProgram ? 'program' : 'course'}
                       />
                     ) : isTutionCenter ? (
                       <TuitionCenterForm
@@ -1107,6 +1338,7 @@ export default function L2DialogBox({
                         selectedCourseId={selectedCourseId}
                         // ✅ Pass errors to TuitionCenterForm
                         courseErrors={courseErrorsById[currentCourse.id] || {}}
+            labelVariant={isSubscriptionProgram ? 'program' : 'course'}
                       />
                     ) : isUnderPostGraduate ? (
                       <UnderPostGraduateForm
@@ -1117,6 +1349,7 @@ export default function L2DialogBox({
                         selectedCourseId={selectedCourseId}
                         // ✅ Add this prop to pass the errors down
                         courseErrors={courseErrorsById[currentCourse.id] || {}}
+        labelVariant={isSubscriptionProgram ? 'program' : 'course'}
                       />
                     ) : isBasicCourseForm ? (
                       <BasicCourseForm
@@ -1127,7 +1360,8 @@ export default function L2DialogBox({
                         selectedCourseId={selectedCourseId}
                         // ✅ This line passes the validation errors for the currently selected course
                         // to the child component. The `|| {}` ensures it's always an object.
-                        courseErrors={courseErrorsById[currentCourse.id] || {}}
+                            courseErrors={courseErrorsById[currentCourse.id] || {}}
+        labelVariant={isSubscriptionProgram ? 'program' : 'course'}
                       />
                     ) : (
                       <FallbackCourseForm
@@ -1136,6 +1370,8 @@ export default function L2DialogBox({
                         setCourses={setCourses}
                         courses={courses}
                         selectedCourseId={selectedCourseId}
+                        courseErrors={courseErrorsById[currentCourse.id] || {}}
+                        labelVariant={isSubscriptionProgram ? 'program' : 'course'}
                       />
                     )}
                     {!isStudyHall && !isTutionCenter && (
@@ -1188,8 +1424,8 @@ export default function L2DialogBox({
                                     />
                                     <span className="text-sm text-gray-500">
                                       {f.type === "image"
-                                        ? "Upload Course Image (jpg / jpeg / png)"
-                                        : "Upload Course Brochure (pdf)"}
+                                        ? (isSubscriptionProgram ? "Upload Program Image (jpg / jpeg)" : "Upload Course Image (jpg / jpeg / png)")
+                                        : (isSubscriptionProgram ? "Upload Program Brochure (pdf)" : "Upload Course Brochure (pdf)")}
                                     </span>
                                   </>
                                 );
@@ -1316,10 +1552,12 @@ export default function L2DialogBox({
                     <div className="space-y-6">
                       <div className="space-y-2">
                         <h3 className="text-xl md:text-2xl font-bold">
-                          {isStudyHall
+                        {isStudyHall
                             ? "Study Hall"
                             : isTutionCenter
                             ? "Tuition Hall"
+                            : isSubscriptionProgram
+                            ? "Program Details"
                             : "Course Details"}
                         </h3>
                         <p className="text-[#697282] text-sm">
@@ -1327,6 +1565,8 @@ export default function L2DialogBox({
                             ? "Enter the details of the study hall."
                             : isTutionCenter
                             ? "Enter the details of the tuition hall."
+                            : isSubscriptionProgram
+                            ? "Enter the programs your institution offers."
                             : "Enter the courses your institution offers."}
                         </p>
                       </div>
@@ -1352,6 +1592,8 @@ export default function L2DialogBox({
                                       ? `Hall ${course.id}`
                                       : isTutionCenter
                                       ? `Hall ${course.id}`
+                                      : isSubscriptionProgram
+                                      ? `Program ${course.id}`
                                       : `Course ${course.id}`)}
                                 </span>
                                 {courses.length > 1 && (
@@ -1378,6 +1620,8 @@ export default function L2DialogBox({
                             ? "Add Hall"
                             : isTutionCenter
                             ? "Add Hall"
+                            : isSubscriptionProgram
+                            ? "Add Program"
                             : "Add Course"}
                         </Button>
                       </div>
@@ -1400,6 +1644,32 @@ export default function L2DialogBox({
                             courseErrorsById[currentCourse.id]?.createdBranch
                           }
                         />
+                        
+                        {/* Branch Selection for Subscription Programs - Only show when branches exist */}
+                        {isSubscriptionProgram && uniqueRemoteBranches.length > 0 && (
+                          <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Select Branch</label>
+                            <AppSelect
+                              value={selectedBranchIdForProgram}
+                              onChange={(val)=> { setSelectedBranchIdForProgram(val); setProgramBranchError(""); }}
+                              options={uniqueRemoteBranches.map(b=> ({ label: b.branchName, value: b._id }))}
+                              placeholder="Select Branch"
+                              variant="white"
+                              size="md"
+                              rounded="lg"
+                              className="w-full"
+                            />
+                            {programBranchError && <p className="text-red-600 text-xs mt-1">{programBranchError}</p>}
+                          </div>
+                        )}
+                        {isSubscriptionProgram && (
+                          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p className="text-sm text-blue-700">
+                              <strong>Note:</strong> You don't have any branches yet. You can add a branch first, or the program will be added to your main institution.
+                            </p>
+                          </div>
+                        )}
+                        
                         {isCoachingCenter ? (
                           <CoachingCourseForm
                             currentCourse={currentCourse}
@@ -1426,6 +1696,7 @@ export default function L2DialogBox({
                             courseErrors={
                               courseErrorsById[currentCourse.id] || {}
                             }
+                            labelVariant={isSubscriptionProgram ? 'program' : 'course'}
                           />
                         ) : isTutionCenter ? (
                           <TuitionCenterForm
@@ -1442,6 +1713,7 @@ export default function L2DialogBox({
                             courseErrors={
                               courseErrorsById[currentCourse.id] || {}
                             }
+            labelVariant={isSubscriptionProgram ? 'program' : 'course'}
                           />
                         ) : isUnderPostGraduate ? (
                           <UnderPostGraduateForm
@@ -1454,6 +1726,7 @@ export default function L2DialogBox({
                             courseErrors={
                               courseErrorsById[currentCourse.id] || {}
                             }
+        labelVariant={isSubscriptionProgram ? 'program' : 'course'}
                           />
                         ) : isBasicCourseForm ? (
                           <BasicCourseForm
@@ -1464,9 +1737,10 @@ export default function L2DialogBox({
                             selectedCourseId={selectedCourseId}
                             // ✅ This line passes the validation errors for the currently selected course
                             // to the child component. The `|| {}` ensures it's always an object.
-                            courseErrors={
+                                courseErrors={
                               courseErrorsById[currentCourse.id] || {}
                             }
+        labelVariant={isSubscriptionProgram ? 'program' : 'course'}
                           />
                         ) : (
                           <FallbackCourseForm
@@ -1475,6 +1749,8 @@ export default function L2DialogBox({
                             setCourses={setCourses}
                             courses={courses}
                             selectedCourseId={selectedCourseId}
+                            courseErrors={courseErrorsById[currentCourse.id] || {}}
+                            labelVariant={isSubscriptionProgram ? 'program' : 'course'}
                           />
                         )}
                         {!isStudyHall && !isTutionCenter && (
@@ -1593,8 +1869,25 @@ export default function L2DialogBox({
                   )}
                 </div>
               )}
-            </CardContent>
-          </Card>
+      </CardContent>
+    </Card>
+  );
+
+  if (renderMode === "inline") {
+    return content;
+  }
+
+  return (
+    <>
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
+        <DialogContent
+          className="w-[95vw] sm:w-[90vw] md:w-[800px] lg:w-[900px] xl:max-w-4xl scrollbar-hide"
+          showCloseButton={false}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+        >
+          {content}
         </DialogContent>
       </Dialog>
     </>

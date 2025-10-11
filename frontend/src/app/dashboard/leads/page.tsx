@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEnvelope } from "@fortawesome/free-regular-svg-icons";
 import { faPhone, faMapMarkerAlt } from "@fortawesome/free-solid-svg-icons";
-import { getInstitutionBranches, getInstitutionCourses, analyticsAPI, authAPI, metricsAPI, enquiriesAPI } from "@/lib/api";
+import { getInstitutionBranches, getInstitutionCourses, analyticsAPI, authAPI, metricsAPI, enquiriesAPI, programsAPI } from "@/lib/api";
 import { withAuth } from "@/lib/auth-context";
 import { getSocket } from "@/lib/socket";
 import { motion, AnimatePresence } from "framer-motion";
@@ -39,6 +39,7 @@ function LeadsPage() {
 	const [kpiCallbacksDelta, setKpiCallbacksDelta] = useState<{value:number; isPositive:boolean}>({value:0,isPositive:true});
 	const [kpiDemosDelta, setKpiDemosDelta] = useState<{value:number; isPositive:boolean}>({value:0,isPositive:true});
 	const [isKpiLoading, setIsKpiLoading] = useState<boolean>(false);
+	const [statusChangeLoading, setStatusChangeLoading] = useState<string | null>(null);
 
 	const queryClient = useQueryClient();
 	const { data: institution } = useInstitution();
@@ -57,12 +58,20 @@ function LeadsPage() {
 		const range = normalizeRange(rangeLabel);
 		try {
 			setIsKpiLoading(true);
-			const [{ data: viewsNow }, { data: leadsNow }, typeRollups] = await Promise.all([
-				metricsAPI.getInstitutionAdminByRange('views', range) as any,
+            const instId = institution?._id || null;
+            const [{ data: viewsNow }, { data: leadsNow }, typeRollups, programViewsSummary] = await Promise.all([
+                metricsAPI.getInstitutionAdminByRange('views', range) as any,
 				metricsAPI.getInstitutionAdminByRange('leads', range) as any,
-				enquiriesAPI.getTypeSummaryRollups(range) as any
+                enquiriesAPI.getTypeSummaryRollups(range) as any,
+                (instId ? programsAPI.summaryViews(String(instId), range) : Promise.resolve(null)) as any
 			]);
-			setKpiViews(viewsNow?.totalViews || 0);
+            // Prefer program views if available; fallback to existing course views
+            let pv = 0;
+            if (programViewsSummary && (programViewsSummary as any).success) {
+                const arr = (programViewsSummary as any).data?.programs || [];
+                pv = Array.isArray(arr) ? arr.reduce((s:number,p:any)=> s + (Number(p.inRangeViews)||0), 0) : 0;
+            }
+            setKpiViews(pv);
 			setKpiLeads(leadsNow?.totalLeads || 0);
 			setKpiCallbacks(typeRollups?.data?.callbacks || 0);
 			setKpiDemos(typeRollups?.data?.demos || 0);
@@ -75,29 +84,70 @@ function LeadsPage() {
 	const fetchList = useCallback(async () => {
 		try {
 			const recent = await enquiriesAPI.getRecentEnquiries();
+			console.log('Recent enquiries response:', recent);
 			if ((recent as any)?.success && Array.isArray((recent as any).data?.enquiries)) {
 				const enquiries = (recent as any).data.enquiries;
 				const mapped: StudentItem[] = enquiries.map((enquiry: any, idx: number) => ({
 					date: new Date(enquiry.createdAt || Date.now() - idx * 86400000).toLocaleDateString('en-GB'),
-					name: enquiry.studentName || `Student ${idx + 1}`,
+					name: enquiry.student?.name || `Student ${idx + 1}`,
 					id: String(enquiry._id || idx),
-					status: enquiry.enquiryType || "Requested for callback",
+					status: enquiry.status || enquiry.enquiryType || "Requested for callback",
 					program: enquiry.programInterest || undefined,
-					email: enquiry.studentEmail || undefined,
-					phone: enquiry.studentPhone || undefined,
-					address: (enquiry.student?.studentAddress || enquiry.institution?.headquartersAddress || enquiry.institution?.locationURL || enquiry.institution?.institutionName) || undefined,
+					email: enquiry.student?.email || undefined,
+					phone: enquiry.student?.contactNumber || undefined,
+					address: (enquiry.student?.address || enquiry.institution?.headquartersAddress || enquiry.institution?.locationURL || enquiry.institution?.institutionName) || undefined,
 					timestampMs: enquiry.createdAt ? new Date(enquiry.createdAt).getTime() : (Date.now() - idx * 86400000)
 				}));
-				// Only seed base list if still empty (infinite query will handle main list)
-				if (baseStudents.length === 0) {
-					setBaseStudents(mapped);
-				}
+				
+				// Extract unique programs from all enquiries for filter options
 				const programSet = new Set<string>();
 				mapped.forEach(m => { if (m.program) programSet.add(m.program); });
 				setCourseOptions(["Choose Program to see", ...Array.from(programSet)]);
 			}
 		} catch (err) { console.error('Leads: initial fetch failed', err); }
-	}, [baseStudents.length]);
+	}, []);
+
+	const handleStatusChange = useCallback(async (studentId: string, newStatus: string, notes?: string) => {
+		setStatusChangeLoading(studentId);
+		try {
+			// Find the enquiry ID from the student data
+			const student = baseStudents.find(s => s.id === studentId);
+			if (!student) {
+				throw new Error('Student not found');
+			}
+
+			console.log('Updating status:', { enquiryId: studentId, newStatus, notes });
+
+			// Call the API to update status
+			const response = await enquiriesAPI.updateEnquiryStatus(studentId, { status: newStatus, notes });
+			
+			console.log('API Response:', response);
+			
+			if (response.success) {
+				// Update local state optimistically
+				setBaseStudents(prev => prev.map(s => 
+					s.id === studentId ? { ...s, status: newStatus } : s
+				));
+				
+				// Update selected student if it's the same one
+				if (selectedStudent && selectedStudent.id === studentId) {
+					setSelectedStudent(prev => prev ? { ...prev, status: newStatus } : null);
+				}
+				
+				// Invalidate and refetch data
+				queryClient.invalidateQueries({ queryKey: ['infiniteLeads'] });
+				
+				console.log('Status updated successfully:', response.data);
+			} else {
+				throw new Error(response.message || 'Failed to update status');
+			}
+		} catch (error) {
+			console.error('Error updating status:', error);
+			throw error; // Re-throw to let the component handle the error
+		} finally {
+			setStatusChangeLoading(null);
+		}
+	}, [baseStudents, queryClient, selectedStudent]);
 
 	const applyListFilters = (source: StudentItem[], programLabel: string, rangeLabel: "Weekly"|"Monthly"|"Yearly") => {
 		const now = Date.now();
@@ -119,20 +169,32 @@ function LeadsPage() {
 
 	const statusColorClass = (status?: string) => {
 		const s = (status || '').toLowerCase();
+		// Merged enquiry type and status system
+		if (s.includes('requested for callback')) return 'bg-blue-600 hover:bg-blue-700';
+		if (s.includes('requested for demo')) return 'bg-purple-600 hover:bg-purple-700';
+		if (s.includes('contacted')) return 'bg-indigo-600 hover:bg-indigo-700';
+		if (s.includes('interested')) return 'bg-green-600 hover:bg-green-700';
+		if (s.includes('demo scheduled')) return 'bg-pink-600 hover:bg-pink-700';
+		if (s.includes('follow up')) return 'bg-yellow-600 hover:bg-yellow-700';
+		if (s.includes('qualified')) return 'bg-emerald-600 hover:bg-emerald-700';
+		if (s.includes('not interested')) return 'bg-red-600 hover:bg-red-700';
+		if (s.includes('converted')) return 'bg-green-700 hover:bg-green-800';
+		// Legacy fallbacks
 		if (s.includes('demo')) return 'bg-purple-600 hover:bg-purple-700';
 		if (s.includes('callback')) return 'bg-blue-600 hover:bg-blue-700';
 		if (s.includes('lead')) return 'bg-emerald-600 hover:bg-emerald-700';
 		return 'bg-gray-600 hover:bg-gray-700';
 	};
 
-	// Update baseStudents from IndexedDB infinite pages, keep UI intact
+	// Update baseStudents from infinite query pages
 	useEffect(() => {
 		const p = (pages?.pages as any[]) || [];
 		if (p) setIsLoading(false);
 		const flat = p.flat() as any[];
 		if (flat.length) {
 			const mapped: StudentItem[] = flat.map((c: any, idx: number) => {
-				const stableId = String(c.studentId || c.id || `${c.timestampMs || ''}-${c.email || ''}-${idx}`);
+				// Use studentId as primary ID, fallback to a combination that doesn't include idx
+				const stableId = String(c.studentId || c.id || `${c.timestampMs || ''}-${c.email || ''}-${c.name || ''}`);
 				return {
 					date: c.date || new Date(c.timestampMs || Date.now()).toLocaleDateString('en-GB'),
 					name: c.name,
@@ -149,7 +211,14 @@ function LeadsPage() {
 			// Deduplicate by id to avoid React key collisions
 			const seen = new Set<string>();
 			const unique = mapped.filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
+			console.log(`[DEBUG] Leads page - after deduplication: ${unique.length} unique items from ${flat.length} total`);
 			setBaseStudents(unique);
+			
+			// Extract unique programs from all enquiries for filter options
+			const programSet = new Set<string>();
+			unique.forEach(m => { if (m.program) programSet.add(m.program); });
+			setCourseOptions(["Choose Program to see", ...Array.from(programSet)]);
+			
 			applyListFilters(unique, selectedProgram, leadTimeRange);
 		}
 	}, [pages, selectedProgram, leadTimeRange]);
@@ -196,7 +265,7 @@ function LeadsPage() {
 				setIsLoading(true);
 				await Promise.all([
 					fetchKPIs(leadKpiRange),
-					fetchList()
+					fetchList() // Only fetch program options, not base students
 				]);
 				setIsLoading(false);
 			} catch {
@@ -239,12 +308,22 @@ function LeadsPage() {
 					}
 					if (oid) s.emit('joinInstitutionAdmin', oid);
 				});
-				s.on('courseViewsUpdated', async () => {
-					try {
-						const latest = await metricsAPI.getInstitutionAdminByRange('views', normalizeRange(leadKpiRange));
-						if ((latest as any)?.success) setKpiViews(((latest as any).data?.totalViews) || 0);
-					} catch (err) { console.error('Leads: realtime views refresh failed', err); }
-				});
+                s.on('courseViewsUpdated', async () => {
+                    try {
+                        const instId2 = institutionId;
+                        let newViews = 0;
+                        if (instId2) {
+                            try {
+                                const progSum = await programsAPI.summaryViews(String(instId2), normalizeRange(leadKpiRange) as any) as any;
+                                if (progSum?.success) {
+                                    const arr = progSum.data?.programs || [];
+                                    newViews = Array.isArray(arr) ? arr.reduce((s:number,p:any)=> s + (Number(p.inRangeViews)||0), 0) : 0;
+                                }
+                            } catch (_) {}
+                        }
+                        setKpiViews(newViews);
+                    } catch (err) { console.error('Leads: realtime views refresh failed', err); }
+                });
 				s.on('institutionAdminTotalLeads', async () => {
 					try {
 						const latest = await metricsAPI.getInstitutionAdminByRange('leads', normalizeRange(leadKpiRange));
@@ -395,9 +474,105 @@ function LeadsPage() {
 														</div>
 												</div>
 											</div>
-											<Button className={`rounded-md px-6 py-2 mx-auto block text-white ${statusColorClass(selectedStudent.status)}`}>
-												{selectedStudent.status}
-											</Button>
+											<div className="flex flex-col items-center gap-3">
+												<div className="relative">
+													<AppSelect
+														value={selectedStudent.status}
+														onChange={(value) => handleStatusChange(selectedStudent.id, value)}
+														options={[
+															"Requested for callback",
+															"Requested for demo",
+															"Contacted",
+															"Interested",
+															"Demo Scheduled",
+															"Follow Up Required",
+															"Qualified",
+															"Not Interested",
+															"Converted"
+														]}
+														className={`min-w-[200px] status-select-${selectedStudent.status.replace(/\s+/g, '-').toLowerCase()}`}
+														variant="white"
+														size="md"
+														rounded="lg"
+														placeholder="Select status"
+														disabled={statusChangeLoading === selectedStudent.id}
+														stopPropagation={true}
+													/>
+													<style jsx global>{`
+														.status-select-requested-for-callback button {
+															background-color: rgb(37 99 235) !important;
+															color: white !important;
+															font-weight: 600 !important;
+															box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+														}
+														.status-select-requested-for-demo button {
+															background-color: rgb(147 51 234) !important;
+															color: white !important;
+															font-weight: 600 !important;
+															box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+														}
+														.status-select-contacted button {
+															background-color: rgb(79 70 229) !important;
+															color: white !important;
+															font-weight: 600 !important;
+															box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+														}
+														.status-select-interested button {
+															background-color: rgb(34 197 94) !important;
+															color: white !important;
+															font-weight: 600 !important;
+															box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+														}
+														.status-select-demo-scheduled button {
+															background-color: rgb(236 72 153) !important;
+															color: white !important;
+															font-weight: 600 !important;
+															box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+														}
+														.status-select-follow-up-required button {
+															background-color: rgb(234 179 8) !important;
+															color: white !important;
+															font-weight: 600 !important;
+															box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+														}
+														.status-select-qualified button {
+															background-color: rgb(16 185 129) !important;
+															color: white !important;
+															font-weight: 600 !important;
+															box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+														}
+														.status-select-not-interested button {
+															background-color: rgb(239 68 68) !important;
+															color: white !important;
+															font-weight: 600 !important;
+															box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+														}
+														.status-select-converted button {
+															background-color: rgb(21 128 61) !important;
+															color: white !important;
+															font-weight: 600 !important;
+															box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+														}
+														
+														/* Color-coded dropdown options */
+														.status-select-requested-for-callback ul li:nth-child(1) { background-color: rgb(37 99 235) !important; color: white !important; }
+														.status-select-requested-for-demo ul li:nth-child(2) { background-color: rgb(147 51 234) !important; color: white !important; }
+														.status-select-contacted ul li:nth-child(3) { background-color: rgb(79 70 229) !important; color: white !important; }
+														.status-select-interested ul li:nth-child(4) { background-color: rgb(34 197 94) !important; color: white !important; }
+														.status-select-demo-scheduled ul li:nth-child(5) { background-color: rgb(236 72 153) !important; color: white !important; }
+														.status-select-follow-up-required ul li:nth-child(6) { background-color: rgb(234 179 8) !important; color: white !important; }
+														.status-select-qualified ul li:nth-child(7) { background-color: rgb(16 185 129) !important; color: white !important; }
+														.status-select-not-interested ul li:nth-child(8) { background-color: rgb(239 68 68) !important; color: white !important; }
+														.status-select-converted ul li:nth-child(9) { background-color: rgb(21 128 61) !important; color: white !important; }
+													`}</style>
+												</div>
+												{statusChangeLoading === selectedStudent.id && (
+													<div className="flex items-center gap-2 text-xs text-gray-500">
+														<div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+														Updating status...
+													</div>
+												)}
+											</div>
 										</div>
 									) : (
 										<div className="text-gray-500 dark:text-gray-400">Select a Lead to see details.</div>

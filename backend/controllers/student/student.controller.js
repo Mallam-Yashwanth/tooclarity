@@ -18,7 +18,7 @@ const validateProfileDetails = (profileType, details) => {
       }
       return false;
 
-    case 'COACHING':
+    case 'COACHING_CENTER':
       return (
         ['UPSKILLING_SKILL_DEVELOPMENT', 'EXAM_PREPARATION', 'VOCATIONAL_TRAINING'].includes(details.lookingFor) &&
         typeof details.academicLevel === 'string' &&
@@ -44,7 +44,9 @@ const validateProfileDetails = (profileType, details) => {
 
 // ✅ Create a new Student
 const createStudent = async (req, res) => {
+  console.log('createStudent called with body:', req.body);
   const { name, email, contactNumber, address, googleId } = matchedData(req);
+  console.log('Extracted data:', { name, email, contactNumber, address, googleId });
 
   try {
     const student = new InstituteAdmin({
@@ -55,10 +57,15 @@ const createStudent = async (req, res) => {
       address,
       role: 'STUDENT',
     });
+    console.log('Student object created:', student);
 
     await student.save();
+    console.log('Student saved successfully');
     res.status(201).json({ data: student });
   } catch (error) {
+    console.error('Error in createStudent:', error);
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
     res.status(500).json({ error: 'An unexpected error occurred.' });
   }
 };
@@ -101,9 +108,13 @@ const updateStudentDetails = async (req, res) => {
 
 // ✅ Update Academic Profile
 const updateAcademicProfile = async (req, res) => {
+  console.log('updateAcademicProfile called with body:', req.body);
   const { profileType, details } = req.body;
+  console.log('profileType:', profileType);
+  console.log('details:', details);
 
   if (!validateProfileDetails(profileType, details)) {
+    console.log('Validation failed for profileType:', profileType, 'details:', details);
     return res.status(400).json({ error: 'Invalid structure for the provided profile details.' });
   }
 
@@ -125,6 +136,7 @@ const updateAcademicProfile = async (req, res) => {
       data: student.academicProfile,
     });
   } catch (error) {
+    console.error('Error updating academic profile:', error);
     res.status(500).json({ error: 'An unexpected error occurred.' });
   }
 };

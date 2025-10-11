@@ -15,6 +15,8 @@ interface BasicCourseFormProps {
   selectedCourseId: number;
   // ✅ 1. Accept an error object for the current course
   courseErrors: Record<string, string>; 
+  // Optional: switch labels to Program wording
+  labelVariant?: 'course' | 'program';
 }
 
 export default function BasicCourseForm({
@@ -24,36 +26,58 @@ export default function BasicCourseForm({
   courses,
   selectedCourseId,
   courseErrors = {}, // ✅ 2. Destructure with a default value
+  labelVariant = 'course',
 }: BasicCourseFormProps) {
+  const isProgram = labelVariant === 'program';
   return (
     <div className="grid md:grid-cols-2 gap-6">
       <InputField
-        label="Course Name"
+        label={isProgram ? "Program Name" : "Course Name"}
         name="courseName"
         value={currentCourse.courseName}
         onChange={handleCourseChange}
-        placeholder="Enter Course name"
+        placeholder={isProgram ? "Enter Program name" : "Enter Course name"}
         error={courseErrors.courseName} // ✅ 3. Display the error
         required
       />
 
       <InputField
-        label="About Course"
+        label={isProgram ? "About Program" : "About Course"}
         name="aboutCourse"
         value={currentCourse.aboutCourse}
         onChange={handleCourseChange}
-        placeholder="Enter the course info"
+        placeholder={isProgram ? "Enter the program info" : "Enter the course info"}
         error={courseErrors.aboutCourse} // ✅ 3. Display the error
         required
       />
 
       <InputField
-        label="Course Duration"
+        label={isProgram ? "Program Duration" : "Course Duration"}
         name="courseDuration"
         value={currentCourse.courseDuration}
         onChange={handleCourseChange}
         placeholder="e.g, 3 months"
         error={courseErrors.courseDuration} // ✅ 3. Display the error
+        required
+      />
+
+      <InputField
+        label={isProgram ? "Program Start Date" : "Course Start Date"}
+        name="startDate"
+        value={currentCourse.startDate}
+        onChange={handleCourseChange}
+        type="date"
+        error={courseErrors.startDate}
+        required
+      />
+
+      <InputField
+        label={isProgram ? "Program End Date" : "Course End Date"}
+        name="endDate"
+        value={currentCourse.endDate}
+        onChange={handleCourseChange}
+        type="date"
+        error={courseErrors.endDate}
         required
       />
 
@@ -78,11 +102,11 @@ export default function BasicCourseForm({
       </div>
 
       <InputField
-        label="Price of Course"
+        label={isProgram ? "Price of Program" : "Price of Course"}
         name="priceOfCourse"
         value={currentCourse.priceOfCourse}
         onChange={handleCourseChange}
-        placeholder="Enter Course price"
+        placeholder={isProgram ? "Enter Program price" : "Enter Course price"}
         type="number"
         error={courseErrors.priceOfCourse} // ✅ 3. Display the error
         required

@@ -29,6 +29,14 @@ export const baseCourseSchema = Joi.object({
     "string.max": "About Course must be at most 500 characters",
   }),
   courseDuration: durationRule,
+  startDate: Joi.string().required().messages({
+    "string.empty": "Start date is required",
+    "any.required": "Start date is required",
+  }),
+  endDate: Joi.string().required().messages({
+    "string.empty": "End date is required", 
+    "any.required": "End date is required",
+  }),
   priceOfCourse: Joi.number()
     .greater(0) // ensures value is > 0
     .required()
@@ -44,14 +52,16 @@ export const baseCourseSchema = Joi.object({
   }),
   createdBranch: createdBranchRule,
   image: Joi.any().optional(),
-  imageUrl: Joi.string().uri().required().messages({
-    "string.empty": "Image is required",
+  /*imageUrl: Joi.string().uri().required().messages({
+    "string.empty": "Image is required", */
+    imageUrl: Joi.string().uri().allow("").optional().messages({
     "string.uri": "Must be a valid URL (e.g., https://...)",
   }),
   imagePreviewUrl: Joi.string().allow("").optional(), // ✅ only preview, not mandatory
   brochure: Joi.any().optional(),
-  brochureUrl: Joi.string().uri().required().messages({
-    "string.empty": "Brochure URL is required",
+  /*brochureUrl: Joi.string().uri().required().messages({
+    "string.empty": "Brochure URL is required", */
+    brochureUrl: Joi.string().uri().allow("").optional().messages({
     "string.uri": "Must be a valid URL (e.g., https://...)",
   }),
   brochurePreviewUrl: Joi.string().allow("").optional(),

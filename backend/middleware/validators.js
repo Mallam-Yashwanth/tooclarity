@@ -1260,3 +1260,6 @@ module.exports.schoolL3Rules = schoolL3Rules;
 module.exports.intermediateCollegeL3Rules = intermediateCollegeL3Rules;
 module.exports.ugPgUniversityL3Rules = ugPgUniversityL3Rules;
 module.exports.coachingCenterL3Rules = coachingCenterL3Rules;
+
+// Export the validation error handler
+module.exports.handleValidationErrors = handleValidationErrors;

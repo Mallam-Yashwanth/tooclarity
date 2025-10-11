@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const { body, param } = require('express-validator');
+const { handleValidationErrors } = require('../../middleware/validators');
 const {
   createStudent,
   getStudentById,
@@ -12,16 +13,20 @@ const router = Router();
 router.post(
   '/',
   [
-    body('fullName').isString().notEmpty().trim(),
-    body('birthday').isISO8601().toDate(),
-    body('location').isString().notEmpty().trim(),
+    body('name').isString().notEmpty().trim(),
+    body('email').isEmail().normalizeEmail(),
+    body('contactNumber').optional().isString().trim(),
+    body('address').optional().isString().trim(),
+    body('googleId').optional().isString().trim(),
   ],
+  handleValidationErrors,
   createStudent
 );
 
 router.get(
   '/:id',
   [param('id').isMongoId().withMessage('Invalid student ID.')],
+  handleValidationErrors,
   getStudentById
 );
 
@@ -29,10 +34,12 @@ router.put(
   '/:id',
   [
     param('id').isMongoId().withMessage('Invalid student ID.'),
-    body('fullName').optional().isString().trim(),
-    body('birthday').optional().isISO8601().toDate(),
-    body('location').optional().isString().trim(),
+    body('name').optional().isString().trim(),
+    body('email').optional().isEmail().normalizeEmail(),
+    body('contactNumber').optional().isString().trim(),
+    body('address').optional().isString().trim(),
   ],
+  handleValidationErrors,
   updateStudentDetails
 );
 
@@ -45,13 +52,14 @@ router.put(
       'SCHOOL',
       'INTERMEDIATE',
       'GRADUATION',
-      'COACHING_CENTERS',
+      'COACHING_CENTER',
       'STUDY_HALLS',
       'TUITION_CENTER',
       'STUDY_ABROAD',
     ]),
     body('details').isObject(),
   ],
+  handleValidationErrors,
   updateAcademicProfile
 ); 
 

@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import StatCard from "./StatCard";
 import TimeRangeToggle, { TimeRangeValue } from "../ui/TimeRangeToggle";
-import { metricsAPI } from "@/lib/api";
 
 // Types for dynamic data
 interface DashboardStats {
@@ -61,29 +60,9 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({
     }
   };
 
-  const [baseline, setBaseline] = useState<number>(stats.courseViews);
 
-  useEffect(() => {
-    // fetch institutionAdmin range value on range change
-    const fetchRange = async () => {
-      try {
-        const range = (filters.timeRange || 'Weekly').toString().toLowerCase() as 'weekly'|'monthly'|'yearly';
-        const res = await metricsAPI.getInstitutionAdminByRange('views', range);
-        if ((res as any)?.success) {
-          const total = (res as any).data?.totalViews ?? 0;
-          // compute trend vs previous baseline for this range
-          const delta = baseline > 0 ? Math.round(((total - baseline) / baseline) * 100) : (total > 0 ? 100 : 0);
-          const isPositive = total - baseline >= 0;
-          // Update baseline for next comparison
-          setBaseline(total);
-        }
-      } catch (err) {
-        console.error('DashboardStats: institutionAdmin range fetch failed', err);
-      }
-    };
-    fetchRange();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.timeRange]);
+  // Removed direct API call - now using props from parent component
+  // The parent component uses useDashboardStats hook which handles caching
 
   return (
     <motion.div

@@ -11,19 +11,10 @@ import AdCard from "@/components/dashboard/AdCard";
 import StudentList, { StudentItem } from "@/components/dashboard/StudentList";
 import CourseReachChart from "@/components/dashboard/CourseReachChart";
 import AdminDashboard from "@/components/dashboard/AdminDashboard";
-import {
-  getMyInstitution,
-  getInstitutionBranches,
-  getInstitutionCourses,
-} from "@/lib/api";
+import { getMyInstitution, getInstitutionBranches, getInstitutionCourses } from "@/lib/api";
 import { authAPI, metricsAPI, enquiriesAPI } from "@/lib/api";
 import { getSocket } from "@/lib/socket";
-import { 
-	useDashboardStats,
-	useRecentStudents,
-	useChartData,
-	useInstitution
-} from "@/lib/hooks/dashboard-hooks";
+import { useDashboardStats, useRecentStudents, useChartData, useInstitution, useProgramViews } from "@/lib/hooks/dashboard-hooks";
 import { useQueryClient } from "@tanstack/react-query";
 import { QUERY_KEYS } from "@/lib/hooks/dashboard-hooks";
 import { socketManager } from "@/lib/socket";
@@ -99,7 +90,9 @@ function DashboardPage() {
 
 	// ------- TanStack Query hooks (source of truth) -------
 	const { data: inst } = useInstitution();
-	const { data: statsData, isLoading: statsLoading } = useDashboardStats(filters.timeRange);
+    const { data: statsData, isLoading: statsLoading } = useDashboardStats(filters.timeRange);
+    const programViewsRange = filters.timeRange;
+    const { data: programViewsData } = useProgramViews(programViewsRange);
 	const { data: recentStudents, isLoading: studentsLoading } = useRecentStudents();
 	const { data: seriesValues } = useChartData('views');
 	const queryClient = useQueryClient();
@@ -111,9 +104,10 @@ function DashboardPage() {
 
 	useEffect(() => {
 		setIsStatsLoading(!!statsLoading);
-		if (statsData) {
-			setStats({
-				courseViews: statsData.courseViews,
+    if (statsData) {
+            const programViewsSum = Array.isArray(programViewsData) ? (programViewsData as any[]).reduce((sum, p:any) => sum + (Number(p.inRangeViews)||0), 0) : 0;
+            setStats({
+                courseViews: programViewsSum,
 				courseComparisons: statsData.courseComparisons,
 				contactRequests: statsData.contactRequests,
 				courseViewsTrend: statsData.courseViewsTrend,
@@ -121,7 +115,7 @@ function DashboardPage() {
 				contactRequestsTrend: statsData.contactRequestsTrend,
 			});
 			}
-	}, [statsLoading, statsData]);
+    }, [statsLoading, statsData, programViewsData]);
 
 	useEffect(() => {
 		setIsListLoading(!!studentsLoading);
@@ -150,10 +144,13 @@ function DashboardPage() {
 		socketManager.retain();
 		socketManager.subscribeRoom(instRoom);
 
-		const onCourseViewsUpdated = () => {
+        const onCourseViewsUpdated = () => {
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_STATS(filters.timeRange, institutionId || undefined), exact: false });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CHART_DATA('views', new Date().getFullYear(), institutionId || undefined), exact: false });
 		};
+        const onProgramViewsUpdated = () => {
+            queryClient.invalidateQueries({ queryKey: ['program-views', institutionId, filters.timeRange] });
+        };
 		const onComparisonsUpdated = () => {
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_STATS(filters.timeRange, institutionId || undefined), exact: false });
 		};
@@ -164,13 +161,15 @@ function DashboardPage() {
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_STATS(filters.timeRange, institutionId || undefined), exact: false });
 		};
 
-		socketManager.addListener('courseViewsUpdated', onCourseViewsUpdated);
+        socketManager.addListener('courseViewsUpdated', onCourseViewsUpdated);
+        socketManager.addListener('programViewsUpdated', onProgramViewsUpdated);
 		socketManager.addListener('comparisonsUpdated', onComparisonsUpdated);
 		socketManager.addListener('enquiryCreated', onEnquiryCreated);
 		socketManager.addListener('institutionAdminTotalLeads', onInstitutionAdminTotalLeads);
 
 		return () => {
-			socketManager.removeListener('courseViewsUpdated', onCourseViewsUpdated);
+            socketManager.removeListener('courseViewsUpdated', onCourseViewsUpdated);
+            socketManager.removeListener('programViewsUpdated', onProgramViewsUpdated);
 			socketManager.removeListener('comparisonsUpdated', onComparisonsUpdated);
 			socketManager.removeListener('enquiryCreated', onEnquiryCreated);
 			socketManager.removeListener('institutionAdminTotalLeads', onInstitutionAdminTotalLeads);
@@ -195,10 +194,10 @@ function DashboardPage() {
 			animate="visible"
 		>
 			<motion.div 
-				className="grid grid-cols-1 xl:grid-cols-3 gap-3 sm:gap-6 mb-4 sm:mb-6 mt-2 sm:mt-5 rounded-2xl"
+				className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-6 mb-4 sm:mb-6 mt-2 sm:mt-5 rounded-2xl"
 				variants={itemVariants}
 			>
-				<div className="xl:col-span-2 bg-gray-50 dark:bg-gray-900 rounded-2xl mt-0">
+				<div className="lg:col-span-2 bg-gray-50 dark:bg-gray-900 rounded-2xl mt-0">
 					<DashboardStats
 						stats={stats}
 						filters={filters}
@@ -206,7 +205,7 @@ function DashboardPage() {
 						onFilterChange={handleFilterChange}
 					/>
 				</div>
-				<div className="xl:col-span-1">
+				<div className="lg:col-span-1">
 					<AdCard onShare={() => {}} />
 				</div>
 			</motion.div>
@@ -223,7 +222,6 @@ function DashboardPage() {
 						statusLabel="Inquiry type"
 						useDashboardColumns
 						onStudentClick={() => {}}
-						onStatusChange={() => {}}
 					/>
 				</div>
 			</motion.div>

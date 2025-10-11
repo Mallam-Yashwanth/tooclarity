@@ -11,9 +11,6 @@ router.post('/', notificationController.create);
 // POST /v1/notifications/read
 router.post('/read', notificationController.markRead);
 
-// POST /v1/notifications/unread
-router.post('/unread', notificationController.markUnread);
-
 // DELETE /v1/notifications
 router.delete('/', notificationController.remove);
 

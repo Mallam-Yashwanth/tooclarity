@@ -1,10 +1,6 @@
 const mongoose = require("mongoose");
 
 const enquirySchema = new mongoose.Schema({
-  studentName: { type: String, required: true, trim: true },
-  studentEmail: { type: String, required: true, trim: true },
-  studentPhone: { type: String, required: true, trim: true },
-
   institution: { type: mongoose.Schema.Types.ObjectId, ref: "Institution", required: true, index: true },
 
   programInterest: { type: String, required: true, trim: true },
@@ -14,7 +10,50 @@ const enquirySchema = new mongoose.Schema({
     required: true,
   },
 
-  student: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
+  student: { type: mongoose.Schema.Types.ObjectId, ref: "InstituteAdmin", required: true },
+
+  // Lead status for institution admin management (starts with enquiryType, then progresses)
+  status: {
+    type: String,
+    enum: [
+      // Initial enquiry types from students
+      "Requested for callback",
+      "Requested for demo",
+      // Progressed statuses by institution admin
+      "Contacted", 
+      "Interested",
+      "Demo Scheduled",
+      "Follow Up Required",
+      "Qualified",
+      "Not Interested",
+      "Converted"
+    ],
+    required: true,
+  },
+
+  // Status change history for audit trail
+  statusHistory: [{
+    status: {
+      type: String,
+      enum: [
+        // Initial enquiry types from students
+        "Requested for callback",
+        "Requested for demo",
+        // Progressed statuses by institution admin
+        "Contacted", 
+        "Interested",
+        "Demo Scheduled",
+        "Follow Up Required",
+        "Qualified",
+        "Not Interested",
+        "Converted"
+      ],
+      required: true,
+    },
+    changedBy: { type: mongoose.Schema.Types.ObjectId, ref: "InstituteAdmin", required: true },
+    changedAt: { type: Date, default: Date.now },
+    notes: { type: String, trim: true }
+  }],
 
 }, { timestamps: true });
 

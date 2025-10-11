@@ -25,6 +25,11 @@ export interface OTPData {
   otp: string;
 }
 
+export interface ResetPasswordData {
+  password: string;
+  passwordConfirm: string;
+}
+
 export interface ApiResponse<T = any> {
   success: boolean;
   message?: string;
@@ -280,6 +285,23 @@ export const authAPI = {
       method: "GET",
     });
   },
+
+  // Forgot password
+  forgotPassword: async (email: string): Promise<ApiResponse> => {
+    return apiRequest("/v1/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  // Reset password
+  resetPassword: async (token: string, passwordData: ResetPasswordData): Promise<ApiResponse> => {
+    return apiRequest(`/v1/auth/reset-password/${token}`, {
+      method: "PATCH",
+      body: JSON.stringify(passwordData),
+    });
+  },
+  
 };
 
 // Institution API methods
@@ -304,6 +326,7 @@ export const institutionAPI = {
     });
   },
 };
+
 
 // Utility functions for institution data management
 export const getInstitutionId = (): string | null => {

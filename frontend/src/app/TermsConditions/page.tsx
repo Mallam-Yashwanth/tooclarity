@@ -50,11 +50,11 @@ const TermsConditionsPage: React.FC = () => {
       </h1>
       
       <p className="text-sm mb-4">
-        The following terms and conditions, along with all other terms and legal notices located on www.tooclarity.com (collectively, "Terms"), govern Your use of www.tooclarity.com (the "Website"). The Website is owned and operated by Info Edge (India) Limited (hereinafter referred to as “Company”).
+        The following terms and conditions, along with all other terms and legal notices located on www.tooclarity.com (collectively, "Terms"), govern Your use of www.tooclarity.com (the "Website"). The Website is owned and operated by Info Edge (India) Limited (hereinafter referred to as "Company").
       </p>
       
       <p className="text-sm mb-4">
-        These Terms of Use ("Terms") constitute a legally binding agreement ("Agreement") between the user who visits the Website in connection with use of our services, or whose information Company otherwise receives in connection with the services provided through its education business (“You”) and the Company governing Your access to and use of the Platform, including any subdomains thereof, and any other websites through which the Website makes its services available (collectively, "Site"), our mobile, tablet and other smart device applications, and application program interfaces (collectively, "Application"). The Application and Site are collectively termed as "Platform".
+        These Terms of Use ("Terms") constitute a legally binding agreement ("Agreement") between the user who visits the Website in connection with use of our services, or whose information Company otherwise receives in connection with the services provided through its education business ("You") and the Company governing Your access to and use of the Platform, including any subdomains thereof, and any other websites through which the Website makes its services available (collectively, "Site"), our mobile, tablet and other smart device applications, and application program interfaces (collectively, "Application"). The Application and Site are collectively termed as "Platform".
       </p>
       
       <p className="text-sm mb-4">
@@ -135,9 +135,9 @@ const TermsConditionsPage: React.FC = () => {
           By accessing or using the Platform You represent and warrant that You fulfil the requirement of minimum age and have the legal capacity and authority to enter into a contract as per the applicable laws.
         </p>
         <p className="text-sm mb-4">
-          You are not under any legal or other disability which limits Your ability to comply with these Terms or to install and use the products You purchase with minimal risk of harm to You or others. You further represent that You are not purchasing the products/services for resale to others and will not do so without the Company’s prior written consent.
+          You are not under any legal or other disability which limits Your ability to comply with these Terms or to install and use the products You purchase with minimal risk of harm to You or others. You further represent that You are not purchasing the products/services for resale to others and will not do so without the Company's prior written consent.
         </p>
-        <li>You are eligible to conduct the purpose “hereinafter defined” lawfully</li>
+        <li>You are eligible to conduct the purpose "hereinafter defined" lawfully</li>
       </ol>
       
       <h2 

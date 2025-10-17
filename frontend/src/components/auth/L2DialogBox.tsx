@@ -171,6 +171,7 @@ export default function L2DialogBox({
   const [remoteBranches, setRemoteBranches] = useState<Array<{ _id: string; branchName: string }>>([]);
   const [selectedBranchIdForProgram, setSelectedBranchIdForProgram] = useState<string>("");
   const [programBranchError, setProgramBranchError] = useState<string>("");
+  
 
   const uniqueRemoteBranches = React.useMemo(() => {
     const seenNames = new Set<string>();
@@ -1205,13 +1206,13 @@ export default function L2DialogBox({
   const isSubscriptionProgram = mode === "subscriptionProgram" || mode === "settingsEdit";
 
   const content = (
-    <Card className="w-full sm:p-6 rounded-[24px] bg-white border-0 shadow-none">
-      <CardContent className="space-y-6">
+    <Card className="w-full sm:p-6 rounded-[24px] bg-white dark:bg-gray-900 border-0 shadow-none">
+      <CardContent className="space-y-6 text-gray-900 dark:text-gray-100">
               {/* Render based on initialSection */}
               {initialSection === "course" ? (
                 <div className="space-y-6">
                   <div className="space-y-2">
-                    <h3 className="text-xl md:text-2xl font-bold">
+                    <h3 className="text-xl md:text-2xl font-bold dark:text-gray-50">
                       {isStudyHall
                         ? "Study Hall"
                         : isTutionCenter
@@ -1220,7 +1221,7 @@ export default function L2DialogBox({
                         ? "Program Details"
                         : "Course Details"}
                     </h3>
-                    <p className="text-[#697282] text-sm">
+                    <p className="text-[#697282] dark:text-gray-300 text-sm">
                       {isStudyHall
                         ? "Enter the details of the study hall."
                         : isTutionCenter
@@ -1243,8 +1244,8 @@ export default function L2DialogBox({
                             className={`px-3 py-2 rounded-lg text-sm border transition-colors flex items-center gap-2 ${
                               selectedCourseId === course.id
                                 ? "bg-blue-50 border-blue-200 text-blue-700"
-                                : "bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
-                            }`}
+                                : "bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700"
+                            }`} 
                           >
                             <span>
                               {course.courseName ||
@@ -1290,7 +1291,7 @@ export default function L2DialogBox({
                     {/* Branch Selection - Only show for subscription programs and when branches exist */}
                     {isSubscriptionProgram && uniqueRemoteBranches.length > 0 && (
                       <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Select Branch</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Branch</label>
                         <AppSelect
                           value={selectedBranchIdForProgram}
                           onChange={(val)=> { setSelectedBranchIdForProgram(val); setProgramBranchError(""); }}
@@ -1427,9 +1428,9 @@ export default function L2DialogBox({
                                   <>
                                     <Upload
                                       size={24}
-                                      className="text-gray-400 mb-2"
+                                      className="text-gray-400 dark:text-gray-300 mb-2"
                                     />
-                                    <span className="text-sm text-gray-500">
+                                    <span className="text-sm text-gray-500 dark:text-gray-300">
                                       {f.type === "image"
                                         ? (isSubscriptionProgram ? "Upload Program Image (jpg / jpeg)" : "Upload Course Image (jpg / jpeg / png)")
                                         : (isSubscriptionProgram ? "Upload Program Brochure (pdf)" : "Upload Course Brochure (pdf)")}
@@ -1442,7 +1443,7 @@ export default function L2DialogBox({
                               <input
                                 type="file"
                                 accept={f.accept}
-                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                className="absolute inset-0 opacity-0 cursor-pointer dark:bg-gray-800"
                                 onChange={(e) => handleFileChange(e, f.type)}
                               />
                             </label>
@@ -1655,7 +1656,7 @@ export default function L2DialogBox({
                         {/* Branch Selection for Subscription Programs - Only show when branches exist */}
                         {isSubscriptionProgram && uniqueRemoteBranches.length > 0 && (
                           <div className="mb-4">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Select Branch</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Branch</label>
                             <AppSelect
                               value={selectedBranchIdForProgram}
                               onChange={(val)=> { setSelectedBranchIdForProgram(val); setProgramBranchError(""); }}
@@ -1809,9 +1810,9 @@ export default function L2DialogBox({
                                       <>
                                         <Upload
                                           size={24}
-                                          className="text-gray-400 mb-2"
+                                          className="text-gray-400 dark:text-gray-300 mb-2"
                                         />
-                                        <span className="text-sm text-gray-500">
+                                        <span className="text-sm text-gray-500 dark:text-gray-300">
                                           {f.type === "image"
                                             ? "Upload Course Image (jpg / jpeg / png)"
                                             : "Upload Course Brochure (pdf)"}
@@ -1824,7 +1825,7 @@ export default function L2DialogBox({
                                   <input
                                     type="file"
                                     accept={f.accept}
-                                    className="absolute inset-0 opacity-0 cursor-pointer"
+                                    className="absolute inset-0 opacity-0 cursor-pointer dark:bg-gray-800"
                                     onChange={(e) =>
                                       handleFileChange(e, f.type)
                                     }

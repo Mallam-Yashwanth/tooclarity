@@ -100,7 +100,7 @@ export const studentDashboardAPI = {
       name: data?.name || "",
       email: data?.email || "",
       phoneNumber: data?.contactNumber,
-      profilePicture: data?.profilePicture || data?.ProfilePicutre, // backend may use ProfilePicutre
+      profilePicture: data?.profilePicture, // backend may use ProfilePicture
       birthday: data?.birthday, // if backend provides
     };
     return { success: true, message: "ok", data: normalized } as StudentApiResponse<StudentProfile>;

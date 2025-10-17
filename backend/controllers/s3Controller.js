@@ -14,11 +14,14 @@ exports.getUploadUrl = async (req, res) => {
     // Return both URLs
     return res.json({
       uploadUrl,  // For frontend PUT request
-      // publicUrl,  // Publicly accessible file URL
+      publicUrl,  // Publicly accessible file URL
     });
   } catch (error) {
     console.error("Error generating upload URL:", error);
-    res.status(500).json({ error: "Failed to generate upload URL" });
+    const message = /Region is missing/i.test(String(error?.message || ''))
+      ? "S3 region is missing. Set AWS_REGION on the server."
+      : "Failed to generate upload URL";
+    res.status(500).json({ error: message });
   }
 };
 

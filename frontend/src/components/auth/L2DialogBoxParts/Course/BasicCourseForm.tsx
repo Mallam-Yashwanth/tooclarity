@@ -81,8 +81,8 @@ export default function BasicCourseForm({
         required
       />
 
-      <div className="flex flex-col gap-2">
-        <label className="font-medium text-[16px]">Mode</label>
+      <div className="flex flex-col gap-2 dark:bg-gray-50">
+        <label className="font-medium text-[16px] dark:text-gray-50">Mode</label>
         <SlidingIndicator
           options={["Offline", "Online", "Hybrid"] as const}
           activeOption={currentCourse.mode}

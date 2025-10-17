@@ -76,7 +76,7 @@ const AnalyticsTable: React.FC<AnalyticsTableProps> = ({ rows, onAddCourse, titl
           </table>
         </div>
         <div className="flex justify-center mt-6">
-          <Button onClick={onAddCourse} variant="secondary" className="text-gray-600 border border-gray-200 rounded-full bg-white p-5">
+          <Button onClick={onAddCourse} variant="secondary" className="text-gray-600 border border-gray-200 rounded-full bg-white p-5 dark:bg-indigo-50 dark:hover:bg-indigo-100">
             <span className="text-lg mr-2">＋</span>
             Add Course
           </Button>

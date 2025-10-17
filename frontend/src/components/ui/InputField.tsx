@@ -68,7 +68,7 @@ function validateDateInstant(value: string, isBirthday = false): string | undefi
 }
 
 // Styling constants for StudentOnboarding consistency
-const labelCls = "text-[12px] font-semibold";
+const labelCls = "text-[16px] font-semibold";
 const inputBase = "w-full h-[52px] rounded-[12px] px-4 outline-none border transition-colors";
 const inputIdle = "border-gray-200 bg-white focus:border-[#3B82F6]";
 const inputError = "border-red-400 bg-white";
@@ -87,6 +87,7 @@ interface OriginalInputFieldProps {
 	isTextarea?: boolean;
 	as?: 'textarea';
 	options?: string[];
+  layout?: "vertical" | "horizontal";
 	icon?: ReactNode;
 	inputMode?: "text" | "numeric" | "decimal" | "tel" | "email" | "search" | "url";
 	pattern?: string;
@@ -110,6 +111,7 @@ function InputField({
 	isRadio = false,
 	isTextarea = false,
 	options = [],
+  layout = "vertical",
 	icon,
 	inputMode,
 	pattern,
@@ -133,11 +135,11 @@ function InputField({
 				<div className="relative">
 					<div
 						onClick={() => setOpen(!open)}
-						className={cn(
-							`w-full h-[48px] rounded-[12px] p-[12px] bg-[#F5F6F9] flex items-center justify-between cursor-pointer border border-[#DADADD]`,
-							value ? "text-black" : "text-[#697282]",
-							disabled && "opacity-50 cursor-not-allowed"
-						)}
+                    className={cn(
+                            `w-full h-[48px] rounded-[12px] p-[12px] bg-[#F5F6F9] dark:bg-gray-800 flex items-center justify-between cursor-pointer border border-[#DADADD] dark:border-gray-700`,
+                            value ? "text-black dark:text-gray-100" : "text-[#697282] dark:text-gray-300",
+                            disabled && "opacity-50 cursor-not-allowed"
+                        )}
 					>
 						{value || `Select ${label}`}
 						<span className="text-[#697282]">
@@ -146,7 +148,7 @@ function InputField({
 					</div>
 
 					{open && !disabled && (
-						<div className="mt-2 bg-white shadow-md rounded-[12px] border border-[#DADADD] flex flex-col">
+                        <div className="mt-2 bg-white dark:bg-gray-800 shadow-md rounded-[12px] border border-[#DADADD] dark:border-gray-700 flex flex-col">
 							{options.map((opt) => (
 								<div
 									key={opt}
@@ -165,25 +167,32 @@ function InputField({
 						</div>
 					)}
 				</div>
-			) : isRadio ? (
-				<div className="flex gap-4">
+            ) : isRadio ? (
+                <div className={layout === "horizontal" ? "flex items-center gap-6" : "flex flex-col gap-3"}>
 					{options.map((option) => (
-						<label key={option} className="flex items-center gap-2">
-							<input
-								type="radio"
-								name={name}
-								value={option}
-								checked={value === option}
-								onChange={onChange}
-								disabled={disabled}
-								className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-							/>
-							<span className="text-sm font-semibold">{option}</span>
-						</label>
+						<button
+							key={option}
+							type="button"
+							disabled={disabled}
+							onClick={() => {
+								const event = {
+									target: { name, value: option },
+								} as unknown as ChangeEvent<HTMLInputElement>;
+								onChange(event);
+							}}
+                            className="group flex items-center gap-3 text-left"
+						>
+                            <span className={`relative grid place-items-center w-[18px] h-[18px] rounded-full border ${value === option ? "border-[#0A46E4] ring-4 ring-[#0A46E4]/20" : "border-gray-300"}`}>
+                                {value === option && <span className="w-[8px] h-[8px] rounded-full bg-[#0A46E4]" />}
+							</span>
+                            <span className="text-[16px] font-semibold text-[#111827]">
+								{option}
+							</span>
+						</button>
 					))}
 				</div>
 			) : isTextarea ? (
-				<textarea
+                <textarea
 					name={name}
 					value={value}
 					disabled={disabled}
@@ -192,9 +201,9 @@ function InputField({
 					maxLength={maxLength}
 					rows={rows}
 					className={cn(
-						`w-full px-4 py-3 border border-[#DADADD] rounded-[12px] bg-[#F5F6F9]
-						placeholder:font-[Montserrat] placeholder:text-[16px] placeholder:text-[#697282]
-						resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`,
+                        `w-full px-4 py-3 border border-[#DADADD] dark:border-gray-700 rounded-[12px] bg-[#F5F6F9] dark:bg-gray-800 text-black dark:text-gray-100
+                        placeholder:font-[Montserrat] placeholder:text-[16px] placeholder:text-[#697282] dark:placeholder:text-gray-400
+                        resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`,
 						disabled && "opacity-50 cursor-not-allowed"
 					)}
 				/>
@@ -205,7 +214,7 @@ function InputField({
 							{icon}
 						</div>
 					)}
-					<input
+                    <input
 						type={type}
 						name={name}
 						value={value}
@@ -226,10 +235,10 @@ function InputField({
 						inputMode={inputMode}
 						pattern={pattern}
 						maxLength={maxLength}
-						className={cn(
-							`w-full h-[48px] rounded-[12px] border border-[#DADADD] bg-[#F5F6F9]
-							placeholder:font-[Montserrat] placeholder:text-[16px] placeholder:text-[#697282]
-							${icon ? "pl-12" : "p-5"}`,
+                        className={cn(
+                            `w-full h-[48px] rounded-[12px] border border-[#DADADD] dark:border-gray-700 bg-[#F5F6F9] dark:bg-gray-800 text-black dark:text-gray-100
+                            placeholder:font-[Montserrat] placeholder:text-[16px] placeholder:text-[#697282] dark:placeholder:text-gray-400
+                            ${icon ? "pl-12" : "p-5"}`,
 							disabled && "opacity-50 cursor-not-allowed"
 						)}
 					/>

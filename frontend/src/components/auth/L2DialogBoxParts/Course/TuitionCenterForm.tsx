@@ -239,13 +239,13 @@ export default function TuitionCenterForm({
 
       {/* Upload Image */}
       <div className="flex flex-col gap-2">
-        <label className="font-medium text-[16px]">{isProgram ? 'Add Program Image' : 'Add Image'}<span className="text-red-500 ml-1">*</span></label>
+        <label className="font-medium text-[16px] dark:text-gray-700">{isProgram ? 'Add Program Image' : 'Add Image'}<span className="text-red-500 ml-1">*</span></label>
         <label
           className={`w-full h-[120px] rounded-[12px] border-2 border-dashed bg-[#F8F9FA] flex flex-col items-center justify-center cursor-pointer hover:bg-[#F0F1F2] transition-colors ${
             courseErrors.image ? "border-red-500" : "border-[#DADADD]"
           }`}
         >
-          <Upload size={24} className="text-gray-400 mb-2" />
+          <Upload size={24} className="text-gray-400 mb-2 dark:text-gray-300" />
           <span className="text-sm text-gray-500">
             {currentCourse.image
               ? (currentCourse.image as File).name
@@ -255,7 +255,7 @@ export default function TuitionCenterForm({
             type="file"
             name="image"
             accept="image/jpeg,image/jpg"
-            className="hidden"
+            className="hidden dark:bg-gray-800"
             onChange={(e) => handleFileChange(e, "image")}
           />
         </label>

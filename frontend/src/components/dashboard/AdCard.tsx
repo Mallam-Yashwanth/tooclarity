@@ -11,11 +11,11 @@ import { WhatsAppLogo, XLogo, LinkedInLogo } from "../ui/BrandLogos";
 const AdCard: React.FC<AdCardProps> = ({ onShare }) => {
   return (
     <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }}>
-      <Card className="relative overflow-hidden border-none rounded-2xl shadow-sm bg-gradient-to-br from-[#F2F6FF] via-[#E8EEFF] to-[#E3E9FF] dark:from-gray-800 dark:via-gray-800 dark:to-gray-800">
-        <CardContent className="p-4 md:p-9">
-          <div className="relative grid grid-cols-12 items-center min-h-[180px] gap-x-8">
+      <Card className="relative overflow-visible md:overflow-hidden border-none rounded-2xl shadow-sm bg-gradient-to-br from-[#F2F6FF] via-[#E8EEFF] to-[#E3E9FF] dark:from-gray-800 dark:via-gray-800 dark:to-gray-800">
+        <CardContent className="p-4 md:p-6">
+          <div className="relative grid grid-cols-12 items-center min-h-[200px] gap-x-6 md:gap-x-8">
             {/* Left social icons (images only) */}
-            <div className="col-span-12 md:col-span-3 relative h-[160px] mb-4 md:mb-0 overflow-hidden w-full">
+            <div className="col-span-12 md:col-span-3 relative h-[160px] md:h-[180px] mb-4 md:mb-0 overflow-visible w-full">
               {/* WhatsApp top-left */}
               <div className="absolute top-0 left-2 h-12 w-12 rounded-full bg-white ring-4 ring-white flex items-center justify-center shadow-[0_8px_24px_rgba(16,185,129,0.35)] z-10">
                 <WhatsAppLogo />
@@ -34,7 +34,7 @@ const AdCard: React.FC<AdCardProps> = ({ onShare }) => {
             <div className="col-span-12 md:col-span-6 flex flex-col justify-center md:pl-6 z-10">
               <div className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 leading-snug">Increase your reach</div>
               <div className="text-sm text-gray-600 dark:text-gray-300 mt-2">Share now on various social medias</div>
-              <Button className="mt-5 w-[170px] bg-[#1859FF] hover:bg-[#0f4be0] text-white rounded-xl shadow-[0_8px_24px_rgba(24,89,255,0.35)]">
+              <Button className="mt-5 w-[170px] h-12 md:h-11 bg-[#1859FF] hover:bg-[#0f4be0] text-white rounded-xl shadow-[0_8px_24px_rgba(24,89,255,0.35)]">
                 Share Now
               </Button>
             </div>

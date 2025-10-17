@@ -5,6 +5,7 @@ import { AuthProvider } from "../lib/auth-context";
 import ToastProvider from "@/components/ui/ToastProvider";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import NotificationSocketBridge from "@/components/providers/NotificationSocketBridge";
+import ThemeProvider from "@/components/providers/ThemeProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,17 +33,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${Montserrat.variable} antialiased`}
       >
-        <QueryProvider>
-          <AuthProvider>
-            {children}
-            <ToastProvider /> {/* 👈 This must exist ONCE globally */}
-            <NotificationSocketBridge />
-          </AuthProvider>
-        </QueryProvider>
+        <ThemeProvider>
+          <QueryProvider>
+            <AuthProvider>
+              {children}
+              <ToastProvider /> {/* 👈 This must exist ONCE globally */}
+              <NotificationSocketBridge />
+            </AuthProvider>
+          </QueryProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

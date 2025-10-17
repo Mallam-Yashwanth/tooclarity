@@ -26,6 +26,8 @@ const DummyDashboard = () => {
                 type="text"
                 placeholder="Search here"
                 className="pl-10 pr-4 py-2 bg-gray-100 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                readOnly
+                suppressHydrationWarning
               />
             </div>
           </div>

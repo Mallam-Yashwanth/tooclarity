@@ -38,6 +38,8 @@ router.put(
     body('email').optional().isEmail().normalizeEmail(),
     body('contactNumber').optional().isString().trim(),
     body('address').optional().isString().trim(),
+    body('profilePicture').optional().isString().trim(),
+    body('isProfileCompleted').optional().isBoolean().toBoolean(),
   ],
   handleValidationErrors,
   updateStudentDetails

@@ -44,7 +44,9 @@ function LeadsPage() {
 	const queryClient = useQueryClient();
 	const { data: institution } = useInstitution();
 	const { data: pages, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteLeads(10);
-	const sentinelRef = React.useRef<HTMLDivElement | null>(null);
+    const sentinelRef = React.useRef<HTMLDivElement | null>(null);
+    const userScrolledRef = React.useRef<boolean>(false);
+    const fetchLockRef = React.useRef<boolean>(false);
 
 	const computeTrend = (current: number, previous: number) => {
 		if (previous <= 0) return { value: current > 0 ? 100 : 0, isPositive: current > 0 };
@@ -223,7 +225,7 @@ function LeadsPage() {
 		}
 	}, [pages, selectedProgram, leadTimeRange]);
 
-	// IntersectionObserver sentinel for next page (exactly at end)
+    // IntersectionObserver sentinel for next page (only after user scrolls the list container)
 	useEffect(() => {
 		const el = sentinelRef.current;
 		if (!el) return;
@@ -238,21 +240,35 @@ function LeadsPage() {
 			return getScrollParent(node.parentElement);
 		};
 
-		const rootEl = getScrollParent(el.parentElement) || null;
+        let removeScroll: (() => void) | null = null;
+        const rootEl = getScrollParent(el.parentElement) || null;
+        if (rootEl) {
+            const onScroll = () => { userScrolledRef.current = true; };
+            rootEl.addEventListener('scroll', onScroll, { passive: true });
+            // cleanup listener later
+            removeScroll = () => rootEl.removeEventListener('scroll', onScroll);
+        }
 
-		const observer = new IntersectionObserver((entries) => {
+        const observer = new IntersectionObserver((entries) => {
 			for (const entry of entries) {
 				if (entry.isIntersecting) {
-					if (!isFetchingNextPage && hasNextPage) {
-						fetchNextPage();
+                    // Require user has scrolled the list at least once to trigger paging
+                    if (!userScrolledRef.current) continue;
+                    if (!isFetchingNextPage && hasNextPage && !fetchLockRef.current) {
+                        fetchLockRef.current = true;
+                        fetchNextPage().finally(() => {
+                            // small cooldown to prevent burst loads from momentum scroll
+                            setTimeout(() => { fetchLockRef.current = false; }, 600);
+                        });
 					}
 				}
 			}
-		}, { root: rootEl, rootMargin: '0px', threshold: 1.0 });
+        }, { root: rootEl, rootMargin: '64px', threshold: 1.0 });
 
 		observer.observe(el);
 		return () => {
 			try { observer.disconnect(); } catch {}
+            try { if (typeof removeScroll === 'function') removeScroll(); } catch {}
 		};
 	}, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 

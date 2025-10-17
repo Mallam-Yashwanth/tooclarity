@@ -10,6 +10,7 @@ import {
   faUser
 } from "@fortawesome/free-regular-svg-icons";
 import { faSun,faSearch, faTimes, faCheck } from "@fortawesome/free-solid-svg-icons";
+import { useTheme } from "next-themes";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { notificationsAPI } from "@/lib/api";
@@ -50,10 +51,13 @@ const Topbar: React.FC<TopbarProps> = ({
   const router = useRouter();
   const queryClient = useQueryClient();
   const { searchQuery, setSearchQuery, searchInPage, clearSearch, isSearchActive } = useSearch();
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const { theme, setTheme, systemTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
+  const themeMenuRef = useRef<HTMLDivElement | null>(null);
   const [institutionAdminId, setInstitutionAdminId] = useState<string | null>(null);
   const [studentId, setStudentId] = useState<string | null>(null);
   const [platformAdminId, setPlatformAdminId] = useState<string | null>(null);
@@ -320,15 +324,8 @@ const Topbar: React.FC<TopbarProps> = ({
   };
   useEffect(() => () => clearHideTimer(), []);
 
-  // Initialize theme
-  useEffect(() => {
-    try {
-      const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-      setIsDarkMode(prefersDark);
-    } catch (err) {
-      console.error('Topbar: initialize theme failed', err);
-    }
-  }, []);
+  // Ensure mounted before reading theme to avoid hydration mismatch
+  useEffect(() => { setMounted(true); }, []);
 
   // Load notifications on mount
   useEffect(() => {
@@ -365,21 +362,24 @@ const Topbar: React.FC<TopbarProps> = ({
     }
   };
 
-  const toggleDarkMode = () => {
-    const newDarkMode = !isDarkMode;
-    setIsDarkMode(newDarkMode);
-    try {
-      localStorage.setItem("theme", newDarkMode ? "dark" : "light");
-      const root = document.documentElement;
-      if (newDarkMode) {
-        root.classList.add("dark");
-      } else {
-        root.classList.remove("dark");
-      }
-    } catch (err) {
-      console.error('Topbar: localStorage/theme update failed', err);
-    }
+  const cycleTheme = () => {
+    // Cycle order: system -> light -> dark -> system
+    const current = theme || 'system';
+    if (current === 'system') setTheme('light');
+    else if (current === 'light') setTheme('dark');
+    else setTheme('system');
   };
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      const target = e.target as Node | null;
+      if (!themeMenuRef.current) return;
+      if (target && themeMenuRef.current.contains(target)) return;
+      setShowThemeMenu(false);
+    };
+    if (showThemeMenu) document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [showThemeMenu]);
 
   const markOneUnreadAsRead = (id: string) => {
     const updated = allNotifications.map(n => n.id === id ? { ...n, read: true } : n);
@@ -557,19 +557,55 @@ const Topbar: React.FC<TopbarProps> = ({
           <motion.div
             whileHover={{ scale: 1.06 }}
             whileTap={{ scale: 0.96 }}
+            className="relative"
+            ref={themeMenuRef}
           >
             <Button 
               size="icon" 
               variant="ghost" 
               className="h-8 w-8 sm:h-11 sm:w-11 rounded-full border border-gray-200 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
-              onClick={toggleDarkMode}
-              aria-label="Toggle Dark Mode"
+              onClick={() => setShowThemeMenu((v) => !v)}
+              aria-label="Toggle theme menu"
             >
-              <FontAwesomeIcon 
-                icon={isDarkMode ? faSun : faMoon} 
-                className="text-sm sm:text-lg dark:text-gray-100" 
-              />
+              {mounted && (
+                <FontAwesomeIcon 
+                  icon={(theme === 'dark' || (theme === 'system' && systemTheme === 'dark')) ? faSun : faMoon}
+                  className="text-sm sm:text-lg dark:text-gray-100" 
+                />
+              )}
             </Button>
+
+            {/* Theme Menu: system / light / dark */}
+            <AnimatePresence>
+              {showThemeMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.16 }}
+                  className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-xl rounded-md overflow-hidden z-50"
+                >
+                  <button
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 ${theme === 'system' ? 'font-semibold' : ''}`}
+                    onClick={() => { setTheme('system'); setShowThemeMenu(false); }}
+                  >
+                    System
+                  </button>
+                  <button
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 ${theme === 'light' ? 'font-semibold' : ''}`}
+                    onClick={() => { setTheme('light'); setShowThemeMenu(false); }}
+                  >
+                    Light
+                  </button>
+                  <button
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 ${theme === 'dark' ? 'font-semibold' : ''}`}
+                    onClick={() => { setTheme('dark'); setShowThemeMenu(false); }}
+                  >
+                    Dark
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
           
           <div className="h-6 w-px sm:h-9 bg-gray-400 mx-1 sm:mx-2 border border-gray-400 dark:bg-gray-600 dark:border-gray-600" />

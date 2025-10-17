@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 import { useUserStore } from "@/lib/user-store";
 import { studentDashboardAPI, studentOnboardingAPI } from "@/lib/students-api";
 import { apiRequest } from "@/lib/api";
-import { DateInput, FormField, RadioGroup, Dropdown, validateDateInstant } from "@/components/ui/InputField";
+import { uploadToS3 } from "@/lib/awsUpload";
+import InputField, { DateInput, FormField, RadioGroup, Dropdown, validateDateInstant } from "@/components/ui/InputField";
 
-const labelCls = "text-[12px] font-semibold";
+const labelCls = "text-[17px] font-semibold text-gray-900";
 const inputBase =
-	"w-full h-[52px] rounded-[12px] px-4 outline-none border transition-colors";
-const inputIdle = "border-gray-200 bg-white focus:border-[#3B82F6]";
+	"w-full h-[52px] rounded-[12px] px-4 outline-none border transition-colors font-semibold text-gray-900 placeholder:text-gray-500 bg-white dark:text-gray-100 dark:placeholder:text-gray-400";
+const inputIdle = "border-gray-200 bg-white focus:border-[#3B82F6] text-gray-900 placeholder:text-gray-500";
 const inputActive = "border-[#0A46E4] ring-1 ring-[#0A46E4]";
 const inputDisabled = "bg-gray-50 border-gray-200 text-gray-400";
 const inputError = "border-red-400 bg-white";
@@ -61,6 +62,29 @@ const interests = [
 
 
 
+const interestImageFor = (key: string): string => {
+  switch (key) {
+    case "KINDERGARTEN":
+      return "/kindergarden.png";
+    case "SCHOOL":
+      return "/school.png";
+    case "INTERMEDIATE":
+      return "/intermediate.png";
+    case "GRADUATION":
+      return "/graduation.png";
+    case "COACHING_CENTER":
+      return "/coachingcenters.png";
+    case "STUDY_HALLS":
+      return "/studyhalls.png";
+    case "STUDY_ABROAD":
+      return "/studyabroad.png";
+    case "TUITION_CENTER":
+      return "/tutioncenter.png";
+    default:
+      return "/globe.svg";
+  }
+};
+
 const StudentonBoarding: React.FC = () => {
 	const router = useRouter();
 	const setProfileCompleted = useUserStore((s) => s.setProfileCompleted);
@@ -68,6 +92,7 @@ const StudentonBoarding: React.FC = () => {
 
 	const [step, setStep] = useState<Step>(1);
 	const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+    const [avatarFile, setAvatarFile] = useState<File | null>(null);
 	const fileRef = useRef<HTMLInputElement | null>(null);
 
 	const [fullName, setFullName] = useState("");
@@ -232,10 +257,87 @@ const StudentonBoarding: React.FC = () => {
 	const onAvatarChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
 		const f = e.target.files?.[0];
 		if (!f) return;
+        setAvatarFile(f);
 		const reader = new FileReader();
 		reader.onload = () => setAvatarUrl(String(reader.result));
 		reader.readAsDataURL(f);
 	};
+
+    // Upload profile picture to storage and persist to backend
+    const persistProfilePictureIfNeeded = useCallback(async (studentIdParam?: string) => {
+        try {
+            const studentIdFinal = studentIdParam || studentId;
+            if (!studentIdFinal) return { success: false, message: "Profile not initialized yet. Please try again." } as const;
+
+            // If no new file picked, attempt to persist existing avatarUrl (e.g., from Google)
+            if (!avatarFile) {
+                if (avatarUrl && typeof avatarUrl === 'string' && avatarUrl.trim().length > 0) {
+                    try {
+                        await apiRequest(`/v1/students/${encodeURIComponent(studentIdFinal)}`, {
+                            method: "PUT",
+                            body: JSON.stringify({ profilePicture: avatarUrl })
+                        });
+                        setErrors((p) => { const n = { ...p }; delete n.profilePicture; return n; });
+                        return { success: true } as const;
+                    } catch (e: any) {
+                        const msg = (e?.message || "Failed to save picture to profile.");
+                        setErrors((p) => ({ ...p, profilePicture: msg }));
+                        return { success: false, message: msg } as const;
+                    }
+                }
+                // No file and no existing avatar url -> mandatory field missing
+                const msg = "Profile picture is required.";
+                setErrors((p) => ({ ...p, profilePicture: msg }));
+                return { success: false, message: msg } as const;
+            }
+
+            // Validate file quickly before hitting backend
+            const maxBytes = 5 * 1024 * 1024; // 5MB
+            const allowed = ["image/jpeg", "image/png", "image/jpg", "image/webp"];
+            if (avatarFile.size > maxBytes) {
+                const msg = "Profile picture is too large (max 5MB).";
+                setErrors((p) => ({ ...p, profilePicture: msg }));
+                return { success: false, message: msg } as const;
+            }
+            if (!allowed.includes(avatarFile.type)) {
+                const msg = "Unsupported image format. Use JPG/PNG/WEBP.";
+                setErrors((p) => ({ ...p, profilePicture: msg }));
+                return { success: false, message: msg } as const;
+            }
+
+            // Upload via presigned URL
+            const uploaded = await uploadToS3(avatarFile);
+            if (!uploaded.success || !uploaded.fileUrl) {
+                const msg = uploaded.error || "Failed to upload profile picture. Please try again.";
+                setErrors((p) => ({ ...p, profilePicture: msg }));
+                return { success: false, message: msg } as const;
+            }
+
+            // Persist to backend profile with uploaded URL
+            try {
+                await apiRequest(`/v1/students/${encodeURIComponent(studentIdFinal)}`, {
+                    method: "PUT",
+                    body: JSON.stringify({ profilePicture: uploaded.fileUrl })
+                });
+            } catch (e: any) {
+                const msg = (e?.message || "Failed to save picture to profile.");
+                setErrors((p) => ({ ...p, profilePicture: msg }));
+                return { success: false, message: msg } as const;
+            }
+
+            // Clear picture error on success
+            setErrors((p) => { const n = { ...p }; delete n.profilePicture; return n; });
+            return { success: true } as const;
+        } catch (e: any) {
+            // Map common backend 500 from presign route to actionable hint
+            let msg = "Could not upload profile picture.";
+            if (typeof e?.message === 'string' && /presigned url|get presigned url|500/i.test(e.message)) {
+                msg = "Upload service not configured (presign failed). Please contact support.";
+            }
+            setErrors((p) => ({ ...p, profilePicture: msg }));
+            return { success: false, message: msg } as const;
+        }
+    }, [avatarFile, avatarUrl, studentId]);
 
 	const handleContinue = async () => {
 		// Single-screen personal form: when valid, directly submit and move to interests
@@ -463,12 +565,18 @@ const StudentonBoarding: React.FC = () => {
 
 			console.log("Sending academic profile:", { profileType: profileTypeToSend, details });
 
-			await studentOnboardingAPI.updateAcademicProfile(studentId!, {
+            await studentOnboardingAPI.updateAcademicProfile(studentId!, {
 				profileType: profileTypeToSend as any,
 					details,
 				});
-				setProfileCompleted(true);
-				router.replace("/dashboard");
+                // Attempt to upload/persist profile picture URL before finishing (mandatory)
+                const pic = await persistProfilePictureIfNeeded(studentId!);
+                if (!pic.success) {
+                    setErrors((p) => ({ ...p, submit: pic.message || "Profile picture is required." }));
+                    return;
+                }
+                setProfileCompleted(true);
+                router.replace("/dashboard");
 			} catch (e) {
 			console.error("Error submitting academic profile:", e);
 				setErrors((p) => ({ ...p, submit: e instanceof Error ? e.message : "Failed to save academic profile" }));
@@ -615,11 +723,12 @@ const StudentonBoarding: React.FC = () => {
 			case "KINDERGARTEN":
 				return (
 					<div className="flex flex-col gap-4 mt-6">
-						<RadioGroup
+                        <InputField
 							label="Academic Status"
 							name="academicStatus"
 							value={academicStatus}
-							onChange={setAcademicStatus}
+                            onChange={(e) => setAcademicStatus((e.target as HTMLInputElement).value)}
+                            isRadio
 							options={["Currently in Kindergarten", "Completed Kindergarten", "Seeking Admission to Kindergarten"]}
 							error={errors.academicStatus}
 						/>
@@ -732,15 +841,13 @@ const StudentonBoarding: React.FC = () => {
 					<div className="flex flex-col gap-4 mt-6">
 						<div className="transition">
 							<span className={labelCls}>Graduation type</span>
-							<select
-								className={[inputBase, errors.graduationType ? inputError : inputIdle].join(" ")}
+							<Dropdown
+								label="Select graduation type"
 								value={graduationType}
-								onChange={(e) => setGraduationType(e.target.value)}
-							>
-								<option value="">Select graduation type</option>
-								<option value="Under Graduation">Under Graduation</option>
-								<option value="Post Graduation">Post Graduation</option>
-							</select>
+								onChange={setGraduationType}
+								options={["Under Graduation", "Post Graduation"]}
+								error={errors.graduationType}
+							/>
 							{errors.graduationType && (
 								<span className="text-[12px] text-red-500">{errors.graduationType}</span>
 							)}
@@ -847,11 +954,12 @@ const StudentonBoarding: React.FC = () => {
 			case "COACHING_CENTER":
 				return (
 					<div className="flex flex-col gap-4 mt-6">
-						<RadioGroup
+                        <InputField
 							label="What are you looking for?"
 							name="lookingFor"
 							value={lookingFor}
-							onChange={setLookingFor}
+                            onChange={(e) => setLookingFor((e.target as HTMLInputElement).value)}
+                            isRadio
 							options={["Upskilling / Skill Development", "Exam Preparation", "Vocational Training"]}
 							error={errors.lookingFor}
 						/>
@@ -907,23 +1015,25 @@ const StudentonBoarding: React.FC = () => {
 			case "STUDY_ABROAD":
 				return (
 					<div className="flex flex-col gap-4 mt-6">
-						<RadioGroup
+                        <InputField
 							label="Highest Level of Education"
 							name="highestEducation"
 							value={highestEducation}
-							onChange={setHighestEducation}
+                            onChange={(e) => setHighestEducation((e.target as HTMLInputElement).value)}
+                            isRadio
 							options={["12th Grade", "Bachelor's", "Master's"]}
 							error={errors.highestEducation}
 						/>
 
-						<RadioGroup
+                        <InputField
 							label="Do you have any backlogs?"
 							name="hasBacklogs"
 							value={hasBacklogs}
-							onChange={setHasBacklogs}
+                            onChange={(e) => setHasBacklogs((e.target as HTMLInputElement).value)}
+                            isRadio
 							options={["Yes", "No"]}
 							error={errors.hasBacklogs}
-							layout="horizontal"
+							layout="horizontal" // Added layout prop
 						/>
 
 						<div className="transition">
@@ -1169,12 +1279,12 @@ const StudentonBoarding: React.FC = () => {
 				)}
 				{errors.preferredCountries && <span className="text-[12px] text-red-500">{errors.preferredCountries}</span>}
 			</div>
-
-			<RadioGroup
+			<InputField
 				label="Do you have a valid passport?"
 				name="passportStatus"
 				value={passportStatus}
-				onChange={setPassportStatus}
+                onChange={(e) => setPassportStatus((e.target as HTMLInputElement).value)}
+            	isRadio
 				options={["Yes", "No", "Applied"]}
 				error={errors.passportStatus}
 				layout="horizontal"
@@ -1257,8 +1367,8 @@ const StudentonBoarding: React.FC = () => {
 	};
 
 	return (
-		<main className="min-h-screen bg-[#F5F6F9] flex items-start justify-center p-0 sm:p-6 overflow-hidden">
-			<section className="w-full max-w-md bg-white rounded-none sm:rounded-[20px] shadow-sm p-5 flex flex-col h-[100vh] sm:h-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+		<main className="min-h-screen bg-[#F5F6F9] flex items-start justify-center p-0 sm:p-6 overflow-auto">
+			<section className="w-full max-w-md bg-white rounded-none sm:rounded-[20px] shadow-sm p-5 flex flex-col h-[100vh] overflow-auto sm:h-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
 				<button
 					className="w-8 h-8 grid place-items-center rounded-full hover:bg-gray-100"
 					onClick={() => setStep((s) => (s > 1 ? ((s - 1) as Step) : s))}
@@ -1296,82 +1406,21 @@ const StudentonBoarding: React.FC = () => {
 								<button
 									key={c.key}
 									onClick={() => setSelectedInterest(c.key)}
-									className={`h-[88px] rounded-[16px] text-left px-4 py-3 shadow-sm border ${
+                                    className={`relative overflow-hidden h-[96px] rounded-[16px] text-left px-4 py-3 shadow-sm border ${
 										selectedInterest === c.key ? "ring-2 ring-[#0A46E4]" : "border-transparent"
 									}`}
 									style={{ background: c.color, color: "#ffffff" }}
 								>
-									<div className="flex h-full w-full items-center justify-between">
-										<div className="whitespace-pre-line text-[13px] font-medium leading-tight pr-2">
+                                    <div className="flex h-full w-full items-center">
+                                        <div className="whitespace-pre-line text-[13px] font-semibold leading-tight pr-2 text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.25)]">
 											{c.label}
 										</div>
-										<div className="w-[56px] h-[56px] shrink-0 opacity-95">
-											{/* simple inline illustration per category */}
-											{(() => {
-												switch (c.key) {
-													case "SCHOOL":
-														return (
-															<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-															<rect x="6" y="24" width="52" height="30" rx="4" fill="white" opacity="0.9"/>
-															<path d="M8 24l24-12 24 12" stroke="#fff" strokeWidth="4" strokeLinecap="round"/>
-															<rect x="26" y="36" width="12" height="18" fill="#fff"/>
-														</svg>
-														);
-													case "KINDERGARTEN":
-														return (
-															<svg viewBox="0 0 64 64" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-															<circle cx="20" cy="44" r="12" fill="#fff"/>
-															<rect x="32" y="20" width="12" height="24" fill="#fff"/>
-															<rect x="10" y="20" width="12" height="18" fill="#fff"/>
-														</svg>
-													);
-													case "INTERMEDIATE":
-														return (
-															<svg viewBox="0 0 64 64" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-															<circle cx="24" cy="40" r="16" fill="#fff"/>
-															<rect x="36" y="20" width="18" height="10" fill="#fff"/>
-														</svg>
-													);
-													case "GRADUATION":
-														return (
-															<svg viewBox="0 0 64 64" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-															<path d="M6 26l26-10 26 10-26 10L6 26z" fill="#fff"/>
-															<rect x="20" y="32" width="24" height="10" fill="#fff"/>
-														</svg>
-													);
-													case "COACHING_CENTER":
-														return (
-															<svg viewBox="0 0 64 64" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-															<circle cx="40" cy="32" r="16" stroke="#fff" strokeWidth="6" fill="none"/>
-															<circle cx="40" cy="32" r="6" fill="#fff"/>
-														</svg>
-													);
-													case "STUDY_HALLS":
-														return (
-															<svg viewBox="0 0 64 64" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-															<rect x="10" y="36" width="44" height="10" fill="#fff"/>
-															<rect x="14" y="24" width="12" height="10" fill="#fff"/>
-															<rect x="38" y="24" width="12" height="10" fill="#fff"/>
-														</svg>
-													);
-													case "TUITION_CENTER":
-														return (
-															<svg viewBox="0 0 64 64" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-															<rect x="10" y="20" width="44" height="28" rx="4" fill="#fff"/>
-															<rect x="16" y="26" width="20" height="6" fill="#CCC"/>
-														</svg>
-													);
-													case "STUDY_ABROAD":
-														return (
-															<svg viewBox="0 0 64 64" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-															<path d="M8 40l48-16-10 12 8 8-10 2-8-8-28 2z" fill="#fff"/>
-														</svg>
-													);
-													default:
-														return null;
-												}
-											})()}
-										</div>
+                                        <img
+                                            src={interestImageFor(c.key)}
+                                            alt={c.label}
+                                            className="pointer-events-none absolute bottom-1 right-2 w-[82px] h-[82px] object-contain opacity-95"
+                                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/globe.svg"; }}
+                                        />
 									</div>
 								</button>
 							))}

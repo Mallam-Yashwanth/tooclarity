@@ -60,7 +60,7 @@ export default function DashboardLayout({
   ) {
     return (
       <SearchProvider>
-        <div className="min-h-screen w-full">
+        <div className="min-h-screen w-full font-[var(--font-Montserrat)]">
           <div className="flex flex-col lg:flex-row gap-2 lg:gap-6">
             <Sidebar />
             <motion.main

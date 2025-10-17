@@ -40,7 +40,7 @@ const PasswordField: React.FC<PasswordFieldProps> = ({ label, value, show, place
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 disabled={disabled}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="dark:bg-gray-800 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
             />
             <button type="button" onClick={onToggle} disabled={disabled} className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 disabled:cursor-not-allowed">
                 {show ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
@@ -259,50 +259,50 @@ const SettingsPage: React.FC = () => {
 
     // --- RENDER ---
     return (
-        <div className="min-h-screen bg-gray-50 flex">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex">
             <div className="flex-1 p-4 lg:p-8">
                 <div className="max-w-4xl mx-auto">
-                    <h1 className="text-3xl font-bold text-gray-800 mb-6">Settings</h1>
-                    <div className="border-b border-gray-200 mb-6">
+                    <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-6">Settings</h1>
+                    <div className="border-b border-gray-200 dark:border-gray-800 mb-6">
                         <nav className="flex space-x-8">
-                            <button onClick={() => setActiveTab("admin")} className={`py-2 px-1 border-b-2 font-medium text-base transition-colors duration-200 ${activeTab === "admin" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}>Admin Details</button>
-                            <button onClick={() => setActiveTab("course")} className={`py-2 px-1 border-b-2 font-medium text-base transition-colors duration-200 ${activeTab === "course" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}>Edit Program</button>
+                            <button onClick={() => setActiveTab("admin")} className={`py-2 px-1 border-b-2 font-medium text-base transition-colors duration-200 ${activeTab === "admin" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"}`}>Admin Details</button>
+                            <button onClick={() => setActiveTab("course")} className={`py-2 px-1 border-b-2 font-medium text-base transition-colors duration-200 ${activeTab === "course" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"}`}>Edit Program</button>
                         </nav>
                     </div>
 
                     {activeTab === "admin" && (
                         <div className="space-y-8">
-                            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex items-center space-x-4">
+                            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-4 flex items-center space-x-4">
                                 <div className="w-14 h-14 bg-yellow-400 rounded-full flex items-center justify-center text-white font-semibold text-xl">
                                     {userName.charAt(0).toUpperCase()}{(userName.split(" ")[1]?.charAt(0).toUpperCase() || "")}
                                 </div>
                                 <div className="flex-1">
-                                    <h2 className="text-xl font-semibold text-gray-800">{userName}</h2>
-                                    <p className="text-gray-500">Admin</p>
+                                    <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">{userName}</h2>
+                                    <p className="text-gray-500 dark:text-gray-400">Admin</p>
                                 </div>
                                 <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors">
                                     <Edit3 className="h-5 w-5" />
                                 </button>
                             </div>
 
-                            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                                <h3 className="text-lg font-semibold text-gray-800 mb-4">Email Settings</h3>
-                                <label className="block text-base font-medium text-gray-700 mb-1">Your Primary Email</label>
-                                <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600 text-base">
+                            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-6">
+                                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Email Settings</h3>
+                                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1">Your Primary Email</label>
+                                <div className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-200 text-base">
                                     {formData.currentEmail || "Loading..."}
                                 </div>
                             </div>
 
-                            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                                <h3 className="text-lg font-semibold text-gray-800 mb-4">Change Password</h3>
+                            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-6">
+                                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Change Password</h3>
                                 <div className="space-y-4">
                                     {!isEmailVerified ? (
-                                        <div className="p-4 border border-blue-200 bg-blue-50 rounded-lg">
+                                        <div className="p-4 border border-blue-200 bg-blue-50 dark:border-blue-900/50 dark:bg-blue-950 rounded-lg">
                                             <div className="flex items-center space-x-3">
                                                 <KeyRound className="h-6 w-6 text-blue-500 flex-shrink-0" />
                                                 <div className="flex-1">
-                                                    <h4 className="font-semibold text-blue-800">Secure Your Account</h4>
-                                                    <p className="text-sm text-blue-700">Verify your email to enable password changes.</p>
+                                                    <h4 className="font-semibold text-blue-800 dark:text-blue-300">Secure Your Account</h4>
+                                                    <p className="text-sm text-blue-700 dark:text-blue-400">Verify your email to enable password changes.</p>
                                                 </div>
                                                 {!isVerificationSent && (
                                                     <button onClick={handleSendVerification} disabled={verificationLoading} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300 transition-colors text-sm font-medium">
@@ -312,10 +312,10 @@ const SettingsPage: React.FC = () => {
                                             </div>
                                             {isVerificationSent && (
                                                 <div className="mt-4">
-                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Enter 6-digit code</label>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Enter 6-digit code</label>
                                                     <div className="flex items-end space-x-2">
                                                         <div className="flex-1">
-                                                            <input type="text" value={otp} onChange={(e) => setOtp(e.target.value)} maxLength={6} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 text-base ${otpError ? "border-red-500 ring-red-500" : "border-gray-300 focus:ring-blue-500"}`} placeholder="123456" />
+                                                            <input type="text" value={otp} onChange={(e) => setOtp(e.target.value)} maxLength={6} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 text-base ${otpError ? "border-red-500 ring-red-500" : "border-gray-300 dark:border-gray-700 focus:ring-blue-500"}`} placeholder="123456" />
                                                         </div>
                                                         <button onClick={handleVerifyOtp} disabled={verificationLoading || otp.length !== 6} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-green-300 transition-colors text-sm font-medium">
                                                             {verificationLoading ? "Verifying..." : "Verify OTP"}
@@ -326,11 +326,11 @@ const SettingsPage: React.FC = () => {
                                             )}
                                         </div>
                                     ) : (
-                                         <div className="p-4 border border-green-200 bg-green-50 rounded-lg flex items-center space-x-3">
+                                         <div className="p-4 border border-green-200 dark:border-green-900/50 bg-green-50 dark:bg-green-950 rounded-lg flex items-center space-x-3">
                                             <CheckCircle className="h-6 w-6 text-green-500 flex-shrink-0" />
                                             <div>
-                                                <h4 className="font-semibold text-green-800">Email Verified</h4>
-                                                <p className="text-sm text-green-700">You can now set your new password below.</p>
+                                                <h4 className="font-semibold text-green-800 dark:text-green-300">Email Verified</h4>
+                                                <p className="text-sm text-green-700 dark:text-green-400">You can now set your new password below.</p>
                                             </div>
                                         </div>
                                     )}
@@ -339,7 +339,7 @@ const SettingsPage: React.FC = () => {
                                         <PasswordField label="Confirm Password" value={formData.confirmPassword} show={showPasswords.confirm} placeholder="Confirm new password" onChange={(val) => handleInputChange("confirmPassword", val)} onToggle={() => setShowPasswords(p => ({ ...p, confirm: !p.confirm }))} disabled={!isEmailVerified} />
                                     </div>
                                     <div className="flex justify-end">
-                                        <button onClick={handleSavePassword} disabled={!isEmailVerified || passwordSaveLoading || !formData.newPassword || !formData.confirmPassword} className="px-5 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors text-base font-medium">
+                                        <button onClick={handleSavePassword} disabled={!isEmailVerified || passwordSaveLoading || !formData.newPassword || !formData.confirmPassword} className="dark:disabled:bg-blue-400 dark:bg-blue-600 px-5 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors text-base font-medium">
                                             {passwordSaveLoading ? "Saving..." : "Save New Password"}
                                         </button>
                                     </div>
@@ -350,8 +350,8 @@ const SettingsPage: React.FC = () => {
                     
                     {activeTab === "course" && (
                         <div className="space-y-6">
-                            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                                <h3 className="text-lg font-semibold text-gray-800 mb-4">Edit Program Details</h3>
+                            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-6">
+                                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-50 mb-4">Edit Program Details</h3>
 
                             {courseError && <p className="text-red-600 text-sm mb-4">{courseError}</p>}
 

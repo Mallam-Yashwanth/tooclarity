@@ -164,9 +164,9 @@ export default function StudyHallForm({
       
       {/* Add Image */}
       <div className="flex flex-col gap-3">
-        <label className="font-medium text-lg text-black">{labelVariant === 'program' ? 'Add Program Image' : 'Add Image'}<span className="text-red-500 ml-1">*</span></label>
-        <label className={`w-full h-[81px] rounded-xl border border-dashed bg-white flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors ${courseErrors.image ? "border-red-500" : "border-[#DADADD]"}`}>
-          <Upload size={24} className="text-gray-400 mb-2" />
+        <label className="font-medium text-lg text-black dark:text-gray-700">{labelVariant === 'program' ? 'Add Program Image' : 'Add Image'}<span className="text-red-500 ml-1">*</span></label>
+        <label className={`dark:bg-gray-800 w-full h-[81px] rounded-xl border border-dashed bg-white flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors ${courseErrors.image ? "border-red-500" : "border-[#DADADD]"}`}>
+          <Upload size={24} className="text-gray-400 mb-2 dark:text-gray-300" />
           <span className="text-sm text-[#697282]">{currentCourse.image ? (currentCourse.image as File).name : (labelVariant === 'program' ? "Upload Program Image (jpg / jpeg)." : "Upload Course Image (jpg / jpeg).")}</span>
           <input type="file" accept="image/jpeg,image/jpg" className="hidden" onChange={(e) => handleFileChange(e, "image")} />
         </label>

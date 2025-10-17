@@ -106,7 +106,7 @@ function ProgramsPage() {
           </div>
 
           {/* Tabs header */}
-          <div className="flex items-center gap-6 border-b border-gray-200 dark:border-gray-800 mb-4">
+          <div className="flex items-center gap-6 border-b border-gray-200 dark:border-gray-800 mb-4 text-gray-900 dark:text-gray-100">
             <button onClick={()=>setActiveTab('details')} className={`py-2 px-1 ${activeTab==='details'?'border-b-2 border-blue-600 font-medium':'text-gray-500'}`}>Program Details</button>
             <button onClick={()=>setActiveTab('add')} className={`py-2 px-1 ${activeTab==='add'?'border-b-2 border-blue-600 font-medium':'text-gray-500'}`}>Add Program</button>
           </div>
@@ -115,7 +115,7 @@ function ProgramsPage() {
           {activeTab==='details' && (
           <div className="flex items-center justify-between gap-3 mb-4">
             <div className="flex-1">
-              <Input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Search program or branch" className="w-full" />
+              <Input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Search program or branch" className="w-full bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-200 dark:border-gray-700" />
             </div>
             <div className="w-64">
               <AppSelect

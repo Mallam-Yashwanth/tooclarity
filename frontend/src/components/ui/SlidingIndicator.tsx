@@ -15,7 +15,7 @@ interface SlidingIndicatorProps<T extends string> {
   size?: "sm" | "md" | "lg";
 }
 
-export default function SlidingIndicator<T extends string>({
+export default function  SlidingIndicator<T extends string>({
   options,
   activeOption,
   onOptionChange,
@@ -75,7 +75,7 @@ export default function SlidingIndicator<T extends string>({
   return (
     <div
       className={cn(
-        "relative flex w-full bg-gray-100 border border-gray-300",
+        "relative flex w-full bg-gray-100 border border-gray-300 dark:bg-gray-800 dark:border-gray-700",
         config.container,
         config.borderRadius,
         containerClassName,

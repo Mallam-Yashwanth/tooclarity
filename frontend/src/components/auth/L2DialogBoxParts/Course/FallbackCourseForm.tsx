@@ -62,7 +62,7 @@ export default function FallbackCourseForm({
       />
 
       <div className="flex flex-col gap-2">
-        <label className="font-medium text-[16px]">Mode</label>
+        <label className="font-medium text-[16px] dark:text-gray-400">Mode</label>
         <SlidingIndicator
           options={["Offline", "Online", "Hybrid"] as const}
           activeOption={currentCourse.mode}

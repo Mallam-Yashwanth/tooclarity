@@ -3,76 +3,103 @@ const InstitutionAdmin = require("../models/InstituteAdmin");
 const asyncHandler = require("express-async-handler");
 
 exports.getInstitutionAnalytics = asyncHandler(async (req, res) => {
-  const { metric, type } = req.body;
+  const { type, sendViewGroupData = false } = req.body;
   const userId = req.userId;
 
-  // Validate inputs
-  if (!metric || !["views", "comparisons", "leads"].includes(metric)) {
-    return res.status(400).json({ success: false, message: "Invalid metric" });
+  if (!["weekly", "monthly", "yearly"].includes(type)) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid analytics type" });
   }
 
-  if (!type || !["weekly", "monthly", "yearly"].includes(type)) {
-    return res.status(400).json({ success: false, message: "Invalid analytics type" });
-  }
-
-  // Set Date Range
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  let groupFormat = "%Y-%m-%d"; // default (daily)
+  let groupFormat = "%Y-%m-%d";
   let rangeStart = new Date(today);
 
-  if (type === "weekly") {
-    rangeStart.setDate(today.getDate() - 7);
-  } else if (type === "monthly") {
+  if (type === "weekly") rangeStart.setDate(today.getDate() - 7);
+  if (type === "monthly") {
     groupFormat = "%Y-%m";
     rangeStart.setMonth(today.getMonth() - 1);
-  } else if (type === "yearly") {
+  }
+  if (type === "yearly") {
     groupFormat = "%Y";
     rangeStart.setFullYear(today.getFullYear() - 1);
   }
 
   const result = await InstitutionAdmin.aggregate([
     { $match: { userId: new mongoose.Types.ObjectId(userId) } },
-
-    { $project: { institutionId: 1 } },
+    { $limit: 1 },
 
     {
       $lookup: {
         from: "analyticsdailies",
-        let: { instId: "$institutionId" },
-        pipeline: [
-          {
-            $match: {
-              metric,
-              $expr: { $eq: ["$institutionId", "$$instId"] },
-              day: { $gte: rangeStart, $lte: today } // DIRECT DATE FILTER ⚡
-            }
-          },
-          {
-            $group: {
-              _id: {
-                label: { $dateToString: { format: groupFormat, date: "$day" } }
-              },
-              totalCount: { $sum: "$count" }
-            }
-          },
-          {
-            $project: {
-              _id: 0,
-              label: "$_id.label",
-              count: "$totalCount"
-            }
-          },
-          { $sort: { label: 1 } }
-        ],
+        localField: "institutionId",
+        foreignField: "institutionId",
         as: "analytics"
       }
     },
 
-    { $limit: 1 }
-  ]);
+    // Filter records & prepare timeline only if needed
+    {
+      $project: {
+        analytics: {
+          $filter: {
+            input: "$analytics",
+            as: "a",
+            cond: {
+              $and: [
+                { $gte: ["$$a.day", rangeStart] },
+                { $lte: ["$$a.day", today] },
+                { $in: ["$$a.metric", ["views", "leads"]] }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      $facet: {
+        totals: [
+          {
+            $group: {
+              _id: "$analytics.metric",
+              total: { $sum: "$analytics.count" }
+            }
+          }
+        ],
 
+        viewsTimeline: sendViewGroupData
+          ? [
+              { $unwind: "$analytics" },
+              { $match: { "analytics.metric": "views" } },
+              {
+                $group: {
+                  _id: {
+                    label: {
+                      $dateToString: {
+                        format: groupFormat,
+                        date: "$analytics.day"
+                      }
+                    }
+                  },
+                  count: { $sum: "$analytics.count" }
+                }
+              },
+              {
+                $project: {
+                  _id: 0,
+                  label: "$_id.label",
+                  count: 1
+                }
+              },
+              { $sort: { label: 1 } }
+            ]
+          : []
+      }
+    }
+  ]);
 
   if (!result.length) {
     return res.status(404).json({
@@ -81,18 +108,30 @@ exports.getInstitutionAnalytics = asyncHandler(async (req, res) => {
     });
   }
 
-  const analytics = result[0].analytics;
-  const totalCount = analytics.reduce((sum, item) => sum + item.count, 0);
+  const { totals, viewsTimeline } = result[0];
 
-  return res.status(200).json({
+  let viewsTotal = 0;
+  let leadsTotal = 0;
+
+  totals.forEach((t) => {
+    if (t._id === "views") viewsTotal = t.total;
+    if (t._id === "leads") leadsTotal = t.total;
+  });
+
+  const response = {
     success: true,
-    metric,
     type,
     dateRange: {
       from: rangeStart.toISOString().split("T")[0],
       to: today.toISOString().split("T")[0]
     },
-    totalCount,
-    analytics
-  });
+    views: { total: viewsTotal },
+    leads: { total: leadsTotal }
+  };
+
+  if (sendViewGroupData) {
+    response.views.timeline = viewsTimeline;
+  }
+
+  return res.status(200).json(response);
 });

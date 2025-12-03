@@ -6,12 +6,9 @@ const asyncHandler = require("express-async-handler");
 const { uploadStream } = require("../services/upload.service");
 const RedisUtil = require("../utils/redis.util");
 const mongoose = require("mongoose");
-const Subscription = require("../models/Subscription");
 const { esClient } = require("../config/elasticsearch");
-const UserStats = require("../models/userStats");
-const Enquiries = require("../models/Enquiries");
 const ObjectId = mongoose.Types.ObjectId;
-
+const redisClient = require("../config/redisConfig");
 // Generic helpers
 async function incrementMetricGeneric(req, res, next, cfg) {
   const { institutionId, courseId } = req.params;
@@ -373,7 +370,12 @@ exports.getCourseById = asyncHandler(async (req, res) => {
 
       // 🔥 UNIQUE VIEW TRACKING (Redis SET)
       if (userId && parsed.course?.institution) {
-        await RedisUtil.trackUniqueCourseViewOrImpression("viewCourse",courseId, parsed.course.institution, userId);
+        await RedisUtil.trackUniqueCourseViewOrImpression(
+          "viewCourse",
+          courseId,
+          parsed.course.institution,
+          userId
+        );
       }
 
       return res.status(200).json({
@@ -435,7 +437,12 @@ exports.getCourseById = asyncHandler(async (req, res) => {
 
     // 4️⃣ UNIQUE VIEW TRACKING
     if (userId && raw.institution?._id) {
-      await RedisUtil.trackUniqueCourseViewOrImpression("viewCourse",courseId, raw.institution._id, userId);
+      await RedisUtil.trackUniqueCourseViewOrImpression(
+        "viewCourse",
+        courseId,
+        raw.institution._id,
+        userId
+      );
     }
 
     console.log("✅ Returning fresh DB data");
@@ -443,7 +450,6 @@ exports.getCourseById = asyncHandler(async (req, res) => {
       success: true,
       data: finalResponse,
     });
-
   } catch (error) {
     console.error("❌ getCourseById Error:", error);
     return res.status(500).json({
@@ -832,86 +838,6 @@ exports.getInstitutionAdminMetricSeriesUnified = asyncHandler(
   }
 );
 
-exports.requestCallback = asyncHandler(async (req, res, next) => {
-  const { institutionId, courseId } = req.params;
-  const userId = req.userId;
-
-  console.log(
-    `📞 [requestCallback] Request from user ${userId} for institution ${institutionId}, course ${courseId}`
-  );
-
-  try {
-    let subscription = null;
-    const now = new Date();
-
-    // 1️⃣ Check subscription cache first
-    const cachedSub = await RedisUtil.getCachedSubscription(institutionId);
-    if (cachedSub) {
-      console.log("✅ Subscription cache hit");
-      subscription = JSON.parse(cachedSub);
-
-      const isActive =
-        subscription.status === "active" &&
-        new Date(subscription.startDate) <= now &&
-        new Date(subscription.endDate) > now;
-
-      if (!isActive) {
-        console.warn(
-          "⚠️ Cached subscription expired or invalid — fetching from DB"
-        );
-        subscription = null;
-      }
-    } else {
-      console.log("⚙️ No cached subscription found — will query MongoDB");
-    }
-
-    // 2️⃣ If no valid cached subscription, fetch from MongoDB
-    if (!subscription) {
-      const subscriptionFromDB = await Subscription.findOne({
-        institution: institutionId,
-        status: "active",
-        startDate: { $lte: now },
-        endDate: { $gt: now },
-      });
-
-      if (!subscriptionFromDB) {
-        console.warn("❌ No valid active subscription found in DB");
-        return res.status(403).json({
-          success: false,
-          message: "Institution subscription inactive or expired",
-        });
-      }
-
-      subscription = subscriptionFromDB.toObject();
-
-      // Cache it for 5 minutes
-      await RedisUtil.cacheSubscription(institutionId, subscription, 300);
-      console.log("💾 Cached fresh subscription data from DB");
-    }
-
-    // 3️⃣ If reached here, subscription is valid — continue logic
-    console.log(
-      "✅ Valid subscription confirmed — proceeding with callback flow"
-    );
-
-    // ⬇️ Continue your callback logic below (e.g., record callback request)
-    // For example:
-    // await CallbackRequest.create({ userId, institutionId, courseId, createdAt: new Date() });
-
-    return res.status(200).json({
-      success: true,
-      message: "Callback request accepted",
-    });
-  } catch (error) {
-    console.error("❌ [requestCallback] Error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "An error occurred while processing the callback request.",
-      error: error.message,
-    });
-  }
-});
-
 exports.searchCourses = asyncHandler(async (req, res) => {
   const userId = req.userId;
   const page = parseInt(req.query.page, 10) || 1;
@@ -1245,7 +1171,7 @@ async function runAggregation(courseCond, instCond, userId) {
 
 exports.filterCourses = async (req, res) => {
   const userId = req.userId;
-  
+
   try {
     let filters = {
       ...(req.body || {}),
@@ -1313,82 +1239,63 @@ exports.filterCourses = async (req, res) => {
 exports.updateStatsAndCreateEnquiry = async (req, res) => {
   try {
     const userId = req.userId;
-    const { institutionId, type } = req.body;
+    const { institutionId, courseId, type } = req.body;
 
-    if (!institutionId || !type) {
-      return res
-        .status(400)
-        .json({ message: "institutionId and type are required" });
+    if (!institutionId || !courseId || !type) {
+      return res.status(400).json({
+        message: "institutionId, courseId and type are required",
+      });
     }
 
     const typeMapping = {
       demoRequest: {
         statField: "requestDemoCount",
         enquiryType: "Requested for demo",
+        redisPrefix: "bookDemoRequest",
       },
       callRequest: {
         statField: "callRequestCount",
         enquiryType: "Requested for callback",
+        redisPrefix: "callbackRequest",
       },
     };
 
-    if (!typeMapping[type]) {
-      return res
-        .status(400)
-        .json({ message: "Invalid type. Must be demoRequest or callRequest" });
-    }
-
-    const { statField, enquiryType } = typeMapping[type];
-
-    const session = await mongoose.startSession();
-
-    try {
-      await session.withTransaction(async () => {
-        // STEP 1 — Increase stat count
-        await UserStats.findOneAndUpdate(
-          { userId },
-          { $inc: { [statField]: 1 } },
-          { upsert: true, new: true, session }
-        );
-
-        // STEP 2 — Create enquiry
-        await Enquiries.create(
-          [
-            {
-              institution: institutionId,
-              programInterest: "",
-              enquiryType,
-              student: userId,
-              status: enquiryType,
-              statusHistory: [
-                {
-                  status: enquiryType,
-                  changedBy: userId,
-                  changedAt: new Date(),
-                  notes: "",
-                },
-              ],
-            },
-          ],
-          { session }
-        );
-      });
-
-      session.endSession();
-      return res.status(200).json({
-        success: true,
-        message: "Stats updated & enquiry created successfully",
-      });
-    } catch (error) {
-      session.endSession();
-      console.error("Transaction Error:", error);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to update stats & create enquiry",
+    const typeData = typeMapping[type];
+    if (!typeData) {
+      return res.status(400).json({
+        message: "Invalid type",
       });
     }
-  } catch (error) {
-    console.log("error", error);
-    res.send(error);
+
+    // TRACK ANALYTICS IN REDIS
+    const analyticsKey = `${typeData.redisPrefix}:${courseId}:${institutionId}`;
+    await RedisUtil.trackUniqueCourseViewOrImpression(
+      analyticsKey,
+      courseId,
+      institutionId,
+      userId
+    );
+
+    // PUSH ENQUIRY INTO QUEUE
+    const enquiryPayload = {
+      institutionId,
+      courseId,
+      userId,
+      enquiryType: typeData.enquiryType,
+      timestamp: Date.now(),
+    };
+
+    await redisClient.rpush("pendingEnquiries", JSON.stringify(enquiryPayload));
+
+    // INCREMENT USERSTATS QUEUE
+    await redisClient.hset("pendingUserStats", userId, typeData.statField);
+
+    return res.status(200).json({
+      success: true,
+      message: "Enquiry received successfully",
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal error" });
   }
 };

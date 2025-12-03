@@ -3,15 +3,26 @@ const InstitutionAdmin = require("../models/InstituteAdmin");
 const asyncHandler = require("express-async-handler");
 
 exports.getInstitutionAnalytics = asyncHandler(async (req, res) => {
-  const { type, sendViewGroupData = false } = req.body;
+  const { 
+    type, 
+    views = false,
+    leads = false,
+    callbackRequest = false,
+    bookDemoRequest = false
+  } = req.body;
+
   const userId = req.userId;
 
   if (!["weekly", "monthly", "yearly"].includes(type)) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Invalid analytics type" });
+    return res.status(400).json({
+      success: false,
+      message: "Invalid analytics type",
+    });
   }
 
+  // ---------------------------
+  // Date Range Logic
+  // ---------------------------
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -19,15 +30,20 @@ exports.getInstitutionAnalytics = asyncHandler(async (req, res) => {
   let rangeStart = new Date(today);
 
   if (type === "weekly") rangeStart.setDate(today.getDate() - 7);
+
   if (type === "monthly") {
     groupFormat = "%Y-%m";
     rangeStart.setMonth(today.getMonth() - 1);
   }
+
   if (type === "yearly") {
     groupFormat = "%Y";
     rangeStart.setFullYear(today.getFullYear() - 1);
   }
 
+  // ---------------------------
+  // SINGLE AGGREGATION (your structure)
+  // ---------------------------
   const result = await InstitutionAdmin.aggregate([
     { $match: { userId: new mongoose.Types.ObjectId(userId) } },
     { $limit: 1 },
@@ -41,7 +57,6 @@ exports.getInstitutionAnalytics = asyncHandler(async (req, res) => {
       }
     },
 
-    // Filter records & prepare timeline only if needed
     {
       $project: {
         analytics: {
@@ -51,49 +66,89 @@ exports.getInstitutionAnalytics = asyncHandler(async (req, res) => {
             cond: {
               $and: [
                 { $gte: ["$$a.day", rangeStart] },
-                { $lte: ["$$a.day", today] },
-                { $in: ["$$a.metric", ["views", "leads"]] }
+                { $lte: ["$$a.day", today] }
               ]
             }
           }
         }
       }
     },
+
     {
       $facet: {
         totals: [
+          { $unwind: "$analytics" },
           {
             $group: {
-              _id: "$analytics.metric",
-              total: { $sum: "$analytics.count" }
+              _id: null,
+              views: { $sum: "$analytics.views" },
+              leads: { $sum: "$analytics.leads" },
+              callbackRequest: { $sum: "$analytics.callbackRequest" },
+              bookDemoRequest: { $sum: "$analytics.bookDemoRequest" }
             }
           }
         ],
 
-        viewsTimeline: sendViewGroupData
+        viewsTimeline: views
           ? [
               { $unwind: "$analytics" },
-              { $match: { "analytics.metric": "views" } },
               {
                 $group: {
                   _id: {
-                    label: {
-                      $dateToString: {
-                        format: groupFormat,
-                        date: "$analytics.day"
-                      }
-                    }
+                    label: { $dateToString: { format: groupFormat, date: "$analytics.day" } }
                   },
-                  count: { $sum: "$analytics.count" }
+                  count: { $sum: "$analytics.views" }
                 }
               },
+              { $project: { _id: 0, label: "$_id.label", count: 1 } },
+              { $sort: { label: 1 } }
+            ]
+          : [],
+
+        leadsTimeline: leads
+          ? [
+              { $unwind: "$analytics" },
               {
-                $project: {
-                  _id: 0,
-                  label: "$_id.label",
-                  count: 1
+                $group: {
+                  _id: {
+                    label: { $dateToString: { format: groupFormat, date: "$analytics.day" } }
+                  },
+                  count: { $sum: "$analytics.leads" }
                 }
               },
+              { $project: { _id: 0, label: "$_id.label", count: 1 } },
+              { $sort: { label: 1 } }
+            ]
+          : [],
+
+        callbackTimeline: callbackRequest
+          ? [
+              { $unwind: "$analytics" },
+              {
+                $group: {
+                  _id: {
+                    label: { $dateToString: { format: groupFormat, date: "$analytics.day" } }
+                  },
+                  count: { $sum: "$analytics.callbackRequest" }
+                }
+              },
+              { $project: { _id: 0, label: "$_id.label", count: 1 } },
+              { $sort: { label: 1 } }
+            ]
+          : [],
+
+        demoTimeline: bookDemoRequest
+          ? [
+              { $unwind: "$analytics" },
+              {
+                $group: {
+                  _id: {
+                    label: { $dateToString: { format: groupFormat, date: "$analytics.day" } }
+                  },
+                  count: { $sum: "$analytics.bookDemoRequest" }
+                }
+              },
+              { $project: { _id: 0, label: "$_id.label", count: 1 } },
               { $sort: { label: 1 } }
             ]
           : []
@@ -104,20 +159,21 @@ exports.getInstitutionAnalytics = asyncHandler(async (req, res) => {
   if (!result.length) {
     return res.status(404).json({
       success: false,
-      message: "Institution not found for this admin"
+      message: "Institution not found for this admin",
     });
   }
 
-  const { totals, viewsTimeline } = result[0];
+  const { totals, viewsTimeline, leadsTimeline, callbackTimeline, demoTimeline } =
+    result[0];
 
-  let viewsTotal = 0;
-  let leadsTotal = 0;
+  const totalData =
+    totals.length > 0
+      ? totals[0]
+      : { views: 0, leads: 0, callbackRequest: 0, bookDemoRequest: 0 };
 
-  totals.forEach((t) => {
-    if (t._id === "views") viewsTotal = t.total;
-    if (t._id === "leads") leadsTotal = t.total;
-  });
-
+  // ---------------------------
+  // Build Response Dynamically
+  // ---------------------------
   const response = {
     success: true,
     type,
@@ -125,13 +181,14 @@ exports.getInstitutionAnalytics = asyncHandler(async (req, res) => {
       from: rangeStart.toISOString().split("T")[0],
       to: today.toISOString().split("T")[0]
     },
-    views: { total: viewsTotal },
-    leads: { total: leadsTotal }
+    totals: totalData,
+    timelines: {}
   };
 
-  if (sendViewGroupData) {
-    response.views.timeline = viewsTimeline;
-  }
+  if (views) response.timelines.views = viewsTimeline;
+  if (leads) response.timelines.leads = leadsTimeline;
+  if (callbackRequest) response.timelines.callbackRequest = callbackTimeline;
+  if (bookDemoRequest) response.timelines.bookDemoRequest = demoTimeline;
 
   return res.status(200).json(response);
 });

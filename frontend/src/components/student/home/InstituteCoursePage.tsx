@@ -221,6 +221,7 @@ export const InstituteCoursePage: React.FC<InstituteCoursePageProps> = ({
         type: "demoRequest",
         date: data.date,
         timeSlot: data.timeSlot,
+        courseId: course.id,
       });
 
       // if (user?.requestDemoCount !== undefined) {

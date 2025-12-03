@@ -7,13 +7,12 @@ import { faArrowUpRightFromSquare } from "@fortawesome/free-solid-svg-icons";
 export interface CoursePerformanceRow {
   sno: number | string;
   name: string;
-  status: "Live" | "Draft" | "Paused" | "Expired";
+  // Normalized status used in Program Performance table
+  status: "Active" | "Inactive";
   views: number;
   leads: number;
   engagementRate: string; // e.g., '3.6%'
 }
-
-type DisplayStatus = CoursePerformanceRow["status"];
 
 interface AnalyticsTableProps<T = CoursePerformanceRow> {
   rows: T[];
@@ -29,16 +28,14 @@ interface AnalyticsTableProps<T = CoursePerformanceRow> {
 }
 
 const StatusPill: React.FC<{ status: CoursePerformanceRow["status"] }> = ({ status }) => {
-  const colorMap = {
-    "Live": "bg-emerald-100 text-emerald-700",
-    "Draft": "bg-gray-100 text-gray-700", 
-    "Paused": "bg-yellow-100 text-yellow-700",
-    "Expired": "bg-red-100 text-red-700"
+  const colorMap: Record<CoursePerformanceRow["status"], string> = {
+    Active: "bg-emerald-100 text-emerald-700",
+    Inactive: "bg-gray-100 text-gray-700",
   };
-  const color = colorMap[status];
+  const color = colorMap[status] || colorMap.Inactive;
   return (
     <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm ${color}`}>
-      <span className={`h-2 w-2 rounded-full ${status==='Live' ? 'bg-emerald-500 animate-pulse' : 'bg-current'}`}></span>
+      <span className={`h-2 w-2 rounded-full ${status==='Active' ? 'bg-emerald-500 animate-pulse' : 'bg-current'}`}></span>
       {status}
     </span>
   );
@@ -84,7 +81,7 @@ const AnalyticsTable = <T,>({
                   <td className="p-4">
                     <div className="text-gray-900 dark:text-gray-100 font-medium">{r.name}</div>
                   </td>
-                  <td className="p-4"><StatusPill status={r.status as DisplayStatus} /></td>
+                  <td className="p-4"><StatusPill status={r.status} /></td>
                   <td className="p-4 text-gray-900 dark:text-gray-100">{r.views.toLocaleString()}</td>
                   <td className="p-4 text-gray-900 dark:text-gray-100">{r.leads}</td>
                   <td className="p-4 text-gray-900 dark:text-gray-100">{r.engagementRate}</td>

@@ -740,6 +740,18 @@ export const analyticsAPI = {
   },
   getSummaryPrevious: async (range: TimeRangeParam = "weekly"): Promise<ApiResponse> => {
     return apiRequest(`/v1/analytics/summary?range=${range}&compare=prev`, { method: "GET" });
+  },
+  // Unified analytics endpoint using AnalyticsDaily model
+  getInstitutionAnalytics: async (
+    metric: 'views' | 'comparisons' | 'leads',
+    type: 'weekly' | 'monthly' | 'yearly'
+  ): Promise<ApiResponse> => {
+    // Note: Using POST method as GET requests cannot have a body in fetch API
+    // Backend route should be changed from GET to POST to match this
+    return apiRequest(`/v1/analytics/institution`, {
+      method: "POST",
+      body: JSON.stringify({ metric, type }),
+    });
   }
 };
 

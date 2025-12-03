@@ -15,7 +15,8 @@ import StudentDashboard from "@/components/student/StudentDashboard";
 // import { getMyInstitution, getInstitutionBranches, getInstitutionCourses } from "@/lib/api";
 // import { authAPI, metricsAPI, enquiriesAPI } from "@/lib/api";
 // import { getSocket } from "@/lib/socket";
-import { useDashboardStats, useRecentStudents, useChartData, useInstitution, useProgramViews } from "@/lib/hooks/dashboard-hooks";
+import { useRecentStudents, useInstitution } from "@/lib/hooks/dashboard-hooks";
+import { useAnalyticsContext } from "@/components/providers/AnalyticsProvider";
 import { useQueryClient } from "@tanstack/react-query";
 import { QUERY_KEYS } from "@/lib/hooks/dashboard-hooks";
 import { socketManager } from "@/lib/socket";
@@ -95,11 +96,11 @@ function DashboardPage() {
 				
 				// ------- TanStack Query hooks (source of truth) -------
 				const { data: inst } = useInstitution();
-    const { data: statsData, isLoading: statsLoading } = useDashboardStats(filters.timeRange);
-    const programViewsRange = filters.timeRange;
-    const { data: programViewsData } = useProgramViews(programViewsRange);
+    // Use shared analytics context (fetched once at layout level)
+    const { weekly, monthly, yearly, isLoading: analyticsLoading } = useAnalyticsContext();
+    const allAnalytics = filters.timeRange === 'weekly' ? weekly : filters.timeRange === 'monthly' ? monthly : yearly;
+    const yearlyAnalytics = yearly;
 	const { data: recentStudents, isLoading: studentsLoading } = useRecentStudents();
-	const { data: seriesValues } = useChartData('views');
 	const queryClient = useQueryClient();
 	
 	// Sync hook data into existing local state so UI remains unchanged
@@ -108,19 +109,28 @@ function DashboardPage() {
 	}, [inst?._id]);
 
 	useEffect(() => {
-		setIsStatsLoading(!!statsLoading);
-    if (statsData) {
-            const programViewsSum = Array.isArray(programViewsData) ? (programViewsData as Array<Record<string, unknown>>).reduce((sum, p) => sum + (Number(p.inRangeViews)||0), 0) : 0;
-            setStats({
-                courseViews: programViewsSum,
-				courseComparisons: statsData.courseComparisons,
-				contactRequests: statsData.contactRequests,
-				courseViewsTrend: statsData.courseViewsTrend,
-				courseComparisonsTrend: statsData.courseComparisonsTrend,
-				contactRequestsTrend: statsData.contactRequestsTrend,
+		setIsStatsLoading(analyticsLoading);
+		
+		if (allAnalytics) {
+			// Calculate trends (compare current period with previous period)
+			// For now, set default trends - can be enhanced later
+			const courseViewsTrend = { value: 0, isPositive: true };
+			const courseComparisonsTrend = { value: 0, isPositive: true };
+			const contactRequestsTrend = { value: 0, isPositive: true };
+
+			setStats({
+				// 1) Program Views card → unified views total (context)
+				courseViews: allAnalytics.views.totalCount,
+				// 2) Comparison Appearances card → mirror views total for now (no extra API)
+				courseComparisons: allAnalytics.views.totalCount,
+				// 3) Leads Generated card → unified leads total
+				contactRequests: allAnalytics.leads.totalCount,
+				courseViewsTrend,
+				courseComparisonsTrend,
+				contactRequestsTrend,
 			});
-			}
-    }, [statsLoading, statsData, programViewsData]);
+		}
+    }, [analyticsLoading, allAnalytics]);
 
 	useEffect(() => {
 		setIsListLoading(!!studentsLoading);
@@ -139,11 +149,43 @@ function DashboardPage() {
 			}
 	}, [studentsLoading, recentStudents]);
 
+	// Build "Program Reach Over Time" chart series from yearly unified analytics views
 	useEffect(() => {
-		if (Array.isArray(seriesValues)) {
-			setChartValues(seriesValues);
-			}
-	}, [seriesValues]);
+		if (!yearlyAnalytics || !yearlyAnalytics.views?.analytics) return;
+
+		try {
+			const viewsArr = new Array(12).fill(0);
+
+			yearlyAnalytics.views.analytics.forEach((item: { label: string; count: number }) => {
+				const monthMatch =
+					item.label.match(/(\d{4})-(\d{2})/) ||
+					item.label.match(/Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/i);
+
+				if (!monthMatch) return;
+
+				let monthIndex = -1;
+				if (monthMatch[2]) {
+					monthIndex = parseInt(monthMatch[2], 10) - 1;
+				} else if (monthMatch[0]) {
+					const monthNames = [
+						"jan", "feb", "mar", "apr", "may", "jun",
+						"jul", "aug", "sep", "oct", "nov", "dec"
+					];
+					monthIndex = monthNames.findIndex(m =>
+						monthMatch[0].toLowerCase().startsWith(m)
+					);
+				}
+
+				if (monthIndex >= 0 && monthIndex < 12) {
+					viewsArr[monthIndex] = item.count || 0;
+				}
+			});
+
+			setChartValues(viewsArr);
+		} catch (err) {
+			console.error("Dashboard: building yearly views series from context failed", err);
+		}
+	}, [yearlyAnalytics]);
 
 	// Setup socket for live updates (invalidate related queries so TanStack picks updated cache/API)
 	useEffect(() => {
@@ -153,20 +195,25 @@ function DashboardPage() {
 		socketManager.subscribeRoom(instRoom);
 
         const onCourseViewsUpdated = () => {
-			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_STATS(filters.timeRange, institutionId || undefined), exact: false });
+			// Invalidate all time ranges since they're all fetched at once
+			queryClient.invalidateQueries({ queryKey: ['all-unified-analytics'], exact: false });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CHART_DATA('views', new Date().getFullYear(), institutionId || undefined), exact: false });
 		};
         const onProgramViewsUpdated = () => {
             queryClient.invalidateQueries({ queryKey: ['program-views', institutionId, filters.timeRange] });
         };
 		const onComparisonsUpdated = () => {
-			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_STATS(filters.timeRange, institutionId || undefined), exact: false });
+			// Invalidate all time ranges since they're all fetched at once
+			queryClient.invalidateQueries({ queryKey: ['all-unified-analytics'], exact: false });
 		};
 		const onEnquiryCreated = () => {
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.STUDENTS(institutionId || undefined), exact: false });
+			// Invalidate all time ranges since they're all fetched at once
+			queryClient.invalidateQueries({ queryKey: ['all-unified-analytics'], exact: false });
 		};
 		const onInstitutionAdminTotalLeads = () => {
-			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_STATS(filters.timeRange, institutionId || undefined), exact: false });
+			// Invalidate all time ranges since they're all fetched at once
+			queryClient.invalidateQueries({ queryKey: ['all-unified-analytics'], exact: false });
 		};
 
         socketManager.addListener('courseViewsUpdated', onCourseViewsUpdated);

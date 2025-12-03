@@ -5,14 +5,15 @@ import { _Card, _CardContent } from "@/components/ui/card";
 import AnalyticsTable, { CoursePerformanceRow } from "@/components/dashboard/AnalyticsTable";
 import CourseReachChart from "@/components/dashboard/CourseReachChart";
 import LeadTypeAnalytics, { LeadTypeData } from "@/components/dashboard/LeadTypeAnalytics";
-import { metricsAPI, enquiriesAPI, authAPI, programsAPI } from "@/lib/api";
+import { programsAPI } from "@/lib/api";
 import { getSocket } from "@/lib/socket";
-import { withAuth } from "@/lib/auth-context";
+import { withAuth, useAuth } from "@/lib/auth-context";
 import Loading from "@/components/ui/loading";
 import { motion, AnimatePresence } from "framer-motion";
 import StatCard from "@/components/dashboard/StatCard";
 import TimeRangeToggle, { TimeRangeValue } from "@/components/ui/TimeRangeToggle";
-import { useInstitution, useProgramViews, useProgramsList, useRecentEnquiriesAll } from "@/lib/hooks/dashboard-hooks";
+import { useInstitution, useProgramViews, useProgramsList, useRecentEnquiriesAll, QUERY_KEYS } from "@/lib/hooks/dashboard-hooks";
+import { useAnalyticsContext } from "@/components/providers/AnalyticsProvider";
 import { useQueryClient } from "@tanstack/react-query";
 import { getProgramStatus } from "@/lib/utility";
 import { useRouter } from "next/navigation";
@@ -34,106 +35,107 @@ function AnalyticsPage() {
 	const [institutionAdminId, setInstitutionAdminId] = useState<string | null>(null);
 	const queryClient = useQueryClient();
 	const router = useRouter();
+	const { user } = useAuth();
 
-	// Program views KPI via backend summary (range-based)
-	const programViewsRange = analyticsRange.toLowerCase() as 'weekly'|'monthly'|'yearly';
-	const { data: programViewsData } = useProgramViews(programViewsRange);
-	const kpiProgramViews = Array.isArray(programViewsData) ? programViewsData.reduce((sum, p: Record<string, unknown>) => sum + (Number(p.inRangeViews)||0), 0) : 0;
+	// Use shared analytics context (fetched once at layout level)
+	const { weekly, monthly, yearly, isLoading: analyticsLoading } = useAnalyticsContext();
+	const analyticsRangeLower = analyticsRange.toLowerCase() as 'weekly'|'monthly'|'yearly';
+	const allAnalytics = analyticsRangeLower === 'weekly' ? weekly : analyticsRangeLower === 'monthly' ? monthly : yearly;
+	const yearlyAnalytics = yearly;
+	
+	// Program views KPI via unified analytics (views) only (context)
+	const kpiProgramViews = allAnalytics?.views ? allAnalytics.views.totalCount : 0;
 
 	// Data for Program Performance Table
 	const { data: programsList } = useProgramsList();
 	const { data: recentEnquiries } = useRecentEnquiriesAll();
 	const { data: institution } = useInstitution();
 
-	// Effect 1: KPIs depend on time range only
+	// Effect 1: Update KPIs from unified analytics (views/leads/callbacks/demos)
 	useEffect(() => {
-		let mounted = true;
-		(async () => {
-			try {
-				setIsKpiLoading(true);
-				const range = analyticsRange.toLowerCase() as 'weekly'|'monthly'|'yearly';
-				const [viewsRange, leadsRange, callbacksRange] = await Promise.all([
-					metricsAPI.getInstitutionAdminByRange('views', range) as { success?: boolean; data?: { totalViews?: number; trend?: { value: number; isPositive: boolean } } },
-					metricsAPI.getInstitutionAdminByRange('leads', range) as { success?: boolean; data?: { totalLeads?: number; trend?: { value: number; isPositive: boolean } } },
-					enquiriesAPI.getTypeSummaryRollups(range) as { data?: { callbacks?: number } },
-				]);
-				if (!mounted) return;
-				if (viewsRange?.success) {
-					setKpiCourseViews(viewsRange.data?.totalViews || 0);
-					if (viewsRange.data?.trend) setKpiViewsDelta(viewsRange.data.trend);
-				}
-				if (leadsRange?.success) {
-					setKpiLeads(leadsRange.data?.totalLeads || 0);
-					if (leadsRange.data?.trend) setKpiLeadsDelta(leadsRange.data.trend);
-				}
-				// Set Callback Leads KPI based on selected range
-				setKpiCallbacks(Number(callbacksRange?.data?.callbacks || 0));
-			} catch {
-			console.error('Analytics: KPI fetch failed');
-		} finally {
-				setIsKpiLoading(false);
-			}
-		})();
-		return () => { mounted = false; };
-	}, [analyticsRange]);
+		setIsKpiLoading(analyticsLoading);
+		
+		if (allAnalytics) {
+			setKpiLeads(allAnalytics.leads.totalCount);
+			// Calculate trend (can be enhanced later with previous period comparison)
+			setKpiLeadsDelta({ value: 0, isPositive: true });
 
-    // Effect 2: Trends load independently but require institution id
-    useEffect(() => {
-        if (!institution?._id) return;
-        let mounted = true;
-        (async () => {
-            try {
-                setIsTrendLoading(true);
-                const year = new Date().getFullYear();
-                const [viewsSeries, leadsSeries] = await Promise.all([
-                    programsAPI.viewsSeries(String(institution._id), year) as { success?: boolean; data?: { series?: number[] } },
-                    metricsAPI.getInstitutionAdminSeries('leads', year) as { success?: boolean; data?: { series?: number[] } },
-                ]);
-                if (!mounted) return;
-				const viewsArr = new Array(12).fill(0);
-				const leadsArr = new Array(12).fill(0);
-				if (viewsSeries?.success && Array.isArray(viewsSeries.data?.series)) {
-					viewsSeries.data.series.forEach((n: number, i: number) => { if (i>=0 && i<12) viewsArr[i] = n || 0; });
-				}
-				// Fallback to course views if program series is empty
-				if (viewsArr.every(n => !n)) {
-					const courseSeries = await metricsAPI.getInstitutionAdminSeries('views', year) as { success?: boolean; data?: { series?: number[] } };
-					if (courseSeries?.success && Array.isArray(courseSeries.data?.series)) {
-						courseSeries.data.series.forEach((n: number, i: number) => { if (i>=0 && i<12) viewsArr[i] = n || 0; });
-					}
-				}
-				if (leadsSeries?.success && Array.isArray(leadsSeries.data?.series)) {
-					leadsSeries.data.series.forEach((n: number, i: number) => { if (i>=0 && i<12) leadsArr[i] = n || 0; });
-				}
-				setViewLeadTrends({ views: viewsArr, leads: leadsArr });
-			} catch {
-				console.error('Analytics: trends fetch failed');
-			} finally {
-				setIsTrendLoading(false);
-			}
-		})();
-		return () => { mounted = false; };
-    }, [institution?._id]);
-
-	// Effect 2.5: Fetch identifiers for socket rooms
-	useEffect(() => {
-		let mounted = true;
-		(async () => {
-			try {
-				const [prof] = await Promise.all([
-					authAPI.getProfile() as { data?: { id?: string; _id?: string } },
-				]);
-				if (!mounted) return;
-				const iid = institution?._id || null;
-				const oid = prof?.data?.id || prof?.data?._id || null;
-				setInstitutionId(iid);
-				setInstitutionAdminId(oid);
-			} catch {
-			console.error('Analytics: identifiers fetch failed');
+			// Callback & demo requests from unified analytics controller
+			setKpiCallbacks(allAnalytics.callbackRequest?.totalCount || 0);
+			setKpiViewsDelta({ value: 0, isPositive: true });
 		}
-		})();
-		return () => { mounted = false; };
-	}, [institution?._id]);
+	}, [analyticsLoading, allAnalytics]);
+
+    // Effect 2: Trends derived purely from unified analytics yearly data (context)
+    useEffect(() => {
+        if (!yearlyAnalytics) {
+            setIsTrendLoading(true);
+            return;
+        }
+        
+        try {
+            setIsTrendLoading(true);
+            const viewsArr = new Array(12).fill(0);
+            const leadsArr = new Array(12).fill(0);
+            
+            // Extract monthly Views from yearly analytics context
+            if (yearlyAnalytics?.views?.analytics) {
+                yearlyAnalytics.views.analytics.forEach((item: { label: string; count: number }) => {
+                    const monthMatch =
+                        item.label.match(/(\d{4})-(\d{2})/) ||
+                        item.label.match(/Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/i);
+                    if (!monthMatch) return;
+
+                    let monthIndex = -1;
+                    if (monthMatch[2]) {
+                        monthIndex = parseInt(monthMatch[2], 10) - 1; // 0-11
+                    } else if (monthMatch[0]) {
+                        const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+                        monthIndex = monthNames.findIndex(m => monthMatch[0].toLowerCase().startsWith(m));
+                    }
+                    if (monthIndex >= 0 && monthIndex < 12) {
+                        viewsArr[monthIndex] = item.count || 0;
+                    }
+                });
+            }
+            
+            // Extract monthly Leads from yearly analytics context
+            if (yearlyAnalytics?.leads?.analytics) {
+                yearlyAnalytics.leads.analytics.forEach((item: { label: string; count: number }) => {
+                    const monthMatch =
+                        item.label.match(/(\d{4})-(\d{2})/) ||
+                        item.label.match(/Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/i);
+                    if (!monthMatch) return;
+
+                    let monthIndex = -1;
+                    if (monthMatch[2]) {
+                        monthIndex = parseInt(monthMatch[2], 10) - 1;
+                    } else if (monthMatch[0]) {
+                        const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+                        monthIndex = monthNames.findIndex(m => monthMatch[0].toLowerCase().startsWith(m));
+                    }
+                    if (monthIndex >= 0 && monthIndex < 12) {
+                        leadsArr[monthIndex] = item.count || 0;
+                    }
+                });
+            }
+
+            // Use context-only data for the trends component
+            setViewLeadTrends({ views: viewsArr, leads: leadsArr });
+        } catch {
+            console.error('Analytics: trends processing failed');
+        } finally {
+            setIsTrendLoading(false);
+        }
+    }, [yearlyAnalytics]);
+
+	// Effect 2.5: Derive identifiers for socket rooms from context/hooks (no extra profile API)
+	useEffect(() => {
+		const iid = institution?._id || null;
+		const oid = (user as { id?: string; _id?: string } | null)?.id || (user as { id?: string; _id?: string } | null)?._id || null;
+		setInstitutionId(iid);
+		setInstitutionAdminId(oid);
+	}, [institution?._id, user]);
 
 
 	// Build Program Performance Table from programs list + program views summary + recent enquiries
@@ -142,9 +144,7 @@ function AnalyticsPage() {
 			setIsPerfLoading(true);
 			const programs = Array.isArray(programsList) ? programsList : [];
 			const viewsMap = new Map<string, number>();
-			(Array.isArray(programViewsData) ? programViewsData : []).forEach((p: Record<string, unknown>) => {
-				viewsMap.set(String(p.programName), Number(p.inRangeViews || 0));
-			});
+			// Use unified yearly views context as aggregate only; no extra range-based API calls
 			const leadCounts = new Map<string, { leads: number; lastTs: number | null }>();
 			(Array.isArray(recentEnquiries) ? recentEnquiries : []).forEach((e: Record<string, unknown>) => {
 				const p = e.programInterest || 'Unknown Program';
@@ -161,19 +161,22 @@ function AnalyticsPage() {
 				const views = viewsMap.get(name) || 0;
 				const lead = leadCounts.get(name) || { leads: 0, lastTs: null };
 				
-				// Use new program status logic based on startDate and endDate
+				// Normalize to simple "Active"/"Inactive" status like subscription page
 				const programStatus = getProgramStatus(pg.startDate || '', pg.endDate || '');
-				let status: 'Live'|'Paused'|'Draft'|'Expired' = 'Draft';
-				
+				let status: 'Active' | 'Inactive' = 'Inactive';
+
 				if (programStatus.status === 'active') {
-					status = 'Live';
+					status = 'Active';
 				} else if (programStatus.status === 'upcoming') {
-					status = 'Paused';
+					// Upcoming programs are treated as Inactive until they start
+					status = 'Inactive';
 				} else if (programStatus.status === 'expired') {
-					status = 'Expired';
+					status = 'Inactive';
 				} else {
-					// Fallback to old logic for programs without dates
-					if (lead.leads > 0) status = (lead.lastTs || 0) >= (NOW - WINDOW_MS) ? 'Live' : 'Paused';
+					// Fallback for programs without dates: recent leads -> Active
+					if (lead.leads > 0 && (lead.lastTs || 0) >= (NOW - WINDOW_MS)) {
+						status = 'Active';
+					}
 				}
 				
 				return {
@@ -195,35 +198,29 @@ function AnalyticsPage() {
 		} finally {
 			setIsPerfLoading(false);
 		}
-	}, [programsList, programViewsData, recentEnquiries]);
+	}, [programsList, recentEnquiries, yearlyAnalytics]);
 
 	// Effect 4: Lead type totals once; independent of KPI time range
 	useEffect(() => {
-		let mounted = true;
-		(async () => {
-            try {
-				const [callbacksDemos, comparisons] = await Promise.all([
-                    enquiriesAPI.getTypeSummaryRollups('yearly') as { data?: { callbacks?: number; demos?: number } },
-                    // Prefer program comparisons sum; fallback to existing
-                    programsAPI.summaryComparisons(String(institution?._id || ''), 'yearly').catch(()=>null) as { success?: boolean; data?: { programs?: Record<string, unknown>[] } } | null
-				]);
-				if (!mounted) return;
-                let comparisonsTotal = 0;
-                if (comparisons && comparisons.success) {
-                    const arr = comparisons.data?.programs || [];
-                    comparisonsTotal = Array.isArray(arr) ? arr.reduce((s:number,p:Record<string, unknown>)=> s + (Number(p.inRangeComparisons)||0), 0) : 0;
-                }
-                setLeadTypes({
-                    callBackRequests: Number(callbacksDemos?.data?.callbacks || 0),
-                    demoRequests: Number(callbacksDemos?.data?.demos || 0),
-                    courseComparisons: comparisonsTotal
-                });
-			} catch {
-				console.error('Analytics: lead types fetch failed');
-			}
-		})();
-		return () => { mounted = false; };
-	}, [institution?._id]);
+		if (!institution?._id || !yearlyAnalytics) return;
+
+		try {
+			const callbacksTotal = yearlyAnalytics.callbackRequest?.totalCount || 0;
+			const demosTotal = yearlyAnalytics.bookDemoRequest?.totalCount || 0;
+
+			// Derive "course comparisons" from yearly leads as a proxy
+			const comparisonsTotal =
+				yearlyAnalytics.leads?.totalCount || 0;
+
+			setLeadTypes({
+				callBackRequests: callbacksTotal,
+				demoRequests: demosTotal,
+				courseComparisons: comparisonsTotal,
+			});
+		} catch {
+			console.error("Analytics: lead types derivation failed");
+		}
+	}, [institution?._id, yearlyAnalytics]);
 
 	// Effect 5: Realtime updates via Socket.IO
 	useEffect(() => {
@@ -241,31 +238,20 @@ function AnalyticsPage() {
 						if (institutionAdminId) s?.emit('joinInstitutionAdmin', institutionAdminId);
 					});
 
-					// When views change, refresh views KPI and views series
+					// When views change, invalidate unified analytics cache
 					s.on('courseViewsUpdated', async () => {
 					try {
-						const range = (analyticsRange.toLowerCase() as 'weekly'|'monthly'|'yearly');
-						const [viewsRange, viewsSeries] = await Promise.all([
-							metricsAPI.getInstitutionAdminByRange('views', range) as { success?: boolean; data?: { totalViews?: number; trend?: { value: number; isPositive: boolean } } },
-							metricsAPI.getInstitutionAdminSeries('views', new Date().getFullYear()) as { success?: boolean; data?: { series?: number[] } },
-						]);
-						if (viewsRange?.success) {
-							setKpiCourseViews(viewsRange.data?.totalViews || 0);
-							if (viewsRange.data?.trend) setKpiViewsDelta(viewsRange.data.trend);
-						}
-						if (viewsSeries?.success && Array.isArray(viewsSeries.data?.series)) {
-							const arr = new Array(12).fill(0);
-							viewsSeries.data.series.forEach((n: number, i: number) => { if (i>=0 && i<12) arr[i] = n || 0; });
-							setViewLeadTrends(prev => ({ views: arr, leads: prev?.leads || new Array(12).fill(0) }));
-						}
+						// Invalidate all time ranges since they're all fetched at once
+						queryClient.invalidateQueries({ queryKey: ['all-unified-analytics'], exact: false });
+						queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CHART_DATA('views', new Date().getFullYear(), institutionId || undefined) });
 					} catch (err) { console.error('Analytics: realtime courseViews update failed', err); }
 				});
 
 				// When an enquiry is created, invalidate caches: leads KPI, series, and recent enquiries used for program table
 				s.on('enquiryCreated', async () => {
 					try {
-						const range = (analyticsRange.toLowerCase() as 'weekly'|'monthly'|'yearly');
-						queryClient.invalidateQueries({ queryKey: ['metrics', 'leads', range, institutionId] });
+						// Invalidate all time ranges since they're all fetched at once
+						queryClient.invalidateQueries({ queryKey: ['all-unified-analytics'], exact: false });
 						queryClient.invalidateQueries({ queryKey: ['chart-data', 'leads', new Date().getFullYear(), institutionId] });
 						queryClient.invalidateQueries({ queryKey: ['recent-enquiries-all', institutionId] });
 						queryClient.invalidateQueries({ queryKey: ['recent-enquiries', institutionId] });
@@ -275,18 +261,16 @@ function AnalyticsPage() {
 				// When program views change, invalidate program-views query to refetch lazily
 				s.on('programViewsUpdated', async () => {
 					try {
-						queryClient.invalidateQueries({ queryKey: ['program-views', institutionId, programViewsRange] });
+						queryClient.invalidateQueries({ queryKey: ['program-views', institutionId], exact: false });
 						queryClient.invalidateQueries({ queryKey: ['programs-list', institutionId] });
 					} catch (err) { console.error('Analytics: programViews invalidate failed', err); }
 				});
 
-				// When comparisons change, refresh comparisons total inside lead type analysis only
+				// When comparisons change, invalidate unified analytics cache
 				s.on('comparisonsUpdated', async () => {
 					try {
-						const cmp = await metricsAPI.getInstitutionAdminSummary('comparisons') as { success?: boolean; data?: { totalComparisons?: number } };
-						if (cmp?.success) {
-							setLeadTypes(prev => prev ? { ...prev, courseComparisons: Number(cmp.data?.totalComparisons || 0) } : prev);
-						}
+						// Invalidate all time ranges since they're all fetched at once
+						queryClient.invalidateQueries({ queryKey: ['all-unified-analytics'], exact: false });
 					} catch {
 						console.error('Analytics: realtime comparisons update failed');
 					}
@@ -299,7 +283,7 @@ function AnalyticsPage() {
 		return () => { try { if (s) { s.off('courseViewsUpdated', () => {}); s.off('enquiryCreated', () => {}); s.off('comparisonsUpdated', () => {}); s.off('programViewsUpdated', () => {}); } } catch {
 			console.error('Analytics: socket cleanup failed');
 		} };
-	}, [institutionId, institutionAdminId, analyticsRange, queryClient, programViewsRange]);
+	}, [institutionId, institutionAdminId, analyticsRangeLower, queryClient]);
 
 
 	// Navigation function for analytics action button

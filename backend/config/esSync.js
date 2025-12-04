@@ -1,4 +1,4 @@
-require('dotenv').config({ path: './.env.development' });
+require('dotenv').config({ path: './.env.production' });
 const { Client } = require('@elastic/elasticsearch');
 const Course = require('../models/Course');
 const ELASTICSEARCH_NODE = process.env.ELASTICSEARCH_NODE;

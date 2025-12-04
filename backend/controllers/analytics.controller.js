@@ -45,13 +45,13 @@ exports.getInstitutionAnalytics = asyncHandler(async (req, res) => {
   // SINGLE AGGREGATION (your structure)
   // ---------------------------
   const result = await InstitutionAdmin.aggregate([
-    { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+    { $match: { _id: new mongoose.Types.ObjectId(userId) } },
     { $limit: 1 },
 
     {
       $lookup: {
         from: "analyticsdailies",
-        localField: "institutionId",
+        localField: "institution",
         foreignField: "institutionId",
         as: "analytics"
       }

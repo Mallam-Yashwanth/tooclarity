@@ -113,15 +113,15 @@ const HelpCentrePage: React.FC = () => {
             onClick={() => setIsRaiseTicketOpen(true)}
           >
             <div className={styles.cardIcon}>
-              <Image src="/svg01.svg" alt="Raise Ticket" width={24} height={24} />
+              <Image src="/images/ticket.svg" alt="Raise Ticket" width={24} height={24} />
             </div>
             <div className={styles.cardContent}>
               <span className={styles.cardLabel}>Raise a Ticket</span>
-              <span className={styles.cardCount}>{ticketsRaised}</span>
+              {/* <span className={styles.cardCount}>{ticketsRaised}</span> */}
             </div>
           </button>
 
-          <div className={styles.myRequestsCard}>
+          {/* <div className={styles.myRequestsCard}>
             <div className={styles.cardIcon}>
               <svg
                 width="32"
@@ -140,11 +140,11 @@ const HelpCentrePage: React.FC = () => {
               <span className={styles.cardLabel}>My Requests</span>
               <span className={styles.cardCount}>{myRequests}</span>
             </div>
-          </div>
+          </div> */}
         </div>
 
         {/* Tickets Raised Section */}
-        <div className={styles.ticketsSection}>
+        {/* <div className={styles.ticketsSection}>
           <h2 className={styles.ticketsTitle}>Tickets raised</h2>
           <div className={styles.ticketsList}>
             {tickets.map((t) => {
@@ -170,7 +170,7 @@ const HelpCentrePage: React.FC = () => {
               );
             })}
           </div>
-        </div>
+        </div> */}
 
         {/* FAQs Section */}
         <div className={styles.faqSection}>

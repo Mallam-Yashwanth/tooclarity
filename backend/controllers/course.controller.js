@@ -1,6 +1,7 @@
 const Course = require("../models/Course");
 const { Institution } = require("../models/Institution");
 const InstituteAdminModel = require("../models/InstituteAdmin");
+const Branch = require("../models/Branch");
 const AppError = require("../utils/appError");
 const asyncHandler = require("express-async-handler");
 const { uploadStream } = require("../services/upload.service");
@@ -11,6 +12,39 @@ const { esClient } = require("../config/elasticsearch");
 const UserStats = require("../models/userStats");
 const Enquiries = require("../models/Enquiries");
 const ObjectId = mongoose.Types.ObjectId;
+
+/**
+ * Helper to get or create a default branch for an institution.
+ * Used when courses are submitted without a branchId.
+ */
+const getOrCreateDefaultBranch = async (institutionId, session = null) => {
+  const query = {
+    institution: institutionId,
+    branchName: 'Default',
+  };
+  
+  let defaultBranch = session 
+    ? await Branch.findOne(query).session(session)
+    : await Branch.findOne(query);
+
+  if (!defaultBranch) {
+    const branchData = {
+      branchName: 'Default',
+      contactInfo: '0000000000',
+      branchAddress: 'Main Campus',
+      institution: institutionId,
+    };
+    
+    const created = session 
+      ? await Branch.create([branchData], { session })
+      : await Branch.create(branchData);
+    
+    defaultBranch = Array.isArray(created) ? created[0] : created;
+    console.log(`[Course] Created default branch for institution ${institutionId}`);
+  }
+  
+  return defaultBranch;
+};
 
 // Generic helpers
 async function incrementMetricGeneric(req, res, next, cfg) {
@@ -309,12 +343,23 @@ exports.createCourse = asyncHandler(async (req, res, next) => {
     return next(new AppError("No courses provided", 400));
   }
 
+  // Get or create default branch for courses without branchId
+  let defaultBranch = null;
+  const needsDefaultBranch = courses.some(course => !course.branch && !course.branchId);
+  
+  if (needsDefaultBranch) {
+    defaultBranch = await getOrCreateDefaultBranch(institutionId);
+  }
+
   // Add institutionId and defaults to each course object
   const coursesToInsert = courses.map((course) => ({
     ...course,
     institution: institutionId,
+    // Auto-assign default branch if no branch provided
+    branch: course.branch || course.branchId || (defaultBranch ? defaultBranch._id : null),
     image: course.image || "",
     brochure: course.brochure || "",
+    status: course.status || "Inactive", // Ensure new courses default to Inactive
   }));
 
   // Insert all courses at once

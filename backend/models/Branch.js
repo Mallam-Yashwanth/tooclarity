@@ -9,13 +9,15 @@ const branchSchema = new mongoose.Schema({
     },
     contactInfo: {
         type: String,
-        required: [true, 'Contact number is required.'],
+        required: false,
+        default: '0000000000',
         trim: true,
         match: [/^\d{10}$/, 'Please provide a valid contact number.']
     },
     branchAddress: {
         type: String,
-        required: [true, 'Branch address is required.'],
+        required: false,
+        default: 'Main Campus',
         trim: true,
         maxlength: [255, 'Branch address cannot exceed 255 characters.']
     },

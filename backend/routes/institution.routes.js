@@ -25,6 +25,12 @@ router.put(
 	institutionController.updateL2InstitutionDetails
 );
 
+// UPDATE (L3 - Facilities)
+router.put(
+	'/facilities',
+	institutionController.updateL3InstitutionFacilities
+);
+
 // READ & DELETE
 router.route('/me')
     .get( institutionController.getMyInstitution)

@@ -10,11 +10,15 @@ import CourseOrBranchSelectionDialog from "@/components/auth/CourseOrBranchSelec
 import Stepper from "@/components/ui/Stepper";
 // import TermsConditionsPage from "../TermsConditions/page";
 import Image from "next/image";
+// --- NEW IMPORT FOR INSTITUTION CHECK ---
+import { useInstitution } from "@/lib/hooks/dashboard-hooks"; 
 
 export default function SignupPage() {
-  // ✅ ALL HOOKS ARE NOW AT THE TOP LEVEL, BEFORE ANY CONDITIONAL RETURNS
   const router = useRouter();
-  const { user, isAuthenticated, loading } = useAuth();
+  const { user, isAuthenticated, loading, updateUser } = useAuth(); // Added updateUser
+
+  // --- NEW HOOK: TO CHECK IF INSTITUTION ALREADY EXISTS ---
+  const { data: inst, isLoading: instLoading } = useInstitution();
 
   const [l1DialogOpen, setL1DialogOpen] = useState(false);
   const [selectionOpen, setSelectionOpen] = useState(false);
@@ -28,16 +32,31 @@ export default function SignupPage() {
     if (!user) return false;
     return (
       user.role === "INSTITUTE_ADMIN" &&
-      !user.isPaymentDone &&
+      // !user.isPaymentDone &&
       !user.isProfileCompleted
     );
   }, [user]);
 
   // Redirect if not eligible for signup route
   useEffect(() => {
-    if (loading) return;
+    // --- UPDATED LOADING CHECK TO INCLUDE INSTITUTION LOADING ---
+    if (loading || instLoading) return; 
+
     if (!isAuthenticated) {
       router.replace("/institute");
+      return;
+    }
+
+    //  AUTOMATIC REDIRECT IF INSTITUTION RECORD EXISTS ---
+    if (inst && inst._id) {
+      console.log("Institution record found. Skipping L1 and moving to Dashboard.");
+      
+      // Update local state so guards allow entry
+      if (updateUser && (!user?.isProfileCompleted || !user?.isPaymentDone)) {
+      updateUser({ isProfileCompleted: true, isPaymentDone: true });
+    }
+      
+      router.replace("/dashboard");
       return;
     }
 
@@ -48,18 +67,22 @@ export default function SignupPage() {
 
     if (!isAllowed) {
       if (user?.role === "INSTITUTE_ADMIN") {
-        if (!user.isPaymentDone && user.isProfileCompleted) {
-          router.replace("/payment");
-          return;
-        }
-        if (user.isPaymentDone && user.isProfileCompleted) {
+        // if (!user.isPaymentDone && user.isProfileCompleted) {
+        //   router.replace("/payment");
+        //   return;
+        // }
+        // if (user.isPaymentDone && user.isProfileCompleted) {
+        //   router.replace("/dashboard");
+        //   return;
+        // }
+        if (user.isProfileCompleted) {
           router.replace("/dashboard");
           return;
         }
       }
       router.replace("/institute"); // Fallback
     }
-  }, [loading, isAuthenticated, isAllowed, user, router]);
+  }, [loading, instLoading, inst, isAuthenticated, isAllowed, user, router, updateUser]);
 
   // ✅ Dynamic steps
   const steps =
@@ -73,6 +96,10 @@ export default function SignupPage() {
   // 🔹 Load state from localStorage on mount
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    // --- ONLY PROCEED TO OPEN DIALOG IF NO INSTITUTION EXISTS ---
+    if (instLoading || inst) return;
+
     const savedStep = localStorage.getItem("signupStep");
     const savedFormData = localStorage.getItem("signupFormData");
 
@@ -89,23 +116,24 @@ export default function SignupPage() {
     } else {
       setL1DialogOpen(true);
     }
-  }, []);
+  }, [inst, instLoading]);
 
   // Save step whenever it changes
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    localStorage.setItem("signupStep", String(currentStep));
-  }, [currentStep]);
+  // useEffect(() => {
+  //   if (typeof window === "undefined") return;
+  //   localStorage.setItem("signupStep", String(currentStep));
+  // }, [currentStep]);
 
   // Save formData whenever it changes
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    localStorage.setItem("signupFormData", JSON.stringify(formData));
-    console.log(localStorage.getItem("signupFormData"));
-  }, [formData]);
+  // useEffect(() => {
+  //   if (typeof window === "undefined") return;
+  //   localStorage.setItem("signupFormData", JSON.stringify(formData));
+  //   console.log(localStorage.getItem("signupFormData"));
+  // }, [formData]);
 
   // ✅ THIS CONDITIONAL RETURN IS NOW AFTER ALL HOOKS
-  if (loading || !isAuthenticated || !isAllowed) {
+  // Added instLoading to ensure we don't flash the dialog while checking the DB
+  if (loading || instLoading || !isAuthenticated || !isAllowed) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600"></div>
@@ -120,35 +148,13 @@ export default function SignupPage() {
 
   const handleL1Success = () => {
     setL1DialogOpen(false);
-    setSelectionOpen(true);
-    setCurrentStep(2);
+    // setSelectionOpen(true);
+    // setCurrentStep(2);
+    setTimeout(() => {
+      router.replace("/dashboard");
+    }, 100);
   };
 
-  const handleL2Success = () => {
-    setL2DialogOpen(false);
-    setL3DialogOpen(true);
-    setCurrentStep(3);
-  };
-
-  const handleL2Previous = () => {
-    setL2DialogOpen(false);
-    setL1DialogOpen(true);
-    setCurrentStep(1);
-  };
-
-  const handleL3Success = () => {
-    if (typeof window === "undefined") return;
-    console.log("Signup completed!");
-    setCurrentStep(steps.length);
-    localStorage.removeItem("signupStep");
-    localStorage.removeItem("signupFormData");
-  };
-
-  const handleL3Previous = () => {
-    setL3DialogOpen(false);
-    setL2DialogOpen(true);
-    setCurrentStep(2);
-  };
 
   // Show loader while verifying or redirecting
   if (loading || !isAuthenticated || !isAllowed) {
@@ -180,13 +186,6 @@ export default function SignupPage() {
         </a>
       </div>
 
-      <div className="fixed top-[56px] md:top-[72px] left-0 right-0 z-40">
-        <div className="w-full px-4 sm:px-6 md:px-8">
-          <div className="mt-[8px] sm:mt-[12px]">
-            <Stepper currentStep={currentStep} steps={steps} />
-          </div>
-        </div>
-      </div>
 
       {/* L1 _Dialog Box */}
       <L1DialogBox
@@ -196,33 +195,7 @@ export default function SignupPage() {
         onInstituteTypeChange={handleInstituteTypeChange}
       />
 
-      {/* Selection _Dialog between L1 and L2 */}
-      <CourseOrBranchSelectionDialog
-        open={selectionOpen}
-        onOpenChange={setSelectionOpen}
-        onSelection={(choice) => {
-          setSelectionOpen(false);
-          setL2Section(choice);
-          setL2DialogOpen(true);
-        }}
-      />
-
-      {/* L2 _Dialog Box */}
-      <L2DialogBox
-        open={l2DialogOpen}
-        onOpenChange={setL2DialogOpen}
-        onSuccess={handleL2Success}
-        onPrevious={handleL2Previous}
-        initialSection={l2Section}
-      />
-
-      {/* L3 _Dialog Box */}
-      <L3DialogBox
-        open={l3DialogOpen}
-        onOpenChange={setL3DialogOpen}
-        onSuccess={handleL3Success}
-        onPrevious={handleL3Previous}
-      />
+      
     </div>
   );
 }

@@ -67,37 +67,48 @@ const StudentSignupPage = () => {
     router.replace("/dashboard");
   }, [user, router, stage]);
 
-  const bgClass = stage === "success" 
-    ? "bg-[#AEE6A6]" 
-    : "bg-gradient-to-b from-white via-white to-blue-50";
+
+  
+  // const bgClass = stage === "success" 
+  //   ? "bg-[#AEE6A6]" 
+  //   : "bg-gradient-to-b from-white via-white to-blue-50";
 
   return (
-    <section className={`flex min-h-screen flex-col justify-between px-5 py-10 md:px-8 lg:px-12 ${bgClass}`}>
-      {stage === "registration" && (
-        <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
-          <StudentRegistration onOtpRequired={handleOtpRequired} />
-        </div>
-      )}
-      {stage === "otp" && (
-        <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
-          <StudentOtpScreen
-            phoneNumber={phoneNumber}
-            onSuccess={handleOtpVerified}
-            onBack={() => setStage("registration")}
-          />
-        </div>
-      )}
-      {stage === "success" && (
-        <StudentOtpSuccess
-          title="OTP Verified Successfully!"
-          description="Your mobile number has been verified successfully."
-          continueLabel="Continue"
-          onContinue={handleSuccessContinue}
-          fullScreen={false}
-        />
-      )}
-    </section>
-  );
+    <StudentRegistration onOtpRequired={handleOtpRequired} />
+ 
+
+    
+    // <section className={`flex min-h-screen flex-col justify-between px-5 py-10 md:px-8 lg:px-12 ${bgClass}`}>
+      
+    //    <section className={` ${bgClass}`}>
+
+    //   {stage === "registration" && (
+    //     <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
+    //       <StudentRegistration onOtpRequired={handleOtpRequired} />
+    //     </div>
+        
+    //   )}
+    //   {stage === "otp" && (
+    //     <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
+    //       <StudentOtpScreen
+    //         phoneNumber={phoneNumber}
+    //         onSuccess={handleOtpVerified}
+    //         onBack={() => setStage("registration")}
+    //       />
+    //     </div>
+    //   )}
+    //   {stage === "success" && (
+    //     <StudentOtpSuccess
+    //       title="OTP Verified Successfully!"
+    //       description="Your mobile number has been verified successfully."
+    //       continueLabel="Continue"
+    //       onContinue={handleSuccessContinue}
+    //       fullScreen={false}
+    //     />
+    //   )}
+    //  </section>
+
+      );
 };
 
 export default StudentSignupPage;

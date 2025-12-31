@@ -25,6 +25,7 @@ export interface OTPData {
   email?: string;
   contactNumber?: string;
   otp: string;
+  isLogin?: boolean 
 }
 
 export interface resendOtpData {

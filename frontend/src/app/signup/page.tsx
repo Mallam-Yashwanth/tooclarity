@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import L1DialogBox from "@/components/auth/L1DialogBox";
 import L2DialogBox from "@/components/auth/L2DialogBox";
-import L3DialogBox from "@/components/auth/L3DialogBox";
 import CourseOrBranchSelectionDialog from "@/components/auth/CourseOrBranchSelectionDialog";
 import Stepper from "@/components/ui/Stepper";
 // import TermsConditionsPage from "../TermsConditions/page";
@@ -32,14 +31,12 @@ export default function SignupPage() {
     if (!user) return false;
     return (
       user.role === "INSTITUTE_ADMIN" &&
-      // !user.isPaymentDone &&
       !user.isProfileCompleted
     );
   }, [user]);
 
   // Redirect if not eligible for signup route
   useEffect(() => {
-    // --- UPDATED LOADING CHECK TO INCLUDE INSTITUTION LOADING ---
     if (loading || instLoading) return; 
 
     if (!isAuthenticated) {
@@ -52,8 +49,8 @@ export default function SignupPage() {
       console.log("Institution record found. Skipping L1 and moving to Dashboard.");
       
       // Update local state so guards allow entry
-      if (updateUser && (!user?.isProfileCompleted || !user?.isPaymentDone)) {
-      updateUser({ isProfileCompleted: true, isPaymentDone: true });
+      if (updateUser && (!user?.isProfileCompleted)) {
+      updateUser({ isProfileCompleted: true});
     }
       
       router.replace("/dashboard");
@@ -67,14 +64,6 @@ export default function SignupPage() {
 
     if (!isAllowed) {
       if (user?.role === "INSTITUTE_ADMIN") {
-        // if (!user.isPaymentDone && user.isProfileCompleted) {
-        //   router.replace("/payment");
-        //   return;
-        // }
-        // if (user.isPaymentDone && user.isProfileCompleted) {
-        //   router.replace("/dashboard");
-        //   return;
-        // }
         if (user.isProfileCompleted) {
           router.replace("/dashboard");
           return;
@@ -118,19 +107,7 @@ export default function SignupPage() {
     }
   }, [inst, instLoading]);
 
-  // Save step whenever it changes
-  // useEffect(() => {
-  //   if (typeof window === "undefined") return;
-  //   localStorage.setItem("signupStep", String(currentStep));
-  // }, [currentStep]);
-
-  // Save formData whenever it changes
-  // useEffect(() => {
-  //   if (typeof window === "undefined") return;
-  //   localStorage.setItem("signupFormData", JSON.stringify(formData));
-  //   console.log(localStorage.getItem("signupFormData"));
-  // }, [formData]);
-
+  
   // ✅ THIS CONDITIONAL RETURN IS NOW AFTER ALL HOOKS
   // Added instLoading to ensure we don't flash the dialog while checking the DB
   if (loading || instLoading || !isAuthenticated || !isAllowed) {
@@ -148,8 +125,9 @@ export default function SignupPage() {
 
   const handleL1Success = () => {
     setL1DialogOpen(false);
-    // setSelectionOpen(true);
-    // setCurrentStep(2);
+    if (updateUser) {
+    updateUser({ isProfileCompleted:  true });
+  }
     setTimeout(() => {
       router.replace("/dashboard");
     }, 100);

@@ -34,11 +34,10 @@ export default function DashboardLayout({
 
     // 🏫 Institute flow
     if (user.role === "INSTITUTE_ADMIN") {
-      if (!user.isPaymentDone && !user.isProfileCompleted) {
-        router.push("/institute");
-      } else if (!user.isPaymentDone && user.isProfileCompleted) {
-        router.push("/payment");
-      }
+      if (!user.isProfileCompleted) {
+    // If L1 isn't done, send them to the signup/onboarding page
+    router.push("/institute");
+  }
     }
   }, [user, loading, router, pathname]);
 
@@ -57,7 +56,6 @@ export default function DashboardLayout({
 
   if (
     user?.role === "INSTITUTE_ADMIN" &&
-    user.isPaymentDone === true &&
     user.isProfileCompleted === true
   ) {
     return (

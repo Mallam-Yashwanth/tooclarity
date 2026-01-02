@@ -95,13 +95,13 @@ const getInitials = (name: string) => {
       {/*top navbar */}
       <header className="flex items-center justify-between bg-[#0222d7] px-8 py-6">
         {/* Left */}
-        <div className="flex items-center gap-2 text-white ">
+        <div onClick={() => router.push("/dashboard")} className="flex items-center gap-2 text-white ">
             <img
               src="/TCNewLogo.jpg"   
               alt="TooClarity Logo"
               className="h-12 w-12 object-contain"
             />
-            <span className="text-3xl font-bold font-maven">
+            <span  className="text-3xl font-bold font-maven">
               TooClarity
             </span>
           

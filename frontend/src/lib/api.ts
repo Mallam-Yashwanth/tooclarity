@@ -1030,9 +1030,6 @@ export const programsAPI = {
     return res;
   },
 
-  getInstitutionDetails: async (institutionId: string): Promise<ApiResponse> => {
-    return apiRequest(`/v1/institutions/${institutionId}`, { method: 'GET' });
-  },
   subscriptionHistory: async (institutionId: string): Promise<ApiResponse> => {
     // Use unified institutions scope with single controller/routes; fallback safe
     try {

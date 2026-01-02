@@ -4,10 +4,6 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import L1DialogBox from "@/components/auth/L1DialogBox";
-import L2DialogBox from "@/components/auth/L2DialogBox";
-import CourseOrBranchSelectionDialog from "@/components/auth/CourseOrBranchSelectionDialog";
-import Stepper from "@/components/ui/Stepper";
-// import TermsConditionsPage from "../TermsConditions/page";
 import Image from "next/image";
 // --- NEW IMPORT FOR INSTITUTION CHECK ---
 import { useInstitution } from "@/lib/hooks/dashboard-hooks"; 
@@ -19,12 +15,7 @@ export default function SignupPage() {
   // --- NEW HOOK: TO CHECK IF INSTITUTION ALREADY EXISTS ---
   const { data: inst, isLoading: instLoading } = useInstitution();
 
-  const [l1DialogOpen, setL1DialogOpen] = useState(false);
-  const [selectionOpen, setSelectionOpen] = useState(false);
-  const [l2DialogOpen, setL2DialogOpen] = useState(false);
-  const [l3DialogOpen, setL3DialogOpen] = useState(false);
-  const [currentStep, setCurrentStep] = useState(1);
-  const [l2Section, setL2Section] = useState<"course" | "branch">("course");
+  const [l1DialogOpen, setL1DialogOpen] = useState(true);
   const [formData, setFormData] = useState<{ instituteType?: string }>({});
 
   const isAllowed = useMemo(() => {
@@ -44,20 +35,6 @@ export default function SignupPage() {
       return;
     }
 
-    //  AUTOMATIC REDIRECT IF INSTITUTION RECORD EXISTS ---
-    if (inst && inst._id) {
-      console.log("Institution record found. Skipping L1 and moving to Dashboard.");
-      
-      // Update local state so guards allow entry
-      if (updateUser && (!user?.isProfileCompleted)) {
-      updateUser({ isProfileCompleted: true});
-    }
-      
-      router.replace("/dashboard");
-      return;
-    }
-
-    // If allowed (INSTITUTE_ADMIN with both flags false), stay on this page
     if (isAllowed) {
       return;
     }
@@ -72,40 +49,6 @@ export default function SignupPage() {
       router.replace("/institute"); // Fallback
     }
   }, [loading, instLoading, inst, isAuthenticated, isAllowed, user, router, updateUser]);
-
-  // ✅ Dynamic steps
-  const steps =
-    formData.instituteType === "Study Halls" ||
-    formData.instituteType === "Tution Center's"
-      ? ["Institute Details", "Program Details"]
-      : formData.instituteType
-      ? ["Institute Details", "Program Details", "Additional Details"]
-      : ["Institute Details"];
-
-  // 🔹 Load state from localStorage on mount
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    // --- ONLY PROCEED TO OPEN DIALOG IF NO INSTITUTION EXISTS ---
-    if (instLoading || inst) return;
-
-    const savedStep = localStorage.getItem("signupStep");
-    const savedFormData = localStorage.getItem("signupFormData");
-
-    if (savedFormData) {
-      setFormData(JSON.parse(savedFormData));
-    }
-
-    if (savedStep) {
-      const step = parseInt(savedStep, 10);
-      setCurrentStep(step);
-      if (step === 1) setL1DialogOpen(true);
-      if (step === 2) setSelectionOpen(true);
-      if (step === 3) setL3DialogOpen(true);
-    } else {
-      setL1DialogOpen(true);
-    }
-  }, [inst, instLoading]);
 
   
   // ✅ THIS CONDITIONAL RETURN IS NOW AFTER ALL HOOKS
@@ -172,7 +115,6 @@ export default function SignupPage() {
         onSuccess={handleL1Success}
         onInstituteTypeChange={handleInstituteTypeChange}
       />
-
       
     </div>
   );

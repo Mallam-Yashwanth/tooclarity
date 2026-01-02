@@ -10,7 +10,7 @@ export interface SignUpData {
   contactNumber: string;
   designation?: string;
   linkedin?: string;
-  password: string;
+  password?: string;
   type?: "admin" | "institution" | "student";
 }
 

@@ -33,6 +33,7 @@ const FOOTER_ROUTES = {
     { label: "Careers", href: "student/Careers", prefetch: false }, // Less critical, no prefetch
     { label: "Privacy Policy", href: "/PrivacyPolicy", prefetch: false },
     { label: "Terms of Service", href: "/TermsConditions", prefetch: false },
+    { label: "Institution", href: "/institute", prefetch: true },
   ],
   resources: [
     { label: "Blog", href: "/student/blogs", prefetch: true },

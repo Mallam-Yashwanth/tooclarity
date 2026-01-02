@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { toast } from "react-toastify";
 import {
@@ -47,7 +47,8 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
   onOtpRequired,
 }) => {
   const router = useRouter();
-  const { refreshUser } = useAuth();
+  const { login, refreshUser } = useAuth();
+  
 
   const [isScriptLoaded, setIsScriptLoaded] = useState(false);
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
@@ -58,9 +59,52 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [otpSend, setotpSend] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [otpTimer, setOtpTimer] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [otpError, setotpError] = useState(false);
+  const [otpTimer, setOtpTimer] = useState(30);
+  const desktopOtpRefs = useRef<HTMLInputElement[]>([]);
   const otpRefs = React.useRef<Array<HTMLInputElement | null>>([]);
+  const [buttonDisabled, setButtonDisabled] = useState(true);
+
+
+  // take from localstorage if otp send already
+    useEffect(() => {
+      setIsLoading(true);
+      const sendOtp = localStorage.getItem("sendOtp");
+      const otpTime = localStorage.getItem("otpTime");
+      console.log("sendOtp", sendOtp, otpTime);
+  
+      if (sendOtp && otpTime) {
+        const FIVETEEN_MIN = 15 * 60 * 1000;
+        const expired = Date.now() - Number(otpTime) > FIVETEEN_MIN;
+  
+        if (expired) {
+          clearOtpState();
+        } else {
+          setotpSend(true);
+          formData.contactNumber = localStorage.getItem("phone") || "";
+        }
+      }
+
+      setIsLoading(false);
+    }, []);
+  
+    // delete otp state from localstorage
+    const clearOtpState = () => {
+      localStorage.removeItem("phone");
+      localStorage.removeItem("sendOtp");
+      localStorage.removeItem("otpTime");
+  
+      setotpSend(false);
+      formData.contactNumber = "";
+  
+      console.log(
+        "cleared otp state",
+        localStorage.getItem("sendOtp"),
+        localStorage.getItem("otpTime")
+      );
+    };
+
 
   const handleRegisterSuccess = useCallback(async () => {
     await refreshUser();
@@ -137,6 +181,12 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+
+    const phone = formData.contactNumber?.trim() || "";
+    if (phone?.length === 9) {
+      setButtonDisabled(false);
+    } else setButtonDisabled(true);
+
     if (formError) setFormError(null);
   };
 
@@ -145,30 +195,31 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
     event.preventDefault();
     setFormError(null);
 
-    const sanitizedPhone = formData.contactNumber.replace(/\D/g, "");
-
-    if (!/^\d{10}$/.test(sanitizedPhone)) {
-      toast.error("Phone number must be exactly 10 digits.");
-      return setFormError("Phone number must be exactly 10 digits.");
-    }
+    
 
     setIsLoading(true);
     try {
       const response = await authAPI.signUp({
-        contactNumber: sanitizedPhone,
+        contactNumber: formData.contactNumber,
         password: formData.username,
         type: "student",
       });
 
       if (!response.success) {
+        setotpError(true);
         toast.error(response.message || "Registration failed.");
         return setFormError(response.message || "Registration failed.");
       }
 
-      if (onOtpRequired) {
-        onOtpRequired(sanitizedPhone);
-      }
+      
+      clearOtpState();
+      toast.success("Registration successful!");
+      router.replace("/student/dashboard");
     } catch (err) {
+      setFormData((prev) => ({
+          ...prev,
+          otpvalue: "",
+        }));
       console.error("Registration error:", err);
       toast.error("Unexpected error. Please try again.");
       setFormError("Unexpected error. Please try again.");
@@ -179,44 +230,89 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
 
   const handleotp = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const phone = formData.contactNumber?.trim() || "";
+
+    if (!/^\d{10}$/.test(phone)) {
+      toast.error("Enter a valid 10-digit mobile number");
+      return;
+    }
+    if (formData.username.length < 3) {
+      toast.error("Username must be at least 3 characters long");
+      return;
+    }
+
+    // setotpSend(true);
+
     setIsLoading(true);
     setFormError(null);
 
     try {
-      // call api to send otp
-      console.log("sending otp to ", formData.contactNumber);
-      // so success otp send
+       
+      const response = await authAPI.verifyOTP({
+              otp: formData.otpvalue || "",
+              contactNumber: formData.contactNumber || "",
+              isLogin: false,
+            });
+
+      if (!response.success) {
+        toast.error(response.message || "Registration failed.");
+        return setFormError(response.message || "Registration failed.");
+      }
+
+      
+      
       toast.success("OTP sent successfully");
       setotpSend(true);
-    } catch (error) {
-      console.error("Login error:", error);
-      toast.error(error as string);
-      setFormError("An error occurred during login. Please try again.");
-    } finally {
+      localStorage.setItem("phone", formData.contactNumber || "");
+      localStorage.setItem("sendOtp", "true");
+      localStorage.setItem("otpTime", Date.now().toString());
+   
+    } catch (err) {
+    
+      setButtonDisabled(true);
+      console.error("Registration error:", err);
+      toast.error("Unexpected error. Please try again.");
+      setFormError("Unexpected error. Please try again.");
+    
+    }  finally {
       setIsLoading(false);
     }
   };
+
   const handleResendotp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setFormError(null);
-    setOtpTimer(30);
+      e.preventDefault();
+      setIsLoading(true);
+      setFormError(null);
+      setotpError(false);
+      setOtpTimer(30);
+      try {
+        // call api to resend otp
+        
+         const response = await login(formData);
+        
+        if (!response) {
+          toast.error("An error occurred during login. Please try again.");
+          setFormError("An error occurred during login. Please try again.");
+          return;
+        }
+  
+  
+        // so success otp send
+        toast.success("OTP resend successfully");
+        setotpSend(true);
+      } catch (error) {
+        console.error("Login error:", error);
+        toast.error("Invalid Phone number");
+         setFormError("Invalid phone number. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-    try {
-      // call api to resend otp
-      console.log("sending otp to ", formData.contactNumber);
-      // so success otp send
-      toast.success("OTP sent successfully");
-      setotpSend(true);
-    } catch (error) {
-      console.error("Login error:", error);
-      toast.error("Invalid OTP");
 
-      setFormError("An error occurred during login. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+
+
   // 🔹 Providers
   const renderedProviders = useMemo(
     () =>
@@ -254,8 +350,8 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
 
   const handleOtpChange = (index: number, value: string) => {
     if (!/^\d?$/.test(value)) return;
-
-    const otpArray = formData.otpvalue.split("");
+    setotpError(false);
+    const otpArray = (formData.otpvalue || "").split("");
     otpArray[index] = value;
 
     setFormData((prev) => ({
@@ -277,19 +373,373 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
   }, [otpTimer, otpSend]);
 
   useEffect(() => {
-    if (otpSend) {
-      // slight delay ensures DOM is painted
-      setTimeout(() => {
+    if (!otpSend) return;
+  
+    setTimeout(() => {
+      const isMobile = window.innerWidth < 640;
+  
+      if (isMobile) {
         otpRefs.current[0]?.focus();
-      }, 0);
-    }
+      } else {
+        desktopOtpRefs.current[0]?.focus();
+      }
+    }, 0);
   }, [otpSend]);
+
+   const handleBackClick = () => {
+    if (otpSend) {
+      clearOtpState();
+    } else {
+      // Normal back navigation
+      router.replace("/");
+    }
+  };
 
   return (
     <>
-      <section className="hidden sm:flex min-h-screen bg-white">
-        desktop view
+      <section className="hidden sm:flex min-h-screen w-full bg-white">
+          {/* LEFT SIDE – DESIGN */}
+        <div className="hidden lg:flex relative w-1/2 min-h-screen overflow-hidden">
+          <div className=" w-full max-w-xl h-full">
+            {/* 1st BIG bubble */}
+            <div
+              className="
+                absolute
+                -top-[40%]
+                -left-[23%]
+                h-[120%]
+                w-[120%]
+                rounded-full
+                bg-gradient-to-br
+                from-[#0222d7]
+                to-[#011481]
+              "
+            />
+
+
+            {/* CONTENT */}
+            <div className="absolute top-14 left-20 z-10 text-white">
+              <Image
+                src="/TCNewLogo.jpg"
+                alt="Too Clarity Logo"
+                width={90}
+                height={90}
+                priority
+              />
+
+
+              <h1
+                className="absolute font-bold"
+                style={{
+                  width: "294px",
+                  top: "21px",
+                  left: "105px",
+                  fontSize: "40px",
+                  lineHeight: "100%",
+                }}
+              >
+                Tooclarity
+              </h1>
+
+
+              <h2
+                className="absolute font-semibold"
+                style={{
+                  top: "140px",
+                  fontSize: "50px",
+                  lineHeight: "122%",
+                }}
+              >
+                Welcome
+              </h2>
+
+
+              <p
+                className="relative font-semibold"
+                style={{
+                  top: "110px",
+                  fontSize: "31px",
+              
+                }}
+              >
+                Sign Up to your account
+              </p>
+            </div>
+
+
+            {/* 2nd bubble */}
+            <div
+              className="
+                absolute
+                top-[62%]
+                left-[50%]
+                h-[290px]
+                w-[290px]
+                rounded-full
+                bg-gradient-to-br
+                from-[#0222d7]
+                to-[#011481]
+              "
+            />
+
+
+            {/* 3rd bubble */}
+            <div
+              className="
+                absolute
+                -bottom-[16%]
+                -left-[15%]
+                h-[420px]
+                w-[420px]
+                rounded-full
+                bg-gradient-to-br
+                from-[#0222d7]
+                to-[#011481]
+              "
+            />
+          </div>
+        </div>
+        {/* Right side */}
+        <div className=" w-full lg:w-1/2  min-h-screen flex items-center justify-center">
+          <div className="w-full max-w-[540px] rounded-3xl bg-white p-15 shadow-2xl">
+            <div className="flex justify-center mb-6 px-4 py-2 text-3xl font-bold tracking-wide text-[#242f6d]">
+              Sign Up
+            </div>
+
+
+            { otpSend ? (
+              <div className="m-4 flex flex-col">
+                <div className="p-1 text-[#000000]">
+                  <h1 className="text-5 font-semibold">
+                    Verify account with OTP
+                  </h1>
+                  <p className="text-[14px] text-gray-500 pl-1">
+                    We have sent 6 digit code to {formData.contactNumber}
+                  </p>
+
+
+                  <form className="mt-6 space-y-6" onSubmit={handleSubmit}>
+                    <div className="pb-10">
+                      {/* otp boxes*/}
+                      <div className="flex justify-start gap-3 mt-6  text-black mb-0">
+                      {[0, 1, 2, 3, 4, 5].map((i) => (
+                        <input
+                          key={i}
+                          ref={(el) => {
+                            if (el) desktopOtpRefs.current[i] = el;
+                          }}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={1}
+                          value={formData.otpvalue?.[i] || ""}
+                          onChange={(e) => {
+                            handleOtpChange(i, e.target.value);
+
+                            // move to next box on input
+                            if (e.target.value && i < 5) {
+                              desktopOtpRefs.current[i + 1]?.focus();
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            // move back on backspace
+                            if (
+                              e.key === "Backspace" &&
+                              !formData.otpvalue?.[i] &&
+                              i > 0
+                            ) {
+                              desktopOtpRefs.current[i - 1]?.focus();
+                            }
+                          }}
+                          className={`
+                            w-12 h-12 text-center text-lg font-semibold rounded-2
+                            border text-black
+                            ${
+                              otpError
+                                ? "border-red-500"
+                                : formData.otpvalue?.[i]
+                                ? "border-green-500"
+                                : "border-gray-300"
+                            }
+                            focus:outline-none focus:ring-2 ${
+                              otpError
+                                ? "focus:ring-red-500"
+                                : "focus:ring-green-500"
+                            }
+                          `}
+                        />
+                      ))}
+                    </div>
+
+
+                      {/*otp timer*/}
+                      <div className="mt-4 text-start text-sm text-gray-500">
+                        {otpTimer > 0 ? (
+                          <>
+                            Didn’t get a code?{" "}
+                            <span className="text-blue-600 font-medium">
+                              Resend OTP in 0:{otpTimer.toString().padStart(2, "0")}
+                            </span>
+                          </>
+                        ) : (
+                          <button
+                            onClick={handleResendotp}
+                            className="text-blue-600 font-medium hover:underline"
+                          >
+                            Resend OTP
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+
+                    <div>
+                      <button
+                        type="submit"
+                        disabled={isLoading || formData.otpvalue?.length !== 6  }
+                        className={`w-full rounded-[30px] py-3 text-base font-semibold text-[18px]
+                          flex items-center justify-center bg-[#EEEEEE] text-[#B0B1B3]
+                          disabled:bg-[#EEEEEE] disabled:opacity-60 disabled:cursor-not-allowed
+                          enabled:bg-[#0222D7] enabled:text-white transition-colors duration-300 ease-in-out
+                        `}
+                      >
+                        {isLoading && <Loader2 className="h-5 w-5 animate-spin" />}
+                        {isLoading ? "Verifying OTP..." : "Verify OTP "}
+                      </button>
+
+
+                      <div className="mt-[15px]">
+                        <p className="text-[14px] text-[#060B13] text-center">
+                          By continuing, you agree to our T&C and Privacy policy
+                        </p>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            ) : (
+              <div className="m-4 flex flex-col">
+                <div className="p-1 text-[#000000]">
+                  <h1 className="text-5 font-semibold">Enter your Details</h1>
+
+
+                  <form className="mt-6 space-y-6" onSubmit={handleotp}>
+                    {/* Full Name */}
+                     <div className="relative w-full">
+                    <input
+                      type="text"
+                      id="fullName"
+                      placeholder=" "
+                      value={formData.username}
+                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                      className="
+                        peer
+                        w-full h-[55px]
+                        rounded-[30px]
+                        border border-gray-300
+                        bg-white
+                        px-5 py-3
+                        text-[18px] text-black
+                        outline-none
+                        focus:ring-0
+
+                        focus:border-[#0222D7]
+                        
+                        not-placeholder-shown:border-[#0222D7]
+                      "
+                    />
+
+                    <label
+                      htmlFor="fullName"
+                      className="
+                      absolute left-5
+                      -top-2.5
+                      bg-white px-2
+                      text-[16px]
+                      text-gray-300
+                      transition-colors duration-200
+                      pointer-events-none
+
+                      peer-focus:text-[#0222D7]
+                      peer-not-placeholder-shown:text-[#0222D7]
+                    "
+                    >
+                      Full name
+                    </label>
+                  </div>
+
+
+                    {/* phone */}
+                    <label className="block relative group ">
+                    {/* Smartphone Icon */}
+                    <span className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 transition-colors duration-200 group-focus-within:text-[#0222D7]">
+                      <Smartphone size={18} />
+                    </span>
+
+                    <input
+                      type="tel"
+                      name="contactNumber"
+                      value={formData.contactNumber}
+                      placeholder="Enter mobile number"
+                      required
+                      disabled={isLoading}
+                      onChange={handleInputChange}
+                      className="
+                        w-full h-[53px] text-[18px] rounded-[30px]
+                        border border-gray-200 bg-gray-50
+                        py-3 pl-12 pr-4 text-base text-[#000000]
+                        outline-none transition
+                        hover:border-[#0222D7]
+                        focus:border-[#0222D7] focus:bg-white
+                        disabled:opacity-50 disabled:cursor-not-allowed
+                      "
+                    />
+                  </label>
+
+
+                    <button
+                      type="submit"
+                      disabled={isLoading || buttonDisabled}
+                      className={`w-full rounded-[30px] py-3 text-base font-semibold text-[18px]
+                        flex items-center justify-center bg-[#EEEEEE] text-[#B0B1B3]
+                        disabled:bg-[#EEEEEE] disabled:opacity-60 disabled:cursor-not-allowed
+                        enabled:bg-[#0222D7] enabled:text-white transition-colors duration-300 ease-in-out
+                      `}
+                    >
+                      {isLoading && <Loader2 className="h-5 w-5 animate-spin" />}
+                      {isLoading ? "Sending OTP..." : "Continue "}
+                    </button>
+                  </form>
+
+
+                  <div className="mt-6 text-center text-[16px] text-[#000000]">
+                    Already have an account?{" "}
+                    <button
+                      onClick={() => router.push("/student/login")}
+                      className="font-semibold text-blue-600 hover:underline"
+                    >
+                      Sign In
+                    </button>
+                  </div>
+
+
+                  <div className="mt-6 flex items-center gap-3 text-xs text-gray-400">
+                    <span className="h-px flex-1 bg-gray-200" />
+                    <span>Or Login with</span>
+                    <span className="h-px flex-1 bg-gray-200" />
+                  </div>
+
+
+                  <div className="mt-6">{renderedProviders}</div>
+                </div>
+              </div>
+            )}
+
+
+          </div>
+        </div>
       </section>
+
+    
 
       {/* // mobile view  */}
       <section className="sm:hidden  font-montserrat  min-h-screen bg-linear-to-b from-[#0222D7] to-[#000D56] flex flex-col text-white ">
@@ -297,7 +747,7 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
         <div className="flex flex-col w-full h-[234px] p-4 pt-10 ">
           <div className="flex h-11 w-full pt-4 ">
             <div
-              onClick={() => router.replace("/")}
+              onClick={handleBackClick} 
               className=" h-full w-11 p-2.5 "
             >
               <ChevronLeft className="h-6 w-6" />
@@ -340,7 +790,7 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
                 <form className="mt-6  space-y-6" onSubmit={handleSubmit}>
                   <div className="pb-[116px]  ">
                     {/* OTP INPUT BOXES */}
-                    <div className="flex justify-start gap-3 mt-6 mb-0">
+                    <div className="flex justify-start gap-3 mt-6  text-black mb-0">
                       {[0, 1, 2, 3, 4, 5].map((i) => (
                         <input
                           key={i}
@@ -350,7 +800,7 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
                           type="text"
                           inputMode="numeric"
                           maxLength={1}
-                          value={formData.otpvalue[i] || ""}
+                          value={formData.otpvalue?.[i] || ""}
                           onChange={(e) => {
                             handleOtpChange(i, e.target.value);
 
@@ -363,7 +813,7 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
                             // move back on backspace
                             if (
                               e.key === "Backspace" &&
-                              !formData.otpvalue[i] &&
+                              !formData.otpvalue?.[i] &&
                               i > 0
                             ) {
                               otpRefs.current[i - 1]?.focus();
@@ -371,13 +821,19 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
                           }}
                           className={`
                             w-12 h-12 text-center text-lg font-semibold rounded-2
-                            border
+                            border text-black
                             ${
-                              formData.otpvalue[i]
+                              otpError
+                                ? "border-red-500"
+                                : formData.otpvalue?.[i]
                                 ? "border-green-500"
                                 : "border-gray-300"
                             }
-                            focus:outline-none focus:ring-2 focus:ring-green-500
+                            focus:outline-none focus:ring-2 ${
+                              otpError
+                                ? "focus:ring-red-500"
+                                : "focus:ring-green-500"
+                            }
                           `}
                         />
                       ))}
@@ -407,7 +863,7 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
                   <div>
                     <button
                       type="submit"
-                      disabled={isLoading || !formData.otpvalue}
+                      disabled={isLoading || formData.otpvalue?.length !== 6}
                       className={`w-full rounded-[30px] py-3 text-base font-semibold  text-[18px]   flex items-center justify-center bg-[#EEEEEE] text-[#B0B1B3]
                     disabled:bg-[#EEEEEE] disabled:opacity-60 disabled:cursor-not-allowed
                     enabled:bg-[#0222D7] enabled:text-white transition-colors duration-300 ease-in-out
@@ -434,71 +890,66 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
 
                 <form className="mt-6 space-y-6" onSubmit={handleotp}>
                   <div className="relative w-full">
-  <input
-    type="text"
-    id="fullName"
-    className="
-      peer
-      w-full h-[55px]
-      rounded-[30px]
-      border border-gray-300
-      focus:border-[#0222D7]
-      bg-white
-      px-5 py-3
-      text-[18px] text-[#000]
-      outline-none
-      focus:ring-0
-    "
-  />
+                    <input
+                      type="text"
+                      id="fullName"
+                      placeholder=" "
+                      value={formData.username}
+                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                      className="
+                        peer
+                        w-full h-[55px]
+                        rounded-[30px]
+                        border border-gray-300
+                        bg-white
+                        px-5 py-3
+                        text-[18px] text-black
+                        outline-none
+                        focus:ring-0
 
-  <label
-  htmlFor="fullName"
-  className="
-    absolute left-5
-    top-[-10px]
-    bg-white px-2
-    text-[16px]
-    text-gray-300
-    peer-focus:text-[#0222D7]
-    transition-colors duration-200
-    pointer-events-none
-  "
->
-  Full name
-</label>
+                        focus:border-[#0222D7]
+                        
+                        not-placeholder-shown:border-[#0222D7]
+                      "
+                    />
 
-</div>
+                    <label
+                      htmlFor="fullName"
+                      className="
+                      absolute left-5
+                      -top-2.5
+                      bg-white px-2
+                      text-[16px]
+                      text-gray-300
+                      transition-colors duration-200
+                      pointer-events-none
 
+                      peer-focus:text-[#0222D7]
+                      peer-not-placeholder-shown:text-[#0222D7]
+                    "
+                    >
+                      Full name
+                    </label>
+                  </div>
 
-                  <label className="block">
+                  <label className="block relative group ">
+                    {/* Smartphone Icon */}
+                    <span className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 transition-colors duration-200 group-focus-within:text-[#0222D7]">
+                      <Smartphone size={18} />
+                    </span>
+
                     <input
                       type="tel"
                       name="contactNumber"
                       value={formData.contactNumber}
-                      placeholder="+91 Mobile Number"
+                      placeholder="Enter mobile number"
                       required
                       disabled={isLoading}
-                      onFocus={() => {
-                        if (!formData.contactNumber) {
-                          setFormData((prev) => ({
-                            ...prev,
-                            contactNumber: "+91 ",
-                          }));
-                        }
-                      }}
-                      onBlur={() => {
-                        if (formData.contactNumber === "+91 ") {
-                          setFormData((prev) => ({
-                            ...prev,
-                            contactNumber: "",
-                          }));
-                        }
-                      }}
                       onChange={handleInputChange}
                       className="
                         w-full h-[53px] text-[18px] rounded-[30px]
                         border border-gray-200 bg-gray-50
-                        py-3 pl-6 pr-4 text-base text-[#000000]
+                        py-3 pl-12 pr-4 text-base text-[#000000]
                         outline-none transition
                         hover:border-[#0222D7]
                         focus:border-[#0222D7] focus:bg-white
@@ -509,7 +960,7 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
 
                   <button
                     type="submit"
-                    disabled={isLoading || !formData.contactNumber}
+                    disabled={isLoading || buttonDisabled}
                     className={`w-full rounded-[30px] py-3 text-base font-semibold  text-[18px]   flex items-center justify-center bg-[#EEEEEE] text-[#B0B1B3]
                     disabled:bg-[#EEEEEE] disabled:opacity-60 disabled:cursor-not-allowed
                     enabled:bg-[#0222D7] enabled:text-white transition-colors duration-300 ease-in-out
@@ -539,6 +990,8 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
               </div>
             </div>
           )}
+
+          
         </div>
       </section>
     </>

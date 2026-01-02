@@ -5,6 +5,14 @@
   "main": "demoserver.js",
   "scripts": {
     "test": "cross-env NODE_ENV=test jest --runInBand --detectOpenHandles --forceExit",
+    "test:coverage": "cross-env NODE_ENV=test jest --runInBand --detectOpenHandles --forceExit --coverage",
+    "test:ci": "cross-env NODE_ENV=test CI=true jest --runInBand --detectOpenHandles --forceExit --coverage --coverageReporters=lcov --coverageReporters=text-summary",
+    "test:payment": "cross-env NODE_ENV=test jest --runInBand --detectOpenHandles --forceExit --testPathPattern=payment --coverage",
+    "test:unit": "cross-env NODE_ENV=test jest --runInBand --detectOpenHandles --forceExit --testPathPattern=unit",
+    "test:integration": "cross-env NODE_ENV=test jest --runInBand --detectOpenHandles --forceExit --testPathPattern=integration",
+    "test:e2e": "cross-env NODE_ENV=test jest --runInBand --detectOpenHandles --forceExit --testPathPattern=e2e",
+    "test:watch": "cross-env NODE_ENV=test jest --watch",
+    "test:verbose": "cross-env NODE_ENV=test jest --runInBand --detectOpenHandles --forceExit --verbose --coverage",
     "dev": "cross-env NODE_ENV=development nodemon server.js",
     "start": "cross-env NODE_ENV=production node server.js"
   },
@@ -30,7 +38,7 @@
     "express-rate-limit": "^8.0.1",
     "express-validator": "^7.2.1",
     "helmet": "^8.1.0",
-    "ioredis": "^5.7.0",
+    "ioredis": "^5.8.2",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.542.0",
     "mongodb": "^6.18.0",

@@ -10,6 +10,7 @@ const config: Config = {
     extend: {
       fontFamily: {
         roobert: ['"Roobert TRIAL"', "sans-serif"],
+        maven: ['var(--font-maven-pro)'],
       },
     },
   },

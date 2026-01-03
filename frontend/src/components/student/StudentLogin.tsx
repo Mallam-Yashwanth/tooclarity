@@ -235,7 +235,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess }) => {
      
       clearOtpState();
       toast.success("Login successful!");
-      router.replace("/student/dashboard");
+      router.replace("/dashboard");
       } else {
         setotpError(true);
         setFormData((prev) => ({

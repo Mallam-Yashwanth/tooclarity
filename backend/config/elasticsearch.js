@@ -1,5 +1,5 @@
 // backend/config/elasticsearch.js
-require('dotenv').config({ path: './.env.production' });
+require('dotenv').config({ path: './.env.development' });
 const { Client } = require('@elastic/elasticsearch');
 const logger = require('./logger');
 

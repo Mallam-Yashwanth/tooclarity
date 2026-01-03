@@ -108,10 +108,50 @@
   --sidebar-primary: oklch(0.488 0.243 264.376);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 }
+
+/* ===== VIEWPORT AND BODY RESET TO FIX BACKGROUND LINES ===== */
+
+/* Fix default margins and padding on html and body */
+html {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  /* Remove default scrollbar appearance */
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  min-height: 100dvh; /* Dynamic viewport height for mobile */
+  overflow-x: hidden;
+  /* Ensure full background coverage */
+  background: #000;
+}
+
+/* Fix for mobile viewport units */
+@supports (height: 100dvh) {
+  body {
+    min-height: 100dvh;
+  }
+}
+
+/* Remove default scrollbar but keep functionality */
+html {
+  scrollbar-width: none; /* Firefox */
+}
+
+html::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* ===== DIALOG AND COMPONENT FIXES ===== */
+
 /* Center DialogContent globally */
 [data-radix-dialog-content] {
   position: fixed !important;
@@ -130,6 +170,7 @@
   display: none; /* Chrome, Safari, Opera */
 }
 
+/* ===== BASE STYLES ===== */
 
 @layer base {
   * {
@@ -140,10 +181,11 @@
   }
 }
 
+/* ===== FONTS ===== */
+
 @font-face {
   font-family: "Roobert TRIAL";
   src: url("/fonts/RoobertTrial/RoobertTrial-Regular.woff") format("truetype");
   font-weight: 750;
   font-style: normal;
 }
-

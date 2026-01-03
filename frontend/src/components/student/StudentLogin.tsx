@@ -303,7 +303,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess }) => {
     try {
       // call api to resend otp
       
-       const response = await login(formData);
+       const response = await authAPI.resendOTP(formData);
       
       if (!response) {
         toast.error(error as string);

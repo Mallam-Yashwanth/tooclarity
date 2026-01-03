@@ -19,7 +19,7 @@ function timeAgo(ts: number): string {
   const date = new Date(ts);
   return date.toLocaleDateString();
 }
-
+ 
 export default function NotificationsPage() {
   const router = useRouter();
   const [filter, setFilter] = React.useState<"all" | "unread">("all");

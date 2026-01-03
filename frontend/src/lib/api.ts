@@ -354,6 +354,20 @@ export const institutionAPI = {
       body: formData,
     });
   },
+
+  
+  saveL1Details: async (formData: any, logoUrl: string): Promise<ApiResponse> => {
+    const payload = {
+      ...formData,
+      logoUrl: logoUrl,
+    };
+
+    // Use the base apiRequest helper
+    return apiRequest("/v1/institutions", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
 };
 
 
@@ -1015,6 +1029,10 @@ export const programsAPI = {
     const res = await apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses/summary/metrics/institution-admin/series?${qs}`, { method: 'GET' });
     programsCache.set(cacheKey, { data: res, timestamp: Date.now() });
     return res;
+  },
+
+  getInstitutionDetails: async (institutionId: string): Promise<ApiResponse> => {
+    return apiRequest(`/v1/institutions/${institutionId}`, { method: 'GET' });
   },
   subscriptionHistory: async (institutionId: string): Promise<ApiResponse> => {
     // Use unified institutions scope with single controller/routes; fallback safe

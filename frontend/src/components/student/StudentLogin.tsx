@@ -78,40 +78,9 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess }) => {
   const desktopOtpRefs = useRef<HTMLInputElement[]>([]);
   const [buttonDisabled, setButtonDisabled] = useState(true);
 
-  // take from localstorage if otp send already
-  useEffect(() => {
-    const sendOtp = localStorage.getItem("sendOtp");
-    const otpTime = localStorage.getItem("otpTime");
-    console.log("sendOtp", sendOtp, otpTime);
 
-    if (sendOtp && otpTime) {
-      const FIVETEEN_MIN = 15 * 60 * 1000;
-      const expired = Date.now() - Number(otpTime) > FIVETEEN_MIN;
 
-      if (expired) {
-        clearOtpState();
-      } else {
-        setotpSend(true);
-        formData.contactNumber = localStorage.getItem("phone") || "";
-      }
-    }
-  }, []);
-
-  // delete otp state from localstorage
-  const clearOtpState = () => {
-    localStorage.removeItem("phone");
-    localStorage.removeItem("sendOtp");
-    localStorage.removeItem("otpTime");
-
-    setotpSend(false);
-    formData.contactNumber = "";
-
-    console.log(
-      "cleared otp state",
-      localStorage.getItem("sendOtp"),
-      localStorage.getItem("otpTime")
-    );
-  };
+  
 
   // Load Google Script
   React.useEffect(() => {
@@ -200,9 +169,9 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess }) => {
       [name]: value,
     }));
     const phone = formData.contactNumber?.trim() || "";
-    // if(phone?.length ===10){
-    //   setButtonDisabled(false);
-    // }else setButtonDisabled(true);
+    if (phone?.length === 9) {
+      setButtonDisabled(false);
+    } else setButtonDisabled(true);
 
     // Clear error when user starts typing
     if (error) setError(null);
@@ -233,7 +202,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess }) => {
         await refreshUser();
 
      
-      clearOtpState();
+      
       toast.success("Login successful!");
       router.replace("/dashboard");
       } else {
@@ -291,7 +260,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess }) => {
         return;
       }
 
-    // setotpSend(true);
+    setotpSend(true);
     
 
     setIsLoading(true);
@@ -314,11 +283,9 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess }) => {
 
       toast.success("OTP sent successfully");
       setotpSend(true);
-      localStorage.setItem("phone", formData.contactNumber || "");
-      localStorage.setItem("sendOtp", "true");
-      localStorage.setItem("otpTime", Date.now().toString());
+      
     } catch (error) {
-      console.error("Login error:", error);
+    
       toast.error(error as string);
       setButtonDisabled(true);
       setError("An error occurred during login. Please try again.");
@@ -445,14 +412,10 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess }) => {
 
   
   const handleBackClick = () => {
-    if (otpSend) {
-      clearOtpState();
-    } else {
-      // Normal back navigation
+    
       router.replace("/");
-    }
+    
   };
-
   return (
     <>
       {/* // desktop view  */}

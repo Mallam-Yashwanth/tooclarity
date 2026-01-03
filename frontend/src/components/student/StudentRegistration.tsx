@@ -59,7 +59,7 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [otpSend, setotpSend] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [otpError, setotpError] = useState(false);
   const [otpTimer, setOtpTimer] = useState(30);
   const desktopOtpRefs = useRef<HTMLInputElement[]>([]);
@@ -67,43 +67,9 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
   const [buttonDisabled, setButtonDisabled] = useState(true);
 
 
-  // take from localstorage if otp send already
-    useEffect(() => {
-      setIsLoading(true);
-      const sendOtp = localStorage.getItem("sendOtp");
-      const otpTime = localStorage.getItem("otpTime");
-      console.log("sendOtp", sendOtp, otpTime);
   
-      if (sendOtp && otpTime) {
-        const FIVETEEN_MIN = 15 * 60 * 1000;
-        const expired = Date.now() - Number(otpTime) > FIVETEEN_MIN;
   
-        if (expired) {
-          clearOtpState();
-        } else {
-          setotpSend(true);
-          formData.contactNumber = localStorage.getItem("phone") || "";
-        }
-      }
-
-      setIsLoading(false);
-    }, []);
-  
-    // delete otp state from localstorage
-    const clearOtpState = () => {
-      localStorage.removeItem("phone");
-      localStorage.removeItem("sendOtp");
-      localStorage.removeItem("otpTime");
-  
-      setotpSend(false);
-      formData.contactNumber = "";
-  
-      console.log(
-        "cleared otp state",
-        localStorage.getItem("sendOtp"),
-        localStorage.getItem("otpTime")
-      );
-    };
+    
 
 
   const handleRegisterSuccess = useCallback(async () => {
@@ -199,11 +165,12 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
 
     setIsLoading(true);
     try {
-      const response = await authAPI.signUp({
-        contactNumber: formData.contactNumber,
-        password: formData.username,
-        type: "student",
-      });
+      
+      const response = await authAPI.verifyOTP({
+              otp: formData.otpvalue || "",
+              contactNumber: formData.contactNumber || "",
+              isLogin: false,
+            });
 
       if (!response.success) {
         setotpError(true);
@@ -211,8 +178,6 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
         return setFormError(response.message || "Registration failed.");
       }
 
-      
-      clearOtpState();
       toast.success("Registration successful!");
       router.replace("/student/dashboard");
     } catch (err) {
@@ -242,19 +207,19 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
       return;
     }
 
-    // setotpSend(true);
+    
 
     setIsLoading(true);
     setFormError(null);
 
     try {
        
-      const response = await authAPI.verifyOTP({
-              otp: formData.otpvalue || "",
-              contactNumber: formData.contactNumber || "",
-              isLogin: false,
-            });
-
+      
+      const response = await authAPI.signUp({
+        contactNumber: formData.contactNumber,
+        password: formData.username,
+        type: "student",
+      });
       if (!response.success) {
         toast.error(response.message || "Registration failed.");
         return setFormError(response.message || "Registration failed.");
@@ -264,14 +229,11 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
       
       toast.success("OTP sent successfully");
       setotpSend(true);
-      localStorage.setItem("phone", formData.contactNumber || "");
-      localStorage.setItem("sendOtp", "true");
-      localStorage.setItem("otpTime", Date.now().toString());
+    
    
     } catch (err) {
     
       setButtonDisabled(true);
-      console.error("Registration error:", err);
       toast.error("Unexpected error. Please try again.");
       setFormError("Unexpected error. Please try again.");
     
@@ -387,12 +349,10 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
   }, [otpSend]);
 
    const handleBackClick = () => {
-    if (otpSend) {
-      clearOtpState();
-    } else {
+   
       // Normal back navigation
       router.replace("/");
-    }
+    
   };
 
   return (

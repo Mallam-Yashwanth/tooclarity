@@ -179,7 +179,7 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
       }
 
       toast.success("Registration successful!");
-      router.replace("/student/dashboard");
+      router.replace("/student/onboarding");
     } catch (err) {
       setFormData((prev) => ({
           ...prev,
@@ -217,7 +217,7 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
       
       const response = await authAPI.signUp({
         contactNumber: formData.contactNumber,
-        password: formData.username,
+        name: formData.username,
         type: "student",
       });
       if (!response.success) {
@@ -251,7 +251,7 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
       try {
         // call api to resend otp
         
-         const response = await login(formData);
+         const response = await authAPI.resendOTP(formData);
         
         if (!response) {
           toast.error("An error occurred during login. Please try again.");

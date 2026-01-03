@@ -131,7 +131,7 @@ body {
   min-height: 100dvh; /* Dynamic viewport height for mobile */
   overflow-x: hidden;
   /* Ensure full background coverage */
-  background: #000;
+  /* background: #000; */
 }
 
 /* Fix for mobile viewport units */

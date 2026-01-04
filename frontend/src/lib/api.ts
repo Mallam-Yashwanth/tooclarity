@@ -354,7 +354,8 @@ export const institutionAPI = {
     });
   },
 
-  
+
+
   saveL1Details: async (formData: any, logoUrl: string): Promise<ApiResponse> => {
     const payload = {
       ...formData,
@@ -630,25 +631,29 @@ export const branchAPI = {
 
   // Update branch
   updateBranch: async (
-    branchId: number,
-    branchData: Partial<BranchData>
+    branchId: string,
+    branchData: Partial<BranchData>,
+    institutionId : string,
   ): Promise<ApiResponse> => {
-    return apiRequest(`/v1/branches/${branchId}`, {
+    return apiRequest(`/v1/institutions/${institutionId}/branches/${branchId}`, {
       method: "PUT",
       body: JSON.stringify(branchData),
     });
   },
 
   // Get branches
-  getBranches: async (): Promise<ApiResponse> => {
-    return apiRequest("/v1/branches", {
+  getBranches: async (institutionId: string): Promise<ApiResponse> => {
+    return apiRequest("/v1/institutions/${institutionId}/branches", {
       method: "GET",
     });
   },
 
   // Delete branch
-  deleteBranch: async (branchId: number): Promise<ApiResponse> => {
-    return apiRequest(`/v1/branches/${branchId}`, {
+  deleteBranch: async (
+    branchId: number,
+    institutionId :string
+  ): Promise<ApiResponse> => {
+    return apiRequest(`/v1/institutions/${institutionId}/branches/${branchId}`, {
       method: "DELETE",
     });
   },

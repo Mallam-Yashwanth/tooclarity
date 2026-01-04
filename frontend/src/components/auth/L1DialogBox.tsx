@@ -370,7 +370,7 @@ export default function L1DialogBox({
 
   } catch (error) {
     console.error("Error:", error);
-    toast.error("Failed to save institution. Please try again.");
+    toast.error("Something went wrong.");
   } finally {
     setIsLoading(false);
   }

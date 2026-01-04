@@ -133,7 +133,7 @@ exports.getBranchById = asyncHandler(async (req, res, next) => {
 exports.updateBranch = asyncHandler(async (req, res, next) => {
   const { institutionId, branchId } = req.params;
 
-  await checkOwnership(institutionId, req.user.id);
+  await checkOwnership(institutionId, req.userId);
 
   let branch = await Branch.findById(branchId);
 
@@ -164,7 +164,7 @@ exports.deleteBranch = asyncHandler(async (req, res, next) => {
   const { institutionId, branchId } = req.params;
 
   // Authorization Check
-  await checkOwnership(institutionId, req.user.id);
+  await checkOwnership(institutionId, req.userId);
 
   const branch = await Branch.findById(branchId);
 
@@ -177,7 +177,7 @@ exports.deleteBranch = asyncHandler(async (req, res, next) => {
     );
   }
 
-  await branch.remove();
+  await branch.deleteOne();
 
   res.status(204).json({
     success: true,

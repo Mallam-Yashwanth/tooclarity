@@ -298,58 +298,206 @@ const checkOwnership = async (institutionId, userId) => {
 };
 
 exports.createCourse = asyncHandler(async (req, res, next) => {
-  const { institutionId } = req.params;
+  const userId = req.userId;
+  const { courses } = req.body;
 
-  // Ensure the user owns the institution
-  await checkOwnership(institutionId, req.userId);
-
-  const { courses, totalCourses } = req.body;
-
-  if (!totalCourses || !Array.isArray(courses) || courses.length < 1) {
+  if (!Array.isArray(courses) || courses.length === 0) {
     return next(new AppError("No courses provided", 400));
   }
 
-  // Add institutionId and defaults to each course object
-  const coursesToInsert = courses.map((course) => ({
-    ...course,
-    institution: institutionId,
-    image: course.image || "",
-    brochure: course.brochure || "",
-  }));
+  const pipeline = [
+    // 1️⃣ Match institute admin
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(userId),
+        role: "INSTITUTE_ADMIN",
+      },
+    },
 
-  // Insert all courses at once
-  const createdCourses = await Course.insertMany(coursesToInsert);
+    // 2️⃣ Convert input courses array into documents
+    {
+      $project: {
+        courses: {
+          $map: {
+            input: courses,
+            as: "course",
+            in: {
+              $mergeObjects: [
+                "$$course",
+                {
+                  institution: "$institution",
+                  status: "Inactive",
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+
+    // 3️⃣ Unwind courses → one document per course
+    { $unwind: "$courses" },
+
+    // 4️⃣ Lookup branch if branchName exists
+    {
+      $lookup: {
+        from: "branches",
+        let: {
+          branchName: "$courses.branchName",
+          institutionId: "$courses.institution",
+        },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$branchName", "$$branchName"] },
+                  { $eq: ["$institution", "$$institutionId"] },
+                ],
+              },
+            },
+          },
+          { $project: { _id: 1 } },
+        ],
+        as: "branchData",
+      },
+    },
+
+    // 5️⃣ Attach branch ObjectId (if found)
+    {
+      $addFields: {
+        "courses.branch": {
+          $cond: {
+            if: { $gt: [{ $size: "$branchData" }, 0] },
+            then: { $arrayElemAt: ["$branchData._id", 0] },
+            else: null,
+          },
+        },
+      },
+    },
+
+    // 6️⃣ Cleanup temporary fields
+    {
+      $project: {
+        branchData: 0,
+      },
+    },
+
+    // 7️⃣ Replace root with final course object
+    {
+      $replaceRoot: {
+        newRoot: "$courses",
+      },
+    },
+
+    // 8️⃣ Insert into courses collection
+    {
+      $merge: {
+        into: "courses",
+        whenMatched: "fail",
+        whenNotMatched: "insert",
+      },
+    },
+  ];
+
+  await InstituteAdminModel.aggregate(pipeline);
 
   res.status(201).json({
     success: true,
-    count: createdCourses.length,
-    data: createdCourses,
+    message: "Courses created successfully",
+    count: courses.length,
   });
 });
 
 exports.getAllCoursesForInstitution = asyncHandler(async (req, res, next) => {
-  const { institutionId } = req.params;
-
-  await checkOwnership(institutionId, req.userId);
+  const userId = req.userId;
 
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
   const skip = (page - 1) * limit;
 
-  const q = { institution: institutionId };
-  if (req.query.type) {
-    q.type = req.query.type; // optional filter by type: 'PROGRAM' | 'COURSE'
+  const pipeline = [
+    // 1️⃣ Match institute admin
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(userId),
+        role: "INSTITUTE_ADMIN",
+      },
+    },
+
+    // 2️⃣ SINGLE lookup with facet
+    {
+      $lookup: {
+        from: "courses",
+        let: { institutionId: "$institution" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $eq: ["$institution", "$$institutionId"],
+              },
+            },
+          },
+
+          // Optional: only active courses
+          // { $match: { status: "Active" } },
+
+          {
+            $facet: {
+              data: [
+                { $sort: { createdAt: -1 } },
+                { $skip: skip },
+                { $limit: limit },
+              ],
+              totalCount: [
+                { $count: "count" },
+              ],
+            },
+          },
+        ],
+        as: "coursesResult",
+      },
+    },
+
+    // 3️⃣ Flatten result
+    {
+      $project: {
+        courses: {
+          $ifNull: [
+            { $arrayElemAt: ["$coursesResult.data", 0] },
+            [],
+          ],
+        },
+        total: {
+          $ifNull: [
+            { $arrayElemAt: ["$coursesResult.totalCount.count", 0] },
+            0,
+          ],
+        },
+      },
+    },
+  ];
+
+  const result = await InstituteAdminModel.aggregate(pipeline);
+
+  if (!result.length) {
+    return res.status(403).json({
+      success: false,
+      message: "Unauthorized or institute admin not found",
+    });
   }
-  const courses = await Course.find(q).skip(skip).limit(limit);
-  const totalCourses = await Course.countDocuments(q);
+
+  const { courses, total } = result[0];
 
   res.status(200).json({
     success: true,
     count: courses.length,
     pagination: {
-      total: totalCourses,
+      total,
       page,
-      pages: Math.ceil(totalCourses / limit),
+      pages: Math.ceil(total / limit),
     },
     data: courses,
   });

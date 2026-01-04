@@ -45,17 +45,7 @@ export default function SignupPage() {
     }
 
     //  AUTOMATIC REDIRECT IF INSTITUTION RECORD EXISTS ---
-    if (inst && inst._id) {
-      console.log("Institution record found. Skipping L1 and moving to Dashboard.");
-      
-      // Update local state so guards allow entry
-      if (updateUser && (!user?.isProfileCompleted)) {
-      updateUser({ isProfileCompleted: true});
-    }
-      
-      router.replace("/dashboard");
-      return;
-    }
+    
 
     // If allowed (INSTITUTE_ADMIN with both flags false), stay on this page
     if (isAllowed) {

@@ -19,16 +19,12 @@ const App = () => {
 
     // Redirect rules for INSTITUTE_ADMIN
     if (user.role === "INSTITUTE_ADMIN") {
-      if (user.isPaymentDone === true && user.isProfileCompleted === true) {
+      if (user.isProfileCompleted === true) {
         router.replace("/dashboard");
         return;
       }
-      if (user.isPaymentDone === false && user.isProfileCompleted == false) {
+      if (user.isProfileCompleted == false) {
         router.replace("/signup");
-        return;
-      }
-      if (user.isPaymentDone === false && user.isProfileCompleted === true) {
-        router.replace("/payment");
         return;
       }
     }

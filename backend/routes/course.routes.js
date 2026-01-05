@@ -12,6 +12,11 @@ router.route('/')
     )
     .get(courseController.getAllCoursesForInstitution);
 
+router.route('/create')
+    .post(
+        courseController.createCourse
+    )
+
 
 router.get('/search', courseController.searchCourses);
 

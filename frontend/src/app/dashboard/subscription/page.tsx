@@ -576,6 +576,7 @@ function ProgramsPage() {
                     initialSection={addInlineMode==='course' ? 'course' : 'branch'}
                     mode={addInlineMode==='course' ? 'subscriptionProgram' : 'default'}
                     institutionId={institution?._id}
+                    institutionType={institution?.institutionType}
                     onSuccess={()=>{ onL2Success(); setAddInlineMode('none'); }}
                     onPrevious={()=> setAddInlineMode('none')}
                   />

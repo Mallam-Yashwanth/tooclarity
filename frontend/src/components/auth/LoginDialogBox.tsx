@@ -174,11 +174,8 @@ export default function LoginDialogBox({
                   router.push("/signup");
                   return;
                 }
-                if (!latestUser.isPaymentDone && latestUser.isProfileCompleted) {
-                  router.push("/payment");
-                  return;
-                }
-                if (latestUser.isPaymentDone && latestUser.isProfileCompleted) {
+                
+                if (latestUser.isProfileCompleted) {
                   router.push("/dashboard");
                   return;
                 }
@@ -315,8 +312,7 @@ export default function LoginDialogBox({
         if (onSuccess) return onSuccess();
 
         if (user?.role === "INSTITUTE_ADMIN") {
-          if (!user?.isProfileCompleted && !user?.isPaymentDone) router.push("/signup");
-          else if (user?.isProfileCompleted && !user?.isPaymentDone) router.push("/payment");
+          if (!user?.isProfileCompleted) router.push("/signup"); 
           else router.push("/dashboard");
           toast.success("LoggedIn successfully!");
           return;

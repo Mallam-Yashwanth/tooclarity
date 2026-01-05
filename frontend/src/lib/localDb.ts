@@ -7,13 +7,14 @@ export type CourseRecord = {
   endDate?: string;
   mode?: string;
   priceOfCourse?: string;
-  location?: string;
+  locationURL?: string;
+  town?: string;
   image?: File | null;
-  imageUrl?: string,
-  imagePreviewUrl?: string,
-  brochureUrl?: string,
+  imageUrl?: string;
+  imagePreviewUrl?: string;
+  brochureUrl?: string;
   brochure?: File | null;
-  brochurePreviewUrl?: string,
+  brochurePreviewUrl?: string;
   graduationType?: string;
   streamType?: string;
   selectBranch?: string;
@@ -31,18 +32,18 @@ export type CourseRecord = {
   totalSeats?: string;
   availableSeats?: string;
   pricePerSeat?: string;
-  hasWifi?: boolean;
-  hasChargingPoints?: boolean;
-  hasAC?: boolean;
-  hasPersonalLocker?: boolean;
+  hasWifi?: boolean | string; // Changed to support both L2/L3 types
+  hasChargingPoints?: boolean | string;
+  hasAC?: boolean | string;
+  hasPersonalLocker?: boolean | string;
   tuitionType?: string;
   instructorProfile?: string;
   subject?: string;
-  createdBranch?: string; // optional UI field
+  createdBranch?: string; 
   eligibilityCriteria?: string;
   hallName?: string;
   consultancyName?: string;
-  studentAdmissions?: number;
+  studentAdmissions?: number | string;
   countriesOffered?: string;
   academicOfferings?: string;
   state?: string;
@@ -51,6 +52,50 @@ export type CourseRecord = {
   businessProofUrl?: string;
   panAadhaarUrl?: string;
   panAadhaarPreviewUrl?: string;
+
+  // --- NEW: Merged L3 Institutional Fields ---
+  ownershipType?: string;
+  collegeCategory?: string;
+  affiliationType?: string;
+  placementDrives?: boolean | string;
+  mockInterviews?: boolean | string;
+  resumeBuilding?: boolean | string;
+  linkedinOptimization?: boolean | string;
+  exclusiveJobPortal?: boolean | string;
+  library?: boolean | string;
+  hostelFacility?: boolean | string;
+  entranceExam?: boolean | string;
+  managementQuota?: boolean | string;
+  playground?: boolean | string;
+  busService?: boolean | string;
+  collegeType?: string;
+  curriculumType?: string;
+  otherActivities?: string;
+  certification?: boolean | string;
+  schoolType?: string;
+  schoolCategory?: string;
+  extendedCare?: string;
+  mealsProvided?: string;
+  outdoorPlayArea?: string;
+  emioptions?:string;
+  installments?:string;
+
+  applicationAssistance?: boolean;
+  visaProcessingSupport?: boolean;
+  testOperation?: boolean;
+  preDepartureOrientation?: boolean;
+  accommodationAssistance?: boolean;
+  educationLoans?: boolean;
+  postArrivalSupport?: boolean;
+
+  collegeImageUrl?: string;       
+  centerImageUrl?: string;        
+  consultancyImageUrl?: string; 
+  totalStudentsPlaced?: string | number; 
+  mockTests?: boolean;
+  libraryFacility?: boolean;
+  partTimeHelp?: boolean;
+
 };
 
 export type BranchCoursesRecord = {
@@ -86,6 +131,7 @@ export type InstitutionRecord = {
   additionalContactInfo?: string;
   headquartersAddress?: string;
   state?: string;
+  town?: string;
   pincode?: string;
   locationURL?: string;
   createdAt?: number;

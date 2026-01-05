@@ -2,7 +2,7 @@
 
 import { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import React from "react";
-import { branchAPI, programsAPI } from "@/lib/api";
+import { ApiResponse, branchAPI, courseAPI, programsAPI } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
@@ -363,8 +363,6 @@ export default function L2DialogBox({
     specialization: "",
     year: "",
     studyMaterial:"",
-
-
   };
 
   const isUnderPostGraduate = institutionType === "Under Graduation/Post Graduation";
@@ -438,7 +436,7 @@ export default function L2DialogBox({
       if (key === "kindergartenImageUrl") return ["kindergartenImageUrl", value];
       if (key === "schoolImageUrl") return ["schoolImageUrl", value];
       if (key === "town") return ["town", value];
-      if (key === "locationUrl") return ["locationUrl", value];
+      if (key === "locationURL") return ["locationURL", value];
 
       return [key, value];
     });
@@ -909,18 +907,28 @@ export default function L2DialogBox({
     });
   };
 
-  const handleCourseSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsLoading(true);
+const handleCourseSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
+  setIsLoading(true);
 
-    try {
-      // 2. Perform S3 Uploads FIRST to get the URLs
-      const uploadedCourses = await Promise.all(
-        courses.map(async (course) => {
-          const updated = { ...course };
+  try {
+    /* ----------------------------------------------------
+       1. VALIDATION
+    ---------------------------------------------------- */
+    const validationMessage = validateCourses();
+    if (validationMessage) {
+      toast.error(validationMessage);
+      return;
+    }
 
-          // Helper to handle multiple file types
-          const fileFields: { file: File | null; urlKey: keyof Course }[] = [
+    /* ----------------------------------------------------
+       2. UPLOAD FILES TO S3
+    ---------------------------------------------------- */
+    const uploadedCourses = await Promise.all(
+      courses.map(async (course) => {
+        const updated: Partial<Course> = { ...course };
+
+        const fileFields: { file: File | null; urlKey: keyof Course }[] = [
           { file: course.image, urlKey: "imageUrl" },
           { file: course.brochure, urlKey: "brochureUrl" },
           { file: course.centerImage, urlKey: "centerImageUrl" },
@@ -930,119 +938,76 @@ export default function L2DialogBox({
           { file: course.intermediateImage, urlKey: "intermediateImageUrl" },
         ];
 
-          for (const item of fileFields) {
-          if (item.file instanceof File) {
-            const res = await uploadToS3(item.file) as S3UploadResult;
-            if (res.success && res.fileUrl) {
-              // Properly assign using the keyof Course
-              (updated[item.urlKey] as string) = res.fileUrl;
+        await Promise.all(
+          fileFields.map(async ({ file, urlKey }) => {
+            if (file instanceof File) {
+              try {
+                const res = (await uploadToS3(file)) as S3UploadResult;
+                if (res.success && res.fileUrl) {
+                  (updated[urlKey] as string) = res.fileUrl;
+                }
+              } catch (err) {
+                console.warn(`Failed to upload ${urlKey}:`, err);
+              }
             }
-          }
+          })
+        );
+
+        return updated as Course;
+      })
+    );
+
+    /* ----------------------------------------------------
+       3. ATTACH BRANCH ID
+    ---------------------------------------------------- */
+    const payload = uploadedCourses.map((course) => ({
+      ...course,
+      branchId: course.selectBranch || null,
+    }));
+
+    /* ----------------------------------------------------
+       4. BACKEND API CALL
+    ---------------------------------------------------- */
+    let apiResponse: ApiResponse = { success: false };
+
+    if (editMode) {
+      for (const course of payload) {
+        if (!course.id) continue;
+        try {
+          await courseAPI.updateCourse(course.id, course);
+        } catch (err) {
+          console.error("Failed to update course:", course.id, err);
         }
-          return updated;
-        })
-      );
-
-      setCourses(uploadedCourses);
-      const validationMessage = validateCourses();
-      if (validationMessage) {
-        toast.error(validationMessage);
-        setIsLoading(false);
-        return;
       }
-
-
-      if (isSubscriptionProgram) {
-      if (!institutionId) throw new Error("institutionId required");
-      
-      for (const course of uploadedCourses) {
-        const courseId = (existingCourseData as { _id?: string })?._id;
-        
-        // Structure the payload for the external API
-        const apiPayload = {
-          ...course,
-          institution: institutionId,
-          branch: selectedBranchIdForProgram || null,
-          type: "PROGRAM" as const,
-        };
-
-        editMode && courseId 
-          ? await programsAPI.update(courseId, apiPayload) 
-          : await programsAPI.create(apiPayload);
-      }
-        await persistAdminProgramsToIndexedDb(uploadedCourses);
-        editMode ? onEditSuccess?.() : onSuccess?.();
-        setIsLoading(false);
-        return;
-      }
-
-      const allBranches = await getAllBranchesFromDB();
-      const branchMap = new Map<string, BranchGroup>(
-      allBranches.map((b) => [
-        b.branchName.trim().toLowerCase(),
-        {
-          branchName: b.branchName,
-          branchAddress: b.branchAddress,
-          contactInfo: b.contactInfo,
-          locationUrl: b.locationUrl || "",
-          courses: [], // Typed via BranchGroup interface
-        },
-      ])
-    );
-      const unassigned: import("@/lib/localDb").CourseRecord[] = [];
-
-      uploadedCourses.forEach((c) => {
-      const key = (c.createdBranch || "").trim().toLowerCase();
-      const existingBranch = branchMap.get(key);
-      if (existingBranch) {
-        existingBranch.courses.push(sanitizeCourseForLocalDb(c));
-      } else {
-        unassigned.push(sanitizeCourseForLocalDb(c));
-      }
-    });
-
-      const payload: BranchGroup[] = Array.from(branchMap.values()).filter(
-      (b) => b.courses.length > 0
-    );
-
-      if (unassigned.length > 0) {
-        payload.push({
-          branchName: "Main Institution",
-          branchAddress: "Default",
-          contactInfo: "0000000000",
-          locationUrl: "",
-          courses: unassigned
-        });
-      }
-
-      for (const entry of payload) {
-      const existingGroups = await getCoursesGroupsByBranchName(entry.branchName);
-      if (existingGroups.length > 0) {
-        const currentGroup = existingGroups[0];
-        await updateCoursesGroupInDB({
-          ...currentGroup,
-          ...entry,
-          courses: [...(currentGroup.courses || []), ...entry.courses],
-        });
-      } else {
-        await addCoursesGroupToDB(entry);
-      }
-    }
-
-      const response = (await exportAndUploadInstitutionAndCourses()) as ExportResponse;
-    if (response.success) {
-      router.push("/payment");
+      apiResponse.success = true;
     } else {
-      toast.error(response.message || "Export failed");
+      apiResponse = await courseAPI.createCourses(payload);
     }
 
-      onSuccess?.();
-    } catch (error) {
-      console.error("Error saving:", error);
-    } finally {
-      setIsLoading(false);
+    if (!apiResponse.success) {
+      toast.error(apiResponse.message || "Failed to save courses");
+      return;
     }
-  };
+
+    /* ----------------------------------------------------
+       6. FINAL UI ACTIONS
+    ---------------------------------------------------- */
+    toast.success(editMode ? "Course updated" : "Courses created");
+    editMode ? onEditSuccess?.() : onSuccess?.();
+
+    /* ----------------------------------------------------
+       7. ROUTER NAVIGATION
+    ---------------------------------------------------- */
+    router.push("/dashboard/subscription");
+
+  } catch (error) {
+    console.error("Course submit error:", error);
+    toast.error("Something went wrong while saving courses");
+  } finally {
+    setIsLoading(false);
+  }
+};
+
 
   const handleBranchChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -1173,7 +1138,7 @@ export default function L2DialogBox({
 
   const getRequiredFields = () => {
     // Added "town" and "aboutBranch" to the required list
-    const locationFields = ["state", "district", "town", "locationUrl", "aboutBranch"];
+    const locationFields = ["state", "district", "town", "locationURL", "aboutBranch"];
     const coachingCommon = ["categoriesType", "domainType", "subDomainType", "courseName", "courseDuration", "startDate", "priceOfCourse", "installments", "emioptions"];
 
     switch (true) {
@@ -1406,3 +1371,23 @@ export default function L2DialogBox({
     </>
   );
 }
+
+function updateCoursesInIndexedDb(payload: {
+  branchId: string | null; id: number; courseName: string; aboutCourse: string; courseDuration: string; startDate: string; endDate: string; mode: string; priceOfCourse: string; locationURL: string; state: string; district: string; town: string; image: File | null; imageUrl: string; imagePreviewUrl: string; brochureUrl: string; brochurePreviewUrl: string; brochure: File | null; graduationType: string; streamType: string; selectBranch: string; aboutBranch: string; educationType: string; classSize: string; classSizeRatio?: string; categoriesType: string; domainType: string; subDomainType: string; courseHighlights: string; seatingOption: string; openingTime: string; closingTime: string; openingTimePeriod: string; closingTimePeriod: string; hallName?: string; operationalDays: string[]; totalSeats: string; availableSeats: string; pricePerSeat: string; hasWifi: string; hasChargingPoints: string; hasAC: string; hasPersonalLocker: string; eligibilityCriteria: string; tuitionType: string; instructorProfile: string; subject: string; createdBranch: string; consultancyName: string; studentAdmissions: string; countriesOffered: string; academicOfferings: string; businessProof: File | null; businessProofPreviewUrl: string; businessProofUrl: string; panAadhaar: File | null; panAadhaarPreviewUrl: string; panAadhaarUrl: string; consultancyImage: File | null; consultancyImagePreviewUrl: string; consultancyImageUrl?: string; centerImage: File | null; centerImagePreviewUrl: string; centerImageUrl?: string;
+  // --- MERGED L3 FIELDS ---
+  collegeType: string; collegeCategory: string; schoolType: string; curriculumType: string; schoolCategory: string; hostelFacility: string; playground: string; busService: string; otherActivities: string; extendedCare: string; mealsProvided: string; outdoorPlayArea: string; placementDrives: string; mockInterviews: string; resumeBuilding: string; linkedinOptimization: string; exclusiveJobPortal: string; certification: string; ownershipType: string; affiliationType: string; library: string; entranceExam: string; managementQuota: string; applicationAssistance: string; visaProcessingSupport: string; testOperation: string; preDepartureOrientation: string; accommodationAssistance: string; educationLoans: string; postArrivalSupport: string; emioptions: string; installments: string; totalNumberRequires: string | number; totalStudentsPlaced: string | number; highestPackage: string; averagePackage: string; budget: string | number; studentsSent: string | number; partTimeHelp: string; academicDetails: AcademicDetail[]; facultyDetails: FacultyDetail[]; qualification?: string; experience?: string; specialization: string; subjectTeach?: string; monthlyFees?: string | number; classTiming?: string; courselanguage: string; classlanguage: string; mockTests: string; collegeImage: File | null; collegeImagePreviewUrl: string; collegeImageUrl?: string; tuitionImage: File | null; tuitionImagePreviewUrl: string; tuitionImageUrl?: string; partlyPayment: string; kindergartenImage: File | null; kindergartenImagePreviewUrl: string; kindergartenImageUrl?: string; schoolImage: File | null; schoolImagePreviewUrl: string; schoolImageUrl?: string; classType: string; intermediateImage: File | null; // ✅ Unique key for campus photos
+  // ✅ Unique key for campus photos
+  intermediateImagePreviewUrl: string; intermediateImageUrl?: string; year: string; studyMaterial: string;
+}[]) {
+  throw new Error("Function not implemented.");
+}
+function persistCoursesToIndexedDb(payload: {
+  branchId: string | null; id: number; courseName: string; aboutCourse: string; courseDuration: string; startDate: string; endDate: string; mode: string; priceOfCourse: string; locationURL: string; state: string; district: string; town: string; image: File | null; imageUrl: string; imagePreviewUrl: string; brochureUrl: string; brochurePreviewUrl: string; brochure: File | null; graduationType: string; streamType: string; selectBranch: string; aboutBranch: string; educationType: string; classSize: string; classSizeRatio?: string; categoriesType: string; domainType: string; subDomainType: string; courseHighlights: string; seatingOption: string; openingTime: string; closingTime: string; openingTimePeriod: string; closingTimePeriod: string; hallName?: string; operationalDays: string[]; totalSeats: string; availableSeats: string; pricePerSeat: string; hasWifi: string; hasChargingPoints: string; hasAC: string; hasPersonalLocker: string; eligibilityCriteria: string; tuitionType: string; instructorProfile: string; subject: string; createdBranch: string; consultancyName: string; studentAdmissions: string; countriesOffered: string; academicOfferings: string; businessProof: File | null; businessProofPreviewUrl: string; businessProofUrl: string; panAadhaar: File | null; panAadhaarPreviewUrl: string; panAadhaarUrl: string; consultancyImage: File | null; consultancyImagePreviewUrl: string; consultancyImageUrl?: string; centerImage: File | null; centerImagePreviewUrl: string; centerImageUrl?: string;
+  // --- MERGED L3 FIELDS ---
+  collegeType: string; collegeCategory: string; schoolType: string; curriculumType: string; schoolCategory: string; hostelFacility: string; playground: string; busService: string; otherActivities: string; extendedCare: string; mealsProvided: string; outdoorPlayArea: string; placementDrives: string; mockInterviews: string; resumeBuilding: string; linkedinOptimization: string; exclusiveJobPortal: string; certification: string; ownershipType: string; affiliationType: string; library: string; entranceExam: string; managementQuota: string; applicationAssistance: string; visaProcessingSupport: string; testOperation: string; preDepartureOrientation: string; accommodationAssistance: string; educationLoans: string; postArrivalSupport: string; emioptions: string; installments: string; totalNumberRequires: string | number; totalStudentsPlaced: string | number; highestPackage: string; averagePackage: string; budget: string | number; studentsSent: string | number; partTimeHelp: string; academicDetails: AcademicDetail[]; facultyDetails: FacultyDetail[]; qualification?: string; experience?: string; specialization: string; subjectTeach?: string; monthlyFees?: string | number; classTiming?: string; courselanguage: string; classlanguage: string; mockTests: string; collegeImage: File | null; collegeImagePreviewUrl: string; collegeImageUrl?: string; tuitionImage: File | null; tuitionImagePreviewUrl: string; tuitionImageUrl?: string; partlyPayment: string; kindergartenImage: File | null; kindergartenImagePreviewUrl: string; kindergartenImageUrl?: string; schoolImage: File | null; schoolImagePreviewUrl: string; schoolImageUrl?: string; classType: string; intermediateImage: File | null; // ✅ Unique key for campus photos
+  // ✅ Unique key for campus photos
+  intermediateImagePreviewUrl: string; intermediateImageUrl?: string; year: string; studyMaterial: string;
+}[]) {
+  throw new Error("Function not implemented.");
+}
+

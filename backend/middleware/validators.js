@@ -415,9 +415,10 @@ exports.validateL1Creation = [
     .escape(),
 
   // --- Conditional Validation for Approved By ---
-  body('approvedBy')
-    .if(body('instituteType').not().isIn(['Study Halls', 'Study Abroad'])) // Skip for Study Halls and Study Abroad
-    .notEmpty().withMessage('Approved By is required')
+  body("approvedBy")
+    .if(body("instituteType").not().isIn(["Study Halls", "Study Abroad"])) // Skip for Study Halls and Study Abroad
+    .notEmpty()
+    .withMessage("Approved By is required")
     .trim()
     .isLength({ min: 2, max: 100 })
     .withMessage("Approved By must be between 2 and 100 characters")
@@ -428,10 +429,12 @@ exports.validateL1Creation = [
     .escape(),
 
   // --- Conditional Validation for Establishment Date ---
-  body('establishmentDate')
-    .if(body('instituteType').not().isIn(['Study Halls', 'Study Abroad'])) // Skip for Study Halls and Study Abroad
-    .notEmpty().withMessage('Establishment Date is required')
-    .isISO8601().withMessage('Must be a valid date')
+  body("establishmentDate")
+    .if(body("instituteType").not().isIn(["Study Halls", "Study Abroad"])) // Skip for Study Halls and Study Abroad
+    .notEmpty()
+    .withMessage("Establishment Date is required")
+    .isISO8601()
+    .withMessage("Must be a valid date")
     .custom((value) => {
       const enteredDate = new Date(value);
       const today = new Date();
@@ -488,7 +491,7 @@ exports.validateL1Creation = [
   // --- Conditional Validation for Logo URL ---
   body("logoUrl")
     .optional({ checkFalsy: true })
-    .if(body('instituteType').not().equals('Study Abroad')) // Skip for Study Abroad
+    .if(body("instituteType").not().equals("Study Abroad")) // Skip for Study Abroad
     .trim()
     .isURL()
     .withMessage("Logo URL must be a valid URL."),
@@ -522,7 +525,7 @@ const l2BranchRules = [
     .matches(/^[0-9]{10}$/)
     .withMessage("A valid 10-digit contact number is required."),
 
-  body("*.locationUrl")
+  body("*.locationURL")
     .if(body("*.branchName").notEmpty()) // The condition
     .trim()
     .notEmpty()
@@ -651,7 +654,7 @@ const l2CoachingCourseRules = [
       "Sports",
       "Music & Dance",
       "Exam Preparation",
-      "Upskilling"
+      "Upskilling",
     ])
     .withMessage("Please select a valid categories type."),
 
@@ -729,7 +732,7 @@ const l2CoachingCourseRules = [
       "Other Vocational Skills",
       "Real Estate",
       "Agriculture & Farming",
-      "Pet Care"
+      "Pet Care",
     ])
     .withMessage("Please select a valid domain type."),
 
@@ -1225,34 +1228,207 @@ const coachingCenterL3Rules = [
 ];
 
 const studyAbroadL3Rules = [
-  body('applicationAssistance')
+  body("applicationAssistance")
     .isBoolean()
-    .withMessage('A selection for Application Assistance is required.'),
+    .withMessage("A selection for Application Assistance is required."),
 
-  body('visaProcessingSupport')
+  body("visaProcessingSupport")
     .isBoolean()
-    .withMessage('A selection for Visa Processing Support is required.'),
+    .withMessage("A selection for Visa Processing Support is required."),
 
-  body('testOperation')
+  body("testOperation")
     .isBoolean()
-    .withMessage('A selection for Test Operation is required.'),
+    .withMessage("A selection for Test Operation is required."),
 
-  body('preDepartureOrientation')
+  body("preDepartureOrientation")
     .isBoolean()
-    .withMessage('A selection for Pre-departure orientation is required.'),
+    .withMessage("A selection for Pre-departure orientation is required."),
 
-  body('accommodationAssistance')
+  body("accommodationAssistance")
     .isBoolean()
-    .withMessage('A selection for Accommodation assistance is required.'),
+    .withMessage("A selection for Accommodation assistance is required."),
 
-  body('educationLoans')
+  body("educationLoans")
     .isBoolean()
-    .withMessage('A selection for Education loans/Financial aid guidance is required.'),
+    .withMessage(
+      "A selection for Education loans/Financial aid guidance is required."
+    ),
 
-  body('postArrivalSupport')
+  body("postArrivalSupport")
     .isBoolean()
-    .withMessage('A selection for Post-arrival support is required.'),
+    .withMessage("A selection for Post-arrival support is required."),
 ];
+
+// exports.validateUploadedFile = async (req, res, next) => {
+//   console.log("\n--- 🚀 [START] Entered validateUploadedFile Middleware ---");
+
+//   if (!req.file) {
+//     console.error("❌ ERROR: No file found on the request.");
+//     return res.status(400).json({ message: "No file was uploaded." });
+//   }
+
+//   try {
+//     const fileContent = req.file.buffer.toString("utf8");
+//     const jsonData = JSON.parse(fileContent);
+//     console.log("Fil data", JSON.stringify(jsonData, null, 2));
+//     if (!jsonData.institution || !jsonData.courses) {
+//       console.error(
+//         "❌ ERROR: JSON must contain 'institution' and 'courses' keys."
+//       );
+//       return res
+//         .status(400)
+//         .json({
+//           message: "File must contain 'institution' and 'courses' properties.",
+//         });
+//     }
+
+//     const { institution, courses } = jsonData;
+
+//     // --- STEP 1: Run L1 Validation ---
+//     console.log("\n🕵️‍♂️ [Step 1] Running L1 Validation...");
+//     req.body = institution;
+//     await Promise.all(
+//       exports.validateL1Creation.slice(0, -1).map((v) => v.run(req))
+//     );
+//     let errors = validationResult(req);
+//     if (!errors.isEmpty()) {
+//       console.error("❌ FAILED: L1 Validation.", errors.array());
+//       return res
+//         .status(422)
+//         .json({ context: "L1 Data Error", errors: errors.array() });
+//     }
+//     console.log("✅ PASSED: L1 Validation.");
+
+//     // --- STEP 2: Run L2 Branch Validation ---
+//     console.log("\n🕵️‍♂️ [Step 2] Running L2 Branch Validation...");
+//     req.body = courses;
+//     await Promise.all(l2BranchRules.map((v) => v.run(req)));
+//     errors = validationResult(req);
+//     if (!errors.isEmpty()) {
+//       console.error("❌ FAILED: L2 Branch Validation.", errors.array());
+//       return res
+//         .status(422)
+//         .json({ context: "L2 Branch Data Error", errors: errors.array() });
+//     }
+//     console.log("✅ PASSED: L2 Branch Validation.");
+
+//     // --- STEP 3: Run L2 Course Validation (Conditionally) ---
+//     console.log(
+//       `\n🕵️‍♂️ [Step 3] Running L2 Course Validation for type: "${institution.instituteType}"...`
+//     );
+//     let courseValidationChain;
+//     switch (institution.instituteType) {
+//       case "Kindergarten/childcare center":
+//       case "School's":
+//       case "Intermediate college(K12)":
+//         courseValidationChain = l2BaseCourseRules;
+//         break;
+//       // ✅ Case added for UG/PG courses
+//       case "Under Graduation/Post Graduation":
+//         courseValidationChain = l2UgPgCourseRules;
+//         break;
+//       // ✅ Case added for Coaching Centers
+//       case "Coaching centers":
+//         courseValidationChain = l2CoachingCourseRules;
+//         break;
+//       // Add other cases here
+//       case "Tution Center's":
+//         courseValidationChain = l2TuitionCourseRules;
+//         break;
+//       case "Study Halls":
+//         courseValidationChain = l2StudyHallRules;
+//         break;
+//       case "Study Abroad":
+//         courseValidationChain = l2StudyAbroadRules;
+//         break;
+//       default:
+//         courseValidationChain = [];
+//     }
+
+//     if (courseValidationChain.length > 0) {
+//       for (const branch of courses) {
+//         for (const course of branch.courses || []) {
+//           req.body = course;
+//           await Promise.all(courseValidationChain.map((v) => v.run(req)));
+//           errors = validationResult(req);
+//           if (!errors.isEmpty()) {
+//             console.error(
+//               `❌ FAILED: L2 Course Validation for course "${course.courseName}".`,
+//               errors.array()
+//             );
+//             return res.status(422).json({
+//               context: "L2 Course Data Error",
+//               branch: branch.branchName,
+//               course: course.courseName,
+//               errors: errors.array(),
+//             });
+//           }
+//         }
+//       }
+//     }
+//     console.log("✅ PASSED: L2 Course Validation.");
+
+//     // --- STEP 4: Run L3 Validation (Conditionally) ---
+//     console.log(
+//       `\n🕵️‍♂️ [Step 4] Running L3 Details Validation for type: "${institution.instituteType}"...`
+//     );
+//     req.body = institution; // Set body back to institution data
+//     let l3ValidationChain;
+//     switch (institution.instituteType) {
+//       case "Kindergarten/childcare center":
+//         l3ValidationChain = kindergartenL3Rules;
+//         break;
+//       // ✅ Case added for School's
+//       case "School's":
+//         l3ValidationChain = schoolL3Rules;
+//         break;
+//       // ✅ Case added for Intermediate College
+//       case "Intermediate college(K12)":
+//         l3ValidationChain = intermediateCollegeL3Rules;
+//         break;
+//       // ✅ Case added for UG/PG
+//       case "Under Graduation/Post Graduation":
+//         l3ValidationChain = ugPgUniversityL3Rules;
+//         break;
+//       // ✅ Case added for Coaching Centers
+//       case 'Coaching centers': l3ValidationChain = coachingCenterL3Rules; break;
+//       // START>>> MODIFICATION
+//       case 'Study Abroad': l3ValidationChain = studyAbroadL3Rules; break;
+//       // END>>> MODIFICATION
+//       default:
+//         l3ValidationChain = [];
+//     }
+
+//     if (l3ValidationChain.length > 0) {
+//       await Promise.all(
+//         l3ValidationChain.map((validation) => validation.run(req))
+//       );
+//       errors = validationResult(req);
+//       if (!errors.isEmpty()) {
+//         console.error("❌ FAILED: L3 Validation.", errors.array());
+//         return res
+//           .status(422)
+//           .json({ context: "L3 Data Error", errors: errors.array() });
+//       }
+//     }
+//     console.log("✅ PASSED: L3 Details Validation.");
+
+//     // --- STEP 5: Success ---
+//     console.log("\n👍 SUCCESS: All validations passed. Moving to controller.");
+//     req.institutionData = institution;
+//     req.coursesData = courses;
+//     next();
+//   } catch (error) {
+//     logger.error(
+//       { error: error.message },
+//       "Error during file upload validation."
+//     );
+//     console.error("🔥 CRITICAL ERROR in validateUploadedFile:", error);
+//     return res
+//       .status(400)
+//       .json({ message: "Invalid JSON format or file structure." });
+//   }
+// };
 
 exports.validateUploadedFile = async (req, res, next) => {
   console.log("\n--- 🚀 [START] Entered validateUploadedFile Middleware ---");
@@ -1265,77 +1441,68 @@ exports.validateUploadedFile = async (req, res, next) => {
   try {
     const fileContent = req.file.buffer.toString("utf8");
     const jsonData = JSON.parse(fileContent);
-    console.log("Fil data", JSON.stringify(jsonData, null, 2));
+
+    console.log("File data:", JSON.stringify(jsonData, null, 2));
+
     if (!jsonData.institution || !jsonData.courses) {
-      console.error(
-        "❌ ERROR: JSON must contain 'institution' and 'courses' keys."
-      );
-      return res
-        .status(400)
-        .json({
-          message: "File must contain 'institution' and 'courses' properties.",
-        });
+      console.error("❌ ERROR: Missing 'institution' or 'courses'.");
+      return res.status(400).json({
+        message: "File must contain 'institution' and 'courses' properties.",
+      });
     }
 
     const { institution, courses } = jsonData;
 
-    // --- STEP 1: Run L1 Validation ---
-    console.log("\n🕵️‍♂️ [Step 1] Running L1 Validation...");
-    req.body = institution;
-    await Promise.all(
-      exports.validateL1Creation.slice(0, -1).map((v) => v.run(req))
-    );
-    let errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      console.error("❌ FAILED: L1 Validation.", errors.array());
-      return res
-        .status(422)
-        .json({ context: "L1 Data Error", errors: errors.array() });
-    }
-    console.log("✅ PASSED: L1 Validation.");
-
-    // --- STEP 2: Run L2 Branch Validation ---
-    console.log("\n🕵️‍♂️ [Step 2] Running L2 Branch Validation...");
+    // --- STEP 1: Run L2 Branch Validation ---
+    console.log("\n🕵️‍♂️ [Step 1] Running L2 Branch Validation...");
     req.body = courses;
+
     await Promise.all(l2BranchRules.map((v) => v.run(req)));
-    errors = validationResult(req);
+    let errors = validationResult(req);
+
     if (!errors.isEmpty()) {
       console.error("❌ FAILED: L2 Branch Validation.", errors.array());
-      return res
-        .status(422)
-        .json({ context: "L2 Branch Data Error", errors: errors.array() });
+      return res.status(422).json({
+        context: "L2 Branch Data Error",
+        errors: errors.array(),
+      });
     }
     console.log("✅ PASSED: L2 Branch Validation.");
 
-    // --- STEP 3: Run L2 Course Validation (Conditionally) ---
+    // --- STEP 2: Run L2 Course Validation (Conditionally) ---
     console.log(
-      `\n🕵️‍♂️ [Step 3] Running L2 Course Validation for type: "${institution.instituteType}"...`
+      `\n🕵️‍♂️ [Step 2] Running L2 Course Validation for type: "${institution.instituteType}"...`
     );
-    let courseValidationChain;
+
+    let courseValidationChain = [];
+
     switch (institution.instituteType) {
       case "Kindergarten/childcare center":
       case "School's":
       case "Intermediate college(K12)":
         courseValidationChain = l2BaseCourseRules;
         break;
-      // ✅ Case added for UG/PG courses
+
       case "Under Graduation/Post Graduation":
         courseValidationChain = l2UgPgCourseRules;
         break;
-      // ✅ Case added for Coaching Centers
+
       case "Coaching centers":
         courseValidationChain = l2CoachingCourseRules;
         break;
-      // Add other cases here
+
       case "Tution Center's":
         courseValidationChain = l2TuitionCourseRules;
         break;
+
       case "Study Halls":
         courseValidationChain = l2StudyHallRules;
         break;
+
       case "Study Abroad":
         courseValidationChain = l2StudyAbroadRules;
         break;
+
       default:
         courseValidationChain = [];
     }
@@ -1344,8 +1511,10 @@ exports.validateUploadedFile = async (req, res, next) => {
       for (const branch of courses) {
         for (const course of branch.courses || []) {
           req.body = course;
+
           await Promise.all(courseValidationChain.map((v) => v.run(req)));
           errors = validationResult(req);
+
           if (!errors.isEmpty()) {
             console.error(
               `❌ FAILED: L2 Course Validation for course "${course.courseName}".`,
@@ -1363,65 +1532,73 @@ exports.validateUploadedFile = async (req, res, next) => {
     }
     console.log("✅ PASSED: L2 Course Validation.");
 
-    // --- STEP 4: Run L3 Validation (Conditionally) ---
+    // --- STEP 3: Run L3 Validation (Conditionally) ---
     console.log(
-      `\n🕵️‍♂️ [Step 4] Running L3 Details Validation for type: "${institution.instituteType}"...`
+      `\n🕵️‍♂️ [Step 3] Running L3 Details Validation for type: "${institution.instituteType}"...`
     );
-    req.body = institution; // Set body back to institution data
-    let l3ValidationChain;
+
+    req.body = institution;
+    let l3ValidationChain = [];
+
     switch (institution.instituteType) {
       case "Kindergarten/childcare center":
         l3ValidationChain = kindergartenL3Rules;
         break;
-      // ✅ Case added for School's
+
       case "School's":
         l3ValidationChain = schoolL3Rules;
         break;
-      // ✅ Case added for Intermediate College
+
       case "Intermediate college(K12)":
         l3ValidationChain = intermediateCollegeL3Rules;
         break;
-      // ✅ Case added for UG/PG
+
       case "Under Graduation/Post Graduation":
         l3ValidationChain = ugPgUniversityL3Rules;
         break;
-      // ✅ Case added for Coaching Centers
-      case 'Coaching centers': l3ValidationChain = coachingCenterL3Rules; break;
-      // START>>> MODIFICATION
-      case 'Study Abroad': l3ValidationChain = studyAbroadL3Rules; break;
-      // END>>> MODIFICATION
+
+      case "Coaching centers":
+        l3ValidationChain = coachingCenterL3Rules;
+        break;
+
+      case "Study Abroad":
+        l3ValidationChain = studyAbroadL3Rules;
+        break;
+
       default:
         l3ValidationChain = [];
     }
 
     if (l3ValidationChain.length > 0) {
-      await Promise.all(
-        l3ValidationChain.map((validation) => validation.run(req))
-      );
+      await Promise.all(l3ValidationChain.map((v) => v.run(req)));
       errors = validationResult(req);
+
       if (!errors.isEmpty()) {
         console.error("❌ FAILED: L3 Validation.", errors.array());
-        return res
-          .status(422)
-          .json({ context: "L3 Data Error", errors: errors.array() });
+        return res.status(422).json({
+          context: "L3 Data Error",
+          errors: errors.array(),
+        });
       }
     }
     console.log("✅ PASSED: L3 Details Validation.");
 
-    // --- STEP 5: Success ---
-    console.log("\n👍 SUCCESS: All validations passed. Moving to controller.");
+    // --- FINAL: Success ---
+    console.log("\n👍 SUCCESS: L2 & L3 validations passed.");
     req.institutionData = institution;
     req.coursesData = courses;
+
     next();
   } catch (error) {
     logger.error(
       { error: error.message },
       "Error during file upload validation."
     );
-    console.error("🔥 CRITICAL ERROR in validateUploadedFile:", error);
-    return res
-      .status(400)
-      .json({ message: "Invalid JSON format or file structure." });
+    console.error("🔥 CRITICAL ERROR:", error);
+
+    return res.status(400).json({
+      message: "Invalid JSON format or file structure.",
+    });
   }
 };
 

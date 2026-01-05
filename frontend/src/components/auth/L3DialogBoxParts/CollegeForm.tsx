@@ -188,7 +188,7 @@ export default function CollegeForm({
 
           <InputField
             label="Location URL"
-            name="locationUrl"
+            name="locationURL"
             value={currentCourse.locationURL || ""}
             onChange={handleCourseChange}
             placeholder="https://maps.app.goo.gl/4mPv8SX6cD52i9B"

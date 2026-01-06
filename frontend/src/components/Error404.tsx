@@ -1,3 +1,5 @@
+"use client"
+
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -7,8 +9,11 @@ import {
   AiOutlineUser,
 } from "react-icons/ai";
 
+import { useRouter } from "next/navigation";
+
 
 const Error404 = () => {
+  const router = useRouter();
   return (
     <>
       {/*desktop */}
@@ -45,13 +50,11 @@ const Error404 = () => {
             <p className="mt-6 text-xl text-gray-600 max-w-md leading-relaxed font-sans">
               Something went wrong, the page you’re looking for is not found.
             </p>
-
-            <Link
-              href="/"
-              className="inline-block mt-8 bg-blue-700 text-white px-8 py-2 rounded-xl font-medium hover:bg-blue-800 transition"
-            >
-              Back to Previous Page
-            </Link>
+            
+            <button onClick={() => router.back()}
+              className="inline-block mt-8 bg-blue-700 text-white px-8 py-2 rounded-xl font-medium hover:bg-blue-800 transition">
+                Back to Previous Page
+            </button>
           </div>
         </div>
           
@@ -97,12 +100,10 @@ const Error404 = () => {
           Something went wrong, the page you’re looking for is not found.
         </p>
 
-        <Link
-          href="/"
-          className="mt-8 bg-blue-700 text-white px-8 py-4 rounded-full font-medium"
-        >
-          Back to Previous Page
-        </Link>
+        <button onClick={() => router.back()}
+          className="mt-8 bg-blue-700 text-white px-8 py-4 rounded-full font-medium">
+            Back to Previous Page
+        </button>
 
         <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
           <div className="flex justify-around items-center h-16">

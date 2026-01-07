@@ -158,14 +158,14 @@ export function Listings() {
       {/* 1. Header */}
       <_Card className="border-none shadow-sm rounded-3xl bg-gray-50 dark:bg-gray-900/50 min-h-[140px] flex items-center">
         <_CardContent className="w-full px-4 sm:px-10">
-          <div className="relative flex flex-col sm:flex-row items-center justify-center">
-            <h1 className="text-xl sm:text-3xl font-bold text-gray-800 dark:text-gray-100 text-center">
-              {isInstLoading ? "..." : (rawInst?.instituteName || "Institution")}
-            </h1>
-            <div className="mt-4 sm:mt-0 sm:absolute sm:right-0 bg-[#0222D7] text-white rounded-xl px-4 py-2 text-xs font-medium">
-              {rawInst?.instituteType || "Education"}
+            <div className="flex flex-row items-center justify-center gap-4">
+                <h1 className="text-xl sm:text-3xl font-bold text-gray-800 dark:text-gray-100">
+                    {isInstLoading ? "..." : (rawInst?.instituteName || "Institution")}
+                </h1>
+               <div className="bg-[#0222D7] text-white rounded-xl px-4 py-2 text-xs font-medium whitespace-nowrap">
+                 {rawInst?.instituteType || "Education"}
+               </div>
             </div>
-          </div>
         </_CardContent>
       </_Card>
 
@@ -191,6 +191,8 @@ export function Listings() {
               initialSection={addInlineMode === 'course' ? 'course' : 'branch'}
               institutionId={inst?._id}
               institutionType={rawInst?.instituteType}
+              mode="subscriptionProgram"
+              adminFlow={true}
               onSuccess={() => {
                 queryClient.invalidateQueries({ queryKey: ['programs-list'] });
                 queryClient.invalidateQueries({ queryKey: ['programs-page-branches'] });
@@ -260,16 +262,44 @@ export function Listings() {
               <div className="max-h-[60vh] overflow-y-auto pr-4 custom-scrollbar">
                 {viewModal.type === 'branch' ? (
                   isEditing ? (
-                    <div className="grid md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <label className="text-sm font-bold">Branch Name</label>
-                        <Input value={editData?.branchName} onChange={e => setEditData({...editData!, branchName: e.target.value})} className="rounded-xl h-12" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-bold">Contact</label>
-                        <Input value={editData?.contactInfo} onChange={e => setEditData({...editData!, contactInfo: e.target.value})} className="rounded-xl h-12" />
-                      </div>
-                    </div>
+                                      <div className="grid md:grid-cols-2 gap-6">
+                                          <div className="space-y-2">
+                                              <label className="text-xs font-bold uppercase text-gray-400">Branch Name</label>
+                                              <Input
+                                                  value={editData?.branchName || ""}
+                                                  onChange={e => setEditData({ ...editData!, branchName: e.target.value })}
+                                                  className="rounded-xl h-12 border-gray-200"
+                                              />
+                                          </div>
+
+                                          <div className="space-y-2">
+                                              <label className="text-xs font-bold uppercase text-gray-400">Contact Number</label>
+                                              <Input
+                                                  value={editData?.contactInfo || ""}
+                                                  onChange={e => setEditData({ ...editData!, contactInfo: e.target.value })}
+                                                  className="rounded-xl h-12 border-gray-200"
+                                              />
+                                          </div>
+
+                                          <div className="space-y-2">
+                                              <label className="text-xs font-bold uppercase text-gray-400">Branch Address</label>
+                                              <Input
+                                                  value={editData?.branchAddress || ""}
+                                                  onChange={e => setEditData({ ...editData!, branchAddress: e.target.value })}
+                                                  className="rounded-xl h-12 border-gray-200"
+                                              />
+                                          </div>
+
+                                          <div className="space-y-2">
+                                              <label className="text-xs font-bold uppercase text-gray-400">Google Maps URL</label>
+                                              <Input
+                                                  value={editData?.locationUrl || ""}
+                                                  onChange={e => setEditData({ ...editData!, locationUrl: e.target.value })}
+                                                  className="rounded-xl h-12 border-gray-200"
+                                                  placeholder="https://goo.gl/maps/..."
+                                              />
+                                          </div>
+                                      </div>
                   ) : (
                     <div className="grid md:grid-cols-2 gap-x-10">
                       <DetailRow label="Branch Name" value={viewModal.data.branchName} />
@@ -302,7 +332,7 @@ export function Listings() {
                 </button>
 
                 {viewModal.type === 'branch' && !isEditing && (
-                  <Button onClick={() => { setEditData(viewModal.data); setIsEditing(true); }} className="w-full sm:w-[200px] h-[48px] bg-blue-600 rounded-xl">Edit Branch</Button>
+                  <Button onClick={() => { setEditData({ ...viewModal.data }); setIsEditing(true); }} className="w-full sm:w-[200px] h-[48px] bg-blue-600 rounded-xl">Edit Branch</Button>
                 )}
                 
                 {isEditing && viewModal.type === 'branch' && (

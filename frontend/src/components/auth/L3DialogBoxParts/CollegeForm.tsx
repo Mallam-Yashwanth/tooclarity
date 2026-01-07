@@ -1,10 +1,9 @@
 "use client";
-import React, { useMemo } from "react";
+import React, {useEffect , useMemo } from "react";
 import { Clock, ChevronDown, Plus, Upload, X, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import InputField from "@/components/ui/InputField";
 import { Course } from "@/components/auth/L2DialogBox";
-import { getMyInstitution } from "@/lib/api";
 import { STATE_DISTRICT_MAP, STATE_OPTIONS } from "@/constants/stateDistricts";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import SlidingIndicator from "@/components/ui/SlidingIndicator";
@@ -22,18 +21,12 @@ interface CollegeFormProps {
   addNewCourse: () => void;
   deleteCourse: (id: number) => void;
   labelVariant?: "course" | "program";
+  uniqueRemoteBranches?: Array<{ _id: string; branchName: string; branchAddress?: string; state?: string; district?: string; town?: string; locationUrl?: string }>;
+  selectedBranchId?: string;
+  isSubscriptionProgram?: boolean;
+
 }
 
-interface InstitutionResponse {
-  data?: {
-    headquartersAddress?: string;
-    state?: string;
-    locationURL?: string;
-  };
-  headquartersAddress?: string;
-  state?: string;
-  locationURL?: string;
-}
 
 export default function CollegeForm({
   currentCourse,
@@ -48,6 +41,9 @@ export default function CollegeForm({
   addNewCourse,
   deleteCourse,
   labelVariant = "course",
+  uniqueRemoteBranches = [],
+  selectedBranchId,
+  isSubscriptionProgram = true,
 }: CollegeFormProps) {
 
   const isProgram = labelVariant === "program";
@@ -58,27 +54,63 @@ export default function CollegeForm({
     setCourses((prev) => prev.map((c) => (c.id === selectedCourseId ? { ...c, [`${name}Period`]: period } : c)));
   };
 
-  const handleRadioChange = async (name: keyof Course, value: string) => {
-    if (name === "createdBranch" && value === "Main") {
-      try {
-         const response = await getMyInstitution() as InstitutionResponse;
-        const mainInst = response?.data || response;
-        if (mainInst) {
-          setCourses((prev) => prev.map((c) => c.id === selectedCourseId ? {
-            ...c,
-            createdBranch: "Main",
-            aboutBranch: mainInst.headquartersAddress || "",
-            state: mainInst.state || "",
-            locationURL: mainInst.locationURL || "",
-            district: c.district || "",
-            town: c.town || "",
-          } : c));
-          return;
-        }
-      } catch (error) { console.error("Autofill failed:", error); }
+ useEffect(() => {
+  if (isSubscriptionProgram && selectedBranchId && currentCourse.createdBranch === "Main") {
+    const branch = uniqueRemoteBranches.find(b => b._id === selectedBranchId);
+    if (branch) {
+      setCourses(prev => prev.map(c => 
+        c.id === selectedCourseId ? {
+          ...c,
+          // Only sync these two specific fields
+          aboutBranch: branch.branchAddress || "",
+          locationURL: branch.locationUrl || "",
+        } : c
+      ));
     }
-    setCourses((prev) => prev.map((c) => (c.id === selectedCourseId ? { ...c, [name]: value } : c)));
-  };
+  }
+}, [selectedBranchId, uniqueRemoteBranches, selectedCourseId, currentCourse.createdBranch, setCourses, isSubscriptionProgram]);
+ 
+   const handleRadioChange = (name: keyof Course, value: string) => {
+  if (name === "createdBranch" && value === "Main") {
+    if (selectedBranchId) {
+      const branch = uniqueRemoteBranches.find((b) => b._id === selectedBranchId);
+      if (branch) {
+        setCourses((prev) =>
+          prev.map((c) =>
+            c.id === selectedCourseId
+              ? {
+                  ...c,
+                  createdBranch: "Main",
+                  // Only pull address and map link
+                  aboutBranch: branch.branchAddress || "",
+                  locationURL: branch.locationUrl || "",
+                }
+              : c
+          )
+        );
+        return;
+      }
+    }
+  }
+
+  setCourses((prev) =>
+    prev.map((c) => {
+      if (c.id === selectedCourseId) {
+        // When switching to "No", only clear the synced fields
+        if (name === "createdBranch" && value === "") {
+          return {
+            ...c,
+            createdBranch: "",
+            aboutBranch: "",
+            locationURL: "",
+          };
+        }
+        return { ...c, [name]: value };
+      }
+      return c;
+    })
+  );
+};
 
   const districtOptions = useMemo(() => {
     if (!currentCourse.state) return [];
@@ -161,87 +193,90 @@ export default function CollegeForm({
 
 
       {/* SECTION 2: LOCATION & ADDRESS */}
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-4">
-          <div className="flex flex-col gap-4">
-            <span className="font-[Montserrat] font-medium text-[16px] md:text-[18px] text-black">
-              This is same as Campus Address?
-            </span>
-            <div className="flex gap-8">
-              {["Yes", "No"].map((opt) => (
-                <label key={opt} className="flex items-center gap-2 cursor-pointer text-sm font-medium">
-                  <input
-                    type="radio"
-                    name="sameAsCampus"
-                    value={opt}
-                    checked={currentCourse.createdBranch === (opt === "Yes" ? "Main" : "")}
-                    onChange={(e) =>
-                      handleRadioChange("createdBranch", e.target.value === "Yes" ? "Main" : "")
-                    }
-                    className="accent-[#0222D7] w-4 h-4 cursor-pointer"
-                  />
-                  {opt}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <InputField
-            label="Location URL"
-            name="locationUrl"
-            value={currentCourse.locationURL || ""}
-            onChange={handleCourseChange}
-            placeholder="https://maps.app.goo.gl/4mPv8SX6cD52i9B"
-            error={courseErrors.locationUrl}
-            required
-          />
-
-          <InputField
-            label="headquarters address"
-            name="aboutBranch"
-            value={currentCourse.aboutBranch || ""}
-            onChange={handleCourseChange}
-            placeholder="2-3, Uppal Hills Colony, Peerzadiguda"
-            error={courseErrors.aboutBranch}
-            required
-          />
-
-          <SearchableSelect
-            label="State"
-            name="state"
-            value={currentCourse.state}
-            onChange={handleCourseChange}
-            options={STATE_OPTIONS}
-            placeholder="Select state"
-            required
-            error={courseErrors.state}
-          />
-
-          <SearchableSelect
-            label="District"
-            name="district"
-            value={currentCourse.district}
-            onChange={handleCourseChange}
-            options={districtOptions}
-            placeholder={
-              currentCourse.state ? "Select district" : "Select state first"
-            }
-            required
-            disabled={!currentCourse.state}
-            error={courseErrors.district}
-          />
-
-          <InputField
-            label="Town"
-            name="town"
-            value={currentCourse.town}
-            onChange={handleCourseChange}
-            placeholder="Medchal"
-            error={courseErrors.town}
-            required
-          />
-        </div>
+<div className="space-y-6">
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-4">
+    <div className="flex flex-col gap-4">
+      <span className="font-[Montserrat] font-medium text-[16px] md:text-[18px] text-black dark:text-slate-200">
+        This is same as Campus Address
+      </span>
+      <div className="flex gap-8">
+        {["Yes", "No"].map((opt) => (
+          <label key={opt} className="flex items-center gap-2 cursor-pointer text-sm font-medium dark:text-slate-200">
+            <input
+              type="radio"
+              name="sameAsCampus"
+              value={opt}
+              checked={currentCourse.createdBranch === (opt === "Yes" ? "Main" : "")}
+              onChange={(e) => handleRadioChange("createdBranch", e.target.value === "Yes" ? "Main" : "")}
+              className="accent-[#0222D7] w-4 h-4 cursor-pointer"
+            />
+            {opt}
+          </label>
+        ))}
       </div>
+      {currentCourse.createdBranch === "Main" && !selectedBranchId && (
+        <p className="text-red-600 text-[10px] font-bold italic">* Select a branch at the top first</p>
+      )}
+    </div>
+
+    <InputField
+      label="Location URL"
+      name="locationURL" 
+      value={currentCourse.locationURL || ""}
+      onChange={handleCourseChange}
+      placeholder="https://maps.app.goo.gl/4mPv8SX6cD52i9B"
+      error={courseErrors.locationURL}
+      required
+      disabled={currentCourse.createdBranch === "Main"} 
+    />
+
+    <InputField
+      label="headquarters address"
+      name="aboutBranch"
+      value={currentCourse.aboutBranch || ""}
+      onChange={handleCourseChange}
+      placeholder="2-3, Uppal Hills Colony, Peerzadiguda"
+      error={courseErrors.aboutBranch}
+      required
+      disabled={currentCourse.createdBranch === "Main"}
+    />
+
+    <SearchableSelect
+      label="State"
+      name="state"
+      value={currentCourse.state}
+      onChange={handleCourseChange}
+      options={STATE_OPTIONS}
+      placeholder="Select state"
+      required
+      error={courseErrors.state}
+      disabled={false} 
+    />
+
+    <SearchableSelect
+      label="District"
+      name="district"
+      value={currentCourse.district}
+      onChange={handleCourseChange}
+      options={districtOptions}
+      placeholder={currentCourse.state ? "Select district" : "Select state first"}
+      required
+      error={courseErrors.district}
+      disabled={!currentCourse.state} 
+    />
+
+    <InputField
+      label="Town"
+      name="town"
+      value={currentCourse.town}
+      onChange={handleCourseChange}
+      placeholder="Medchal"
+      error={courseErrors.town}
+      required
+      disabled={false} 
+    />
+  </div>
+</div>
 
       {/* SECTION 3: CLASS TYPE & SPECIALIZATION (Purple Section) */}
       <div className="bg-[#DCDCFF] p-6 rounded-[12px] border border-[#E9D7FE] shadow-sm space-y-6">
@@ -318,15 +353,33 @@ export default function CollegeForm({
 
           {/* Add Photos of campus Section */}
           <div className="space-y-3">
-            <label className="font-medium text-[16px] text-gray-900">Add Photos of campus<span className="text-red-500">*</span></label>
+            <label className="font-medium text-[16px] text-gray-900">
+              Add Photos of campus<span className="text-red-500">*</span>
+            </label>
             <div className="relative group">
-              <input type="file" id="campus-photos-input" accept="image/*" onChange={(e) => handleFileChange(e, "intermediateImage")} className="hidden" />
-              <label htmlFor="campus-photos-input" className="flex items-center justify-center w-full h-[70px] bg-white border border-[#DADADD] rounded-[12px] cursor-pointer hover:bg-gray-50 transition-all gap-3">
-                {(currentCourse.intermediateImage || currentCourse.intermediateImagePreviewUrl) ? (
-                  <img src={currentCourse.intermediateImagePreviewUrl} alt="Preview" className="h-full object-contain p-2" />
+              <input
+                type="file"
+                id="campus-photos-input"
+                accept="image/*"
+                onChange={(e) => handleFileChange(e, "intermediateImage")}
+                className="hidden"
+              />
+              <label
+                htmlFor="campus-photos-input"
+                className="flex items-center justify-center w-full h-[70px] bg-white border border-[#DADADD] rounded-[12px] cursor-pointer hover:bg-gray-50 transition-all gap-3 overflow-hidden"
+              >
+                {/* ✅ FIX: Removed the requirement for File object. Check only the preview URL */}
+                {currentCourse.intermediateImagePreviewUrl ? (
+                  <img
+                    src={currentCourse.intermediateImagePreviewUrl}
+                    alt="Campus Preview"
+                    className="h-full w-full object-cover"
+                  />
                 ) : (
                   <>
-                    <div className="border border-slate-400 rounded-full p-1"><Upload className="text-slate-500 w-3 h-3" /></div>
+                    <div className="border border-slate-400 rounded-full p-1">
+                      <Upload className="text-slate-500 w-3 h-3" />
+                    </div>
                     <span className="text-[13px] text-slate-500 font-normal">Add Photos of campus</span>
                   </>
                 )}

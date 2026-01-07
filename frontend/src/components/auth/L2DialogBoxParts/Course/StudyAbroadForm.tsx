@@ -3,7 +3,7 @@
 import InputField from "@/components/ui/InputField";
 import { FileText, Plus, Upload, X } from "lucide-react";
 import type { Course } from "../../L2DialogBox";
-import { ChangeEvent, useMemo } from "react";
+import { ChangeEvent, useEffect, useMemo } from "react";
 import Image from "next/image";
 import StateDistrictFields from "./common/StateDistrictFields";
 import { getMyInstitution } from "@/lib/api";
@@ -28,6 +28,9 @@ interface StudyAbroadFormProps {
   addNewCourse: () => void;
   deleteCourse: (id: number) => void;
   labelVariant?: "course" | "program";
+  uniqueRemoteBranches?: Array<{ _id: string; branchName: string; branchAddress?: string; state?: string; district?: string; town?: string; locationUrl?: string }>;
+  selectedBranchId?: string;
+  isSubscriptionProgram?: boolean;
 }
 
 const countries = [
@@ -66,19 +69,6 @@ const academicOfferings = [
   "Professional Course",
 ];
 
-interface InstitutionResponse {
-  data?: {
-    headquartersAddress?: string;
-    state?: string;
-    locationURL?: string;
-  };
-  headquartersAddress?: string;
-  state?: string;
-  locationURL?: string;
-}
-
-
-
 
 export default function StudyAbroadForm({
   currentCourse,
@@ -92,47 +82,70 @@ export default function StudyAbroadForm({
   addNewCourse,
   deleteCourse,
   labelVariant = "course",
+  uniqueRemoteBranches = [],
+  selectedBranchId,
+  isSubscriptionProgram = true,
 }: StudyAbroadFormProps) {
   const yesNoOptions = ["Yes", "No"];
 
-  const handleRadioChange = async (name: keyof Course, value: string) => {
+  useEffect(() => {
+    if (isSubscriptionProgram && selectedBranchId && currentCourse.createdBranch === "Main") {
+      const branch = uniqueRemoteBranches.find(b => b._id === selectedBranchId);
+      if (branch) {
+        setCourses(prev => prev.map(c => 
+          c.id === selectedCourseId ? {
+            ...c,
+            // Only sync these two specific fields
+            aboutBranch: branch.branchAddress || "",
+            locationURL: branch.locationUrl || "",
+          } : c
+        ));
+      }
+    }
+  }, [selectedBranchId, uniqueRemoteBranches, selectedCourseId, currentCourse.createdBranch, setCourses, isSubscriptionProgram]);
+   
+     const handleRadioChange = (name: keyof Course, value: string) => {
     if (name === "createdBranch" && value === "Main") {
-      try {
-        // 1. Fetch the logged-in institution's details
-        const response = await getMyInstitution() as InstitutionResponse;
-
-        // 2. Handle the data structure returned by getMyInstitution
-        const mainInst = response?.data || response;
-
-        if (mainInst) {
+      if (selectedBranchId) {
+        const branch = uniqueRemoteBranches.find((b) => b._id === selectedBranchId);
+        if (branch) {
           setCourses((prev) =>
             prev.map((c) =>
               c.id === selectedCourseId
                 ? {
-                  ...c,
-                  createdBranch: "Main",
-                  aboutBranch: mainInst.headquartersAddress || "",
-                  state: mainInst.state || "",
-                  locationURL: mainInst.locationURL || "",
-
-                  district: c.district || "",
-                  town: c.town || "",
-                }
+                    ...c,
+                    createdBranch: "Main",
+                    // Only pull address and map link
+                    aboutBranch: branch.branchAddress || "",
+                    locationURL: branch.locationUrl || "",
+                  }
                 : c
             )
           );
           return;
         }
-      } catch (error) {
-        console.error("Backend fetch failed:", error);
       }
     }
-
-    // Standard update for "No" or other radio buttons
+  
     setCourses((prev) =>
-      prev.map((c) => (c.id === selectedCourseId ? { ...c, [name]: value } : c))
+      prev.map((c) => {
+        if (c.id === selectedCourseId) {
+          // When switching to "No", only clear the synced fields
+          if (name === "createdBranch" && value === "") {
+            return {
+              ...c,
+              createdBranch: "",
+              aboutBranch: "",
+              locationURL: "",
+            };
+          }
+          return { ...c, [name]: value };
+        }
+        return c;
+      })
     );
   };
+
   const districtOptions = useMemo(() => {
     if (!currentCourse.state) return [];
     return STATE_DISTRICT_MAP[currentCourse.state] || [];
@@ -166,83 +179,88 @@ export default function StudyAbroadForm({
 
       {/* LOCATION BOX SECTION [cite: 14-25] */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-4">
-        <div className="flex flex-col gap-4">
-          <span className="font-[Montserrat] font-medium text-[16px] md:text-[18px] text-black dark:text-slate-200">
-            This is same as Campus Address
-          </span>
-          <div className="flex gap-8">
-            {["Yes", "No"].map((opt) => (
-              <label key={opt} className="flex items-center gap-2 cursor-pointer text-sm font-medium dark:text-slate-200">
-                <input
-                  type="radio"
-                  name="sameAsCampus"
-                  value={opt}
-                  checked={currentCourse.createdBranch === (opt === "Yes" ? "Main" : "")}
-                  onChange={(e) =>
-                    handleRadioChange("createdBranch", e.target.value === "Yes" ? "Main" : "")
-                  }
-                  className="accent-[#0222D7] w-4 h-4 cursor-pointer"
-                />
-                {opt}
-              </label>
-            ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-4">
+          <div className="flex flex-col gap-4">
+            <span className="font-[Montserrat] font-medium text-[16px] md:text-[18px] text-black dark:text-slate-200">
+              This is same as Campus Address
+            </span>
+            <div className="flex gap-8">
+              {["Yes", "No"].map((opt) => (
+                <label key={opt} className="flex items-center gap-2 cursor-pointer text-sm font-medium dark:text-slate-200">
+                  <input
+                    type="radio"
+                    name="sameAsCampus"
+                    value={opt}
+                    checked={currentCourse.createdBranch === (opt === "Yes" ? "Main" : "")}
+                    onChange={(e) => handleRadioChange("createdBranch", e.target.value === "Yes" ? "Main" : "")}
+                    className="accent-[#0222D7] w-4 h-4 cursor-pointer"
+                  />
+                  {opt}
+                </label>
+              ))}
+            </div>
+            {currentCourse.createdBranch === "Main" && !selectedBranchId && (
+              <p className="text-red-600 text-[10px] font-bold italic">* Select a branch at the top first</p>
+            )}
           </div>
         </div>
 
         <InputField
-          label="Location URL"
-          name="locationUrl"
-          value={currentCourse.locationURL || ""}
-          onChange={handleCourseChange}
-          placeholder="https://maps.app.goo.gl/4mPv8SX6cD52i9B"
-          error={courseErrors.locationUrl}
-          required
-        />
-
-        <InputField
-          label="headquarters address"
-          name="aboutBranch"
-          value={currentCourse.aboutBranch || ""}
-          onChange={handleCourseChange}
-          placeholder="2-3, Uppal Hills Colony, Peerzadiguda"
-          error={courseErrors.aboutBranch}
-          required
-        />
-
-        <SearchableSelect
-          label="State"
-          name="state"
-          value={currentCourse.state}
-          onChange={handleCourseChange}
-          options={STATE_OPTIONS}
-          placeholder="Select state"
-          required
-          error={courseErrors.state}
-        />
-
-        <SearchableSelect
-          label="District"
-          name="district"
-          value={currentCourse.district}
-          onChange={handleCourseChange}
-          options={districtOptions}
-          placeholder={
-            currentCourse.state ? "Select district" : "Select state first"
-          }
-          required
-          disabled={!currentCourse.state}
-          error={courseErrors.district}
-        />
-
-        <InputField
-          label="Town"
-          name="town"
-          value={currentCourse.town}
-          onChange={handleCourseChange}
-          placeholder="Medchal"
-          error={courseErrors.location}
-          required
-        />
+                        label="Location URL"
+                        name="locationURL" 
+                        value={currentCourse.locationURL || ""}
+                        onChange={handleCourseChange}
+                        placeholder="https://maps.app.goo.gl/4mPv8SX6cD52i9B"
+                        error={courseErrors.locationURL}
+                        required
+                        disabled={currentCourse.createdBranch === "Main"} 
+                      />
+                  
+                      <InputField
+                        label="headquarters address"
+                        name="aboutBranch"
+                        value={currentCourse.aboutBranch || ""}
+                        onChange={handleCourseChange}
+                        placeholder="2-3, Uppal Hills Colony, Peerzadiguda"
+                        error={courseErrors.aboutBranch}
+                        required
+                        disabled={currentCourse.createdBranch === "Main"}
+                      />
+                  
+                      <SearchableSelect
+                        label="State"
+                        name="state"
+                        value={currentCourse.state}
+                        onChange={handleCourseChange}
+                        options={STATE_OPTIONS}
+                        placeholder="Select state"
+                        required
+                        error={courseErrors.state}
+                        disabled={false} 
+                      />
+                  
+                      <SearchableSelect
+                        label="District"
+                        name="district"
+                        value={currentCourse.district}
+                        onChange={handleCourseChange}
+                        options={districtOptions}
+                        placeholder={currentCourse.state ? "Select district" : "Select state first"}
+                        required
+                        error={courseErrors.district}
+                        disabled={!currentCourse.state} 
+                      />
+                  
+                      <InputField
+                        label="Town"
+                        name="town"
+                        value={currentCourse.town}
+                        onChange={handleCourseChange}
+                        placeholder="Medchal"
+                        error={courseErrors.town}
+                        required
+                        disabled={false} 
+                      />
       </div>
 
       <div className="bg-[#DCDCFF] p-6 rounded-[6px] space-y-6 border border-blue-100 shadow-[0px_4px_20px_rgba(0,0,0,0.1)]">

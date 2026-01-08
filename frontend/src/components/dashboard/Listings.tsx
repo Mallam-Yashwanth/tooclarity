@@ -156,18 +156,18 @@ export function Listings() {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="w-full space-y-6 p-4 sm:p-6 bg-background">
       
       {/* 1. Header */}
-      <_Card className="border-none shadow-sm rounded-3xl bg-gray-50 dark:bg-gray-900/50 min-h-[140px] flex items-center">
-        <_CardContent className="w-full px-4 sm:px-10">
-            <div className="flex flex-row items-center justify-center gap-4">
-                <h1 className="text-xl sm:text-3xl font-bold text-gray-800 dark:text-gray-100">
-                    {isInstLoading ? "..." : (rawInst?.instituteName || "Institution")}
-                </h1>
-               <div className="bg-[#0222D7] text-white rounded-xl px-4 py-2 text-xs font-medium whitespace-nowrap">
-                 {rawInst?.instituteType || "Education"}
-               </div>
-            </div>
-        </_CardContent>
-      </_Card>
+     <_Card className="border-none shadow-sm rounded-3xl bg-gray-50 dark:bg-gray-900/50 min-h-[140px] flex items-center justify-center">
+  <_CardContent className="w-full px-4 sm:px-10">
+    <div className="relative flex items-center justify-center">
+      <h1 className="text-xl sm:text-3xl font-bold text-gray-800 dark:text-gray-100 text-center">
+        {isInstLoading ? "..." : (rawInst?.instituteName || "Institution")}
+      </h1>
+      <div className="absolute right-0 bg-[#0222D7] text-white rounded-xl px-4 py-2 text-xs font-medium whitespace-nowrap">
+        {rawInst?.instituteType || "Education"}
+      </div>
+    </div>
+  </_CardContent>
+</_Card>
 
       {/* 2. Listing Buttons */}
       <_Card className="border-none shadow-sm rounded-3xl bg-gray-50 dark:bg-gray-900/50 p-8">

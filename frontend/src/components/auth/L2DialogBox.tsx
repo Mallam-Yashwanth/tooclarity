@@ -258,6 +258,22 @@ const FORM_WHITELISTS: Record<string, (keyof Course)[]> = {
   ]
 };
 
+const SMART_COPY_FORMS = [
+  "Kindergarten/childcare center",
+  "School's",
+  "Intermediate college(K12)",
+  "Study Abroad",
+  "Tution Center's"
+];
+
+const BLUE_BOX_FIELDS: Record<string, (keyof Course)[]> = {
+  "Intermediate college(K12)": ["year", "classType", "specialization", "priceOfCourse"],
+  "School's": ["classType", "priceOfCourse"],
+  "Kindergarten/childcare center": ["categoriesType", "priceOfCourse", "classSizeRatio", "aboutCourse"],
+  "Study Abroad": ["countriesOffered", "academicOfferings", "budget", "studentsSent"],
+  "Tution Center's": ["subject", "classSize", "academicDetails", "facultyDetails", "priceOfCourse"]
+};
+
 export const getInitialCourseData = (
   id: number, 
   type: string | null, 
@@ -414,6 +430,9 @@ export const getInitialCourseData = (
   interface RemoteBranch {
     _id: string;
     branchName?: string;
+    branchAddress?: string;
+    locationUrl?: string;
+    contactInfo?: string;
   }
 
   // Define the shape of the response from programsAPI.listBranchesForInstitutionAdmin
@@ -631,7 +650,12 @@ export const getInitialCourseData = (
     const [selectedCourseId, setSelectedCourseId] = useState(1);
     const [showCourseAfterBranch, setShowCourseAfterBranch] = useState(false);
     const [branchOptions, setBranchOptions] = useState<string[]>([]);
-    const [remoteBranches, setRemoteBranches] = useState<Array<{ _id: string; branchName: string }>>([]);
+    const [remoteBranches, setRemoteBranches] = useState<Array<{
+      _id: string;
+      branchName: string;
+      branchAddress: string;
+      locationUrl: string
+    }>>([]);
     const [selectedBranchIdForProgram, setSelectedBranchIdForProgram] = useState<string>("");
     const [programBranchError, setProgramBranchError] = useState<string>("");
     const [assetPreview, setAssetPreview] = useState<{ type: "image" | "brochure"; url: string } | null>(null);
@@ -639,7 +663,12 @@ export const getInitialCourseData = (
     const uniqueRemoteBranches = React.useMemo(() => {
       const seenNames = new Set<string>();
       const seenIds = new Set<string>();
-      const result: Array<{ _id: string; branchName: string }> = [];
+      const result: Array<{
+        _id: string;
+        branchName: string;
+        branchAddress: string;
+        locationUrl: string;
+      }> = [];
       for (const b of remoteBranches) {
         const id = String(b?._id || "");
         const name = (b?.branchName || "Branch").trim();
@@ -647,7 +676,12 @@ export const getInitialCourseData = (
         if (!id || seenIds.has(id) || seenNames.has(keyName)) continue;
         seenIds.add(id);
         seenNames.add(keyName);
-        result.push({ _id: id, branchName: name });
+        result.push({
+          _id: id,
+          branchName: name,
+          branchAddress: b.branchAddress || "",
+          locationUrl: b.locationUrl || "",
+        });
       }
       return result.sort((a, b) => a.branchName.localeCompare(b.branchName));
     }, [remoteBranches]);
@@ -757,16 +791,14 @@ export const getInitialCourseData = (
   if (!DialogOpen || !isSubscriptionProgram) return;
   (async () => {
     try {
-      const res = await programsAPI.listBranchesForInstitutionAdmin(String(institutionId || "")) as any;
+      const res = await programsAPI.listBranchesForInstitutionAdmin(String(institutionId || "")) as BranchListResponse;
       const branches = res?.data?.branches || [];
       
-      setRemoteBranches(branches.map((b: any) => ({ 
+      setRemoteBranches(branches.map((b) => ({ 
         _id: String(b._id), 
         branchName: b.branchName || "Branch",
         branchAddress: b.branchAddress || "", 
-        state: b.state || "",
-        district: b.district || "",
-        town: b.town || "",
+        contactInfo: b.contactInfo || "",
         locationUrl: b.locationUrl || "" 
       })));
     } catch (e) {
@@ -826,7 +858,6 @@ useEffect(() => {
     setCourses([freshlyMappedCourse]);
     setSelectedCourseId(1);
     
-    console.log("🔄 Form State & Branch Reset:", freshlyMappedCourse.courseName, "Branch:", branchId);
   }
 }, [existingCourseData, editMode, institutionType]);
 // Triggers every time you click "Edit" on a different listing
@@ -1054,21 +1085,38 @@ useEffect(() => {
     };
 
     const addNewCourse = () => {
-      // 1. Calculate the next ID
-      const newId = courses.length > 0 
-        ? Math.max(...courses.map((c) => c.id)) + 1 
-        : 1;
+  const current = courses.find((c) => c.id === selectedCourseId) || courses[0];
+  const newId = courses.length > 0 ? Math.max(...courses.map((c) => c.id)) + 1 : 1;
+  const type = institutionType || "";
 
-      // 2. Use the factory to create a complete, strictly typed Course object
-      // Passing undefined for 'existing' data ensures it uses all default values
-      const newCourse = getInitialCourseData(newId, institutionType);
+  let newCourse: Course;
 
-      // 3. Append the new course to the state
-      setCourses([...courses, newCourse]);
-
-      // 4. Switch the view to the new course
-      setSelectedCourseId(newId);
+  if (SMART_COPY_FORMS.includes(type)) {
+    newCourse = { 
+      ...current, 
+      id: newId, 
+      _id: undefined 
     };
+    const fieldsToReset = BLUE_BOX_FIELDS[type] || [];
+    const freshDefaults = getInitialCourseData(newId, type);
+    
+    fieldsToReset.forEach((field) => {
+      (newCourse[field] as any) = freshDefaults[field];
+    });
+
+    if (type === "Tution Center's") {
+      newCourse.academicDetails = [];
+      newCourse.facultyDetails = [];
+    }
+
+
+  } else {
+    newCourse = getInitialCourseData(newId, type);
+  }
+
+  setCourses([...courses, newCourse]);
+  setSelectedCourseId(newId);
+};
 
     const deleteCourse = (courseId: number) => {
       if (courses.length > 1) {
@@ -1101,12 +1149,20 @@ useEffect(() => {
   
   // Use Record type to allow dynamic string indexing safely
   const cleaned: Record<string, unknown> = {};
+  if (course._id) {
+    cleaned._id = course._id;
+  }
 
   allowedKeys.forEach((key) => {
     const value = course[key];
     
     // Logic: Only include data that is not "empty"
     // This keeps your database records small and searchable
+    if (value === "Yes" || value === "No") {
+      cleaned[key as string] = value;
+      return;
+    }
+
     if (
       value !== undefined && 
       value !== null && 
@@ -1120,162 +1176,168 @@ useEffect(() => {
   return cleaned as Partial<Course>;
 };
 
-    const handleCourseSubmit = async (e: FormEvent<HTMLFormElement>) => {
-      e.preventDefault();
-      setIsLoading(true);
-      onLoading?.(true);
+   const handleCourseSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
+  setIsLoading(true);
+  onLoading?.(true);
 
-      try {
-        // 2. Perform S3 Uploads FIRST to get the URLs
-        const uploadedCourses = await Promise.all(
-          courses.map(async (course) => {
-            const updated = { ...course };
-
-            // Helper to handle multiple file types
-            const fileFields: { file: File | null; urlKey: keyof Course }[] = [
-            { file: course.image, urlKey: "imageUrl" },
-            { file: course.brochure, urlKey: "brochureUrl" },
-            { file: course.centerImage, urlKey: "centerImageUrl" },
-            { file: course.tuitionImage, urlKey: "tuitionImageUrl" },
-            { file: course.kindergartenImage, urlKey: "kindergartenImageUrl" },
-            { file: course.schoolImage, urlKey: "schoolImageUrl" },
-            { file: course.intermediateImage, urlKey: "intermediateImageUrl" },
-            { file: course.collegeImage, urlKey: "collegeImageUrl" },
-            { file: course.consultancyImage, urlKey: "consultancyImageUrl" },
-          ];
-
-            for (const item of fileFields) {
-            if (item.file instanceof File) {
-              const res = await uploadToS3(item.file) as S3UploadResult;
-              if (res.success && res.fileUrl) {
-                // Properly assign using the keyof Course
-                (updated[item.urlKey] as string) = res.fileUrl;
-              }
-            }
-          }
-            return updated;
-          })
-        );
-
-        setCourses(uploadedCourses);
-        const validationMessage = validateCourses(uploadedCourses);
-        if (validationMessage) {
-          toast.error(validationMessage);
-          setIsLoading(false);
-          return;
-        }
-
-
-        if (isSubscriptionProgram) {
-        if (!institutionId) throw new Error("institutionId required");
-
-        // Find the full branch object from your list to get the name
-          const selectedBranchObj = uniqueRemoteBranches.find(
-            (b) => b._id === selectedBranchIdForProgram
-          );
-        
-          for (const course of uploadedCourses) {
-            const currentDbId = course._id;
-            
-
-            // CALL THE CLEANER HERE
-            const filteredData = getCleanedPayload(course);
-            console.log("ACTUAL DATA BEING SENT:", filteredData);
-
-            const apiPayload = {
-              ...filteredData, // Contains ONLY whitelisted fields for THIS form
-              institution: institutionId,
-              branch: selectedBranchIdForProgram,
-              branchName: uniqueRemoteBranches.find((b) => b._id === selectedBranchIdForProgram)?.branchName || "Main Institution",
-              type: "PROGRAM" as const,
-              courseType: institutionType,
-            };
-            console.log("Submitting Payload to Backend:", apiPayload);
-
-            if (editMode && currentDbId) {
-              console.log("Attempting to UPDATE course with ID:", currentDbId);
-              await programsAPI.update(currentDbId, apiPayload);
-              console.log("Update Success:");
-            } else {
-              console.log("Attempting to CREATE new course");
-              await programsAPI.create(apiPayload);
-              console.log("Create Success:");
-            }
-          }
-          await persistAdminProgramsToIndexedDb(uploadedCourses);
-          editMode ? onEditSuccess?.() : onSuccess?.();
-          setIsLoading(false);
-          return;
-        }
-
-        const allBranches = await getAllBranchesFromDB();
-        const branchMap = new Map<string, BranchGroup>(
-        allBranches.map((b) => [
-          b.branchName.trim().toLowerCase(),
-          {
-            branchName: b.branchName,
-            branchAddress: b.branchAddress,
-            contactInfo: b.contactInfo,
-            locationUrl: b.locationUrl || "",
-            courses: [], // Typed via BranchGroup interface
-          },
-        ])
-      );
-        const unassigned: import("@/lib/localDb").CourseRecord[] = [];
-
-        uploadedCourses.forEach((c) => {
-        const key = (c.createdBranch || "").trim().toLowerCase();
-        const existingBranch = branchMap.get(key);
-        if (existingBranch) {
-          existingBranch.courses.push(sanitizeCourseForLocalDb(c));
-        } else {
-          unassigned.push(sanitizeCourseForLocalDb(c));
-        }
-      });
-
-        const payload: BranchGroup[] = Array.from(branchMap.values()).filter(
-        (b) => b.courses.length > 0
-      );
-
-        if (unassigned.length > 0) {
-          payload.push({
-            branchName: "Main Institution",
-            branchAddress: "Default",
-            contactInfo: "0000000000",
-            locationUrl: "",
-            courses: unassigned
-          });
-        }
-
-        for (const entry of payload) {
-        const existingGroups = await getCoursesGroupsByBranchName(entry.branchName);
-        if (existingGroups.length > 0) {
-          const currentGroup = existingGroups[0];
-          await updateCoursesGroupInDB({
-            ...currentGroup,
-            ...entry,
-            courses: [...(currentGroup.courses || []), ...entry.courses],
-          });
-        } else {
-          await addCoursesGroupToDB(entry);
+  try {
+    // --- STEP 1: PREPARE DATA (Fixes the "Empty locationURL" issue) ---
+    // We map through the courses and if "Same as Campus" is selected, 
+    // we inject the branch data so validation passes.
+    const preparedForValidation = courses.map((course) => {
+      if (course.createdBranch === "Main" && isSubscriptionProgram) {
+        const branch = uniqueRemoteBranches.find((b) => b._id === selectedBranchIdForProgram);
+        if (branch) {
+          return {
+            ...course,
+            aboutBranch: branch.branchAddress || course.aboutBranch || "",
+            locationURL: branch.locationUrl || course.locationURL || "",
+          };
         }
       }
+      return course;
+    });
 
-        const response = (await exportAndUploadInstitutionAndCourses()) as ExportResponse;
-      if (response.success) {
-        router.push("/payment");
+    // --- STEP 2: VALIDATE PREPARED DATA ---
+    const validationMessage = validateCourses(preparedForValidation);
+    if (validationMessage) {
+      toast.error(validationMessage);
+      setIsLoading(false);
+      onLoading?.(false);
+      return;
+    }
+
+    // --- STEP 3: S3 UPLOADS ---
+    const uploadedCourses = await Promise.all(
+      preparedForValidation.map(async (course) => {
+        const updated = { ...course };
+        const fileFields: { file: File | null; urlKey: keyof Course }[] = [
+          { file: course.image, urlKey: "imageUrl" },
+          { file: course.brochure, urlKey: "brochureUrl" },
+          { file: course.centerImage, urlKey: "centerImageUrl" },
+          { file: course.tuitionImage, urlKey: "tuitionImageUrl" },
+          { file: course.kindergartenImage, urlKey: "kindergartenImageUrl" },
+          { file: course.schoolImage, urlKey: "schoolImageUrl" },
+          { file: course.intermediateImage, urlKey: "intermediateImageUrl" },
+          { file: course.collegeImage, urlKey: "collegeImageUrl" },
+          { file: course.consultancyImage, urlKey: "consultancyImageUrl" },
+        ];
+
+        for (const item of fileFields) {
+          if (item.file instanceof File) {
+            const res = (await uploadToS3(item.file)) as S3UploadResult;
+            if (res.success && res.fileUrl) {
+              (updated[item.urlKey] as string) = res.fileUrl;
+            }
+          }
+        }
+        return updated;
+      })
+    );
+
+    // Update state to match what we are sending
+    setCourses(uploadedCourses);
+
+    // --- STEP 4: API SUBMISSION ---
+    if (isSubscriptionProgram) {
+      if (!institutionId) throw new Error("institutionId required");
+
+      for (const course of uploadedCourses) {
+        const currentDbId = course._id;
+        const filteredData = getCleanedPayload(course);
+
+        const apiPayload = {
+          ...filteredData,
+          _id : currentDbId,
+          institution: institutionId,
+          branch: selectedBranchIdForProgram || null,
+          branchName: uniqueRemoteBranches.find((b) => b._id === selectedBranchIdForProgram)?.branchName || "Main Institution",
+          type: "PROGRAM" as const,
+          courseType: institutionType,
+        };
+
+
+        if (editMode && currentDbId) {
+          await programsAPI.update(currentDbId, apiPayload);
+        } else {
+          await programsAPI.create(apiPayload);
+        }
+      }
+      await persistAdminProgramsToIndexedDb(uploadedCourses);
+      editMode ? onEditSuccess?.() : onSuccess?.();
+      setIsLoading(false);
+      return;
+    }
+
+    // --- STEP 5: LOCAL DB & REDIRECT (Non-Subscription) ---
+    const allBranches = await getAllBranchesFromDB();
+    const branchMap = new Map<string, BranchGroup>(
+      allBranches.map((b) => [
+        b.branchName.trim().toLowerCase(),
+        {
+          branchName: b.branchName,
+          branchAddress: b.branchAddress,
+          contactInfo: b.contactInfo,
+          locationUrl: b.locationUrl || "",
+          courses: [],
+        },
+      ])
+    );
+
+    const unassigned: import("@/lib/localDb").CourseRecord[] = [];
+    uploadedCourses.forEach((c) => {
+      const key = (c.createdBranch || "").trim().toLowerCase();
+      const existingBranch = branchMap.get(key);
+      if (existingBranch) {
+        existingBranch.courses.push(sanitizeCourseForLocalDb(c));
       } else {
-        toast.error(response.message || "Export failed");
+        unassigned.push(sanitizeCourseForLocalDb(c));
       }
+    });
 
-        onSuccess?.();
-      } catch (error) {
-        console.error("Error saving:", error);
-      } finally {
-        setIsLoading(false);
-        onLoading?.(false);
+    const payload: BranchGroup[] = Array.from(branchMap.values()).filter((b) => b.courses.length > 0);
+
+    if (unassigned.length > 0) {
+      payload.push({
+        branchName: "Main Institution",
+        branchAddress: "Default",
+        contactInfo: "0000000000",
+        locationUrl: "",
+        courses: unassigned,
+      });
+    }
+
+    for (const entry of payload) {
+      const existingGroups = await getCoursesGroupsByBranchName(entry.branchName);
+      if (existingGroups.length > 0) {
+        const currentGroup = existingGroups[0];
+        await updateCoursesGroupInDB({
+          ...currentGroup,
+          ...entry,
+          courses: [...(currentGroup.courses || []), ...entry.courses],
+        });
+      } else {
+        await addCoursesGroupToDB(entry);
       }
-    };
+    }
+
+    const response = (await exportAndUploadInstitutionAndCourses()) as ExportResponse;
+    if (response.success) {
+      router.push("/payment");
+    } else {
+      toast.error(response.message || "Export failed");
+    }
+
+    onSuccess?.();
+  } catch (error) {
+    console.error("Error saving:", error);
+    toast.error("An error occurred while saving.");
+  } finally {
+    setIsLoading(false);
+    onLoading?.(false);
+  }
+};
 
     const handleBranchChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       const { name, value } = e.target;

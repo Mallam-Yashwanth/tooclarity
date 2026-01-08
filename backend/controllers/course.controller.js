@@ -297,6 +297,120 @@ const checkOwnership = async (institutionId, userId) => {
   return institution;
 };
 
+// exports.createCourse = asyncHandler(async (req, res, next) => {
+//   const userId = req.userId;
+//   const { courses } = req.body;
+
+//   if (!Array.isArray(courses) || courses.length === 0) {
+//     return next(new AppError("No courses provided", 400));
+//   }
+
+//   const pipeline = [
+//     // 1️⃣ Match institute admin
+//     {
+//       $match: {
+//         _id: new mongoose.Types.ObjectId(userId),
+//         role: "INSTITUTE_ADMIN",
+//       },
+//     },
+
+//     // 2️⃣ Convert input courses array into documents
+//     {
+//       $project: {
+//         courses: {
+//           $map: {
+//             input: courses,
+//             as: "course",
+//             in: {
+//               $mergeObjects: [
+//                 "$$course",
+//                 {
+//                   institution: "$institution",
+//                   status: "Inactive",
+//                   createdAt: new Date(),
+//                   updatedAt: new Date(),
+//                 },
+//               ],
+//             },
+//           },
+//         },
+//       },
+//     },
+
+//     // 3️⃣ Unwind courses → one document per course
+//     { $unwind: "$courses" },
+
+//     // 4️⃣ Lookup branch if branchName exists
+//     {
+//       $lookup: {
+//         from: "branches",
+//         let: {
+//           branchName: "$courses.branchName",
+//           institutionId: "$courses.institution",
+//         },
+//         pipeline: [
+//           {
+//             $match: {
+//               $expr: {
+//                 $and: [
+//                   { $eq: ["$branchName", "$$branchName"] },
+//                   { $eq: ["$institution", "$$institutionId"] },
+//                 ],
+//               },
+//             },
+//           },
+//           { $project: { _id: 1 } },
+//         ],
+//         as: "branchData",
+//       },
+//     },
+
+//     // 5️⃣ Attach branch ObjectId (if found)
+//     {
+//       $addFields: {
+//         "courses.branch": {
+//           $cond: {
+//             if: { $gt: [{ $size: "$branchData" }, 0] },
+//             then: { $arrayElemAt: ["$branchData._id", 0] },
+//             else: null,
+//           },
+//         },
+//       },
+//     },
+
+//     // 6️⃣ Cleanup temporary fields
+//     {
+//       $project: {
+//         branchData: 0,
+//       },
+//     },
+
+//     // 7️⃣ Replace root with final course object
+//     {
+//       $replaceRoot: {
+//         newRoot: "$courses",
+//       },
+//     },
+
+//     // 8️⃣ Insert into courses collection
+//     {
+//       $merge: {
+//         into: "courses",
+//         whenMatched: "fail",
+//         whenNotMatched: "insert",
+//       },
+//     },
+//   ];
+
+//   await InstituteAdminModel.aggregate(pipeline);
+
+//   res.status(201).json({
+//     success: true,
+//     message: "Courses created successfully",
+//     count: courses.length,
+//   });
+// });
+
 exports.createCourse = asyncHandler(async (req, res, next) => {
   const userId = req.userId;
   const { courses } = req.body;
@@ -306,7 +420,9 @@ exports.createCourse = asyncHandler(async (req, res, next) => {
   }
 
   const pipeline = [
-    // 1️⃣ Match institute admin
+    /* ----------------------------------------------------
+       1. Match Institute Admin
+    ---------------------------------------------------- */
     {
       $match: {
         _id: new mongoose.Types.ObjectId(userId),
@@ -314,7 +430,9 @@ exports.createCourse = asyncHandler(async (req, res, next) => {
       },
     },
 
-    // 2️⃣ Convert input courses array into documents
+    /* ----------------------------------------------------
+       2. Attach institution + defaults to each course
+    ---------------------------------------------------- */
     {
       $project: {
         courses: {
@@ -326,6 +444,13 @@ exports.createCourse = asyncHandler(async (req, res, next) => {
                 "$$course",
                 {
                   institution: "$institution",
+                  branch: {
+                    $cond: [
+                      { $ifNull: ["$$course.branchId", false] },
+                      { $toObjectId: "$$course.branchId" },
+                      null,
+                    ],
+                  },
                   status: "Inactive",
                   createdAt: new Date(),
                   updatedAt: new Date(),
@@ -337,62 +462,23 @@ exports.createCourse = asyncHandler(async (req, res, next) => {
       },
     },
 
-    // 3️⃣ Unwind courses → one document per course
+    /* ----------------------------------------------------
+       3. One document per course
+    ---------------------------------------------------- */
     { $unwind: "$courses" },
 
-    // 4️⃣ Lookup branch if branchName exists
-    {
-      $lookup: {
-        from: "branches",
-        let: {
-          branchName: "$courses.branchName",
-          institutionId: "$courses.institution",
-        },
-        pipeline: [
-          {
-            $match: {
-              $expr: {
-                $and: [
-                  { $eq: ["$branchName", "$$branchName"] },
-                  { $eq: ["$institution", "$$institutionId"] },
-                ],
-              },
-            },
-          },
-          { $project: { _id: 1 } },
-        ],
-        as: "branchData",
-      },
-    },
-
-    // 5️⃣ Attach branch ObjectId (if found)
-    {
-      $addFields: {
-        "courses.branch": {
-          $cond: {
-            if: { $gt: [{ $size: "$branchData" }, 0] },
-            then: { $arrayElemAt: ["$branchData._id", 0] },
-            else: null,
-          },
-        },
-      },
-    },
-
-    // 6️⃣ Cleanup temporary fields
-    {
-      $project: {
-        branchData: 0,
-      },
-    },
-
-    // 7️⃣ Replace root with final course object
+    /* ----------------------------------------------------
+       4. Replace root with course document
+    ---------------------------------------------------- */
     {
       $replaceRoot: {
         newRoot: "$courses",
       },
     },
 
-    // 8️⃣ Insert into courses collection
+    /* ----------------------------------------------------
+       5. Insert into courses collection
+    ---------------------------------------------------- */
     {
       $merge: {
         into: "courses",
@@ -410,6 +496,7 @@ exports.createCourse = asyncHandler(async (req, res, next) => {
     count: courses.length,
   });
 });
+
 
 exports.getAllCoursesForInstitution = asyncHandler(async (req, res, next) => {
   const userId = req.userId;

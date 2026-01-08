@@ -1,95 +1,93 @@
-  "use client";
+"use client";
 
-  import { useState, useEffect, ChangeEvent, FormEvent } from "react";
-  import React from "react";
-  import { branchAPI, programsAPI } from "@/lib/api";
-  import { useRouter } from "next/navigation";
-  import { Button } from "@/components/ui/button";
-  import Image from "next/image";
-  import {
-    _Dialog,
-    _DialogContent,
-    _DialogHeader,
-    _DialogTitle,
-    _DialogDescription,
-    _DialogTrigger,
-  } from "@/components/ui/dialog";
-  import {
-    _Card,
-    _CardHeader,
-    _CardTitle,
-    _CardDescription,
-    _CardContent,
-    _CardFooter,
-  } from "@/components/ui/card";
-  import InputField from "@/components/ui/InputField";
-  import { Upload, Plus, MoreVertical, X } from "lucide-react";
-  import {
-    addBranchesToDB,
-    getAllBranchesFromDB,
-    updateBranchInDB,
-    addCoursesGroupToDB,
-    getCoursesGroupsByBranchName,
-    updateCoursesGroupInDB,
-    getAllInstitutionsFromDB, // Added
-  } from "@/lib/localDb";
+import { useState, useEffect, ChangeEvent, FormEvent } from "react";
+import React from "react";
+import { ApiResponse, branchAPI, courseAPI, programsAPI } from "@/lib/api";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import Image from "next/image";
+import {
+  _Dialog,
+  _DialogContent,
+  _DialogHeader,
+  _DialogTitle,
+  _DialogDescription,
+  _DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  _Card,
+  _CardHeader,
+  _CardTitle,
+  _CardDescription,
+  _CardContent,
+  _CardFooter,
+} from "@/components/ui/card";
+import InputField from "@/components/ui/InputField";
+import { Upload, Plus, MoreVertical, X } from "lucide-react";
+import {
+  addBranchesToDB,
+  getAllBranchesFromDB,
+  updateBranchInDB,
+  addCoursesGroupToDB,
+  getCoursesGroupsByBranchName,
+  updateCoursesGroupInDB,
+  getAllInstitutionsFromDB, // Added
+} from "@/lib/localDb";
 
-  // ✅ New imports for split forms
-  import CoachingCourseForm from "./L2DialogBoxParts/Course/CoachingCourseForm";
-  import StudyHallForm from "./L2DialogBoxParts/Course/StudyHallForm";
-  import TuitionCenterForm from "./L2DialogBoxParts/Course/TuitionCenterForm";
-  import UnderPostGraduateForm from "./L2DialogBoxParts/Course/UnderPostGraduateForm";
-  import BasicCourseForm from "./L2DialogBoxParts/Course/BasicCourseForm";
-  import FallbackCourseForm from "./L2DialogBoxParts/Course/FallbackCourseForm";
-  import StudyAbroadForm from "./L2DialogBoxParts/Course/StudyAbroadForm";
-  import KindergartenForm from "./L3DialogBoxParts/KindergartenForm";
-  import CollegeForm from "./L3DialogBoxParts/CollegeForm";
-  import StateDistrictFields from "./L2DialogBoxParts/Course/common/StateDistrictFields";
-  import BranchForm from "./L2DialogBoxParts/Branch/BranchForm";
-  import {
-    exportAndUploadInstitutionAndCourses,
-  } from "@/lib/utility";
-  import { L2Schemas } from "@/lib/validations/L2Schema";
-  import { uploadToS3 } from "@/lib/awsUpload";
-  import AppSelect from "@/components/ui/AppSelect";
-  import { toast } from "react-toastify";
-  import SchoolForm from "./L3DialogBoxParts/SchoolForm";
-  import { sub } from "date-fns";
+// ✅ New imports for split forms
+import CoachingCourseForm from "./L2DialogBoxParts/Course/CoachingCourseForm";
+import StudyHallForm from "./L2DialogBoxParts/Course/StudyHallForm";
+import TuitionCenterForm from "./L2DialogBoxParts/Course/TuitionCenterForm";
+import UnderPostGraduateForm from "./L2DialogBoxParts/Course/UnderPostGraduateForm";
+import BasicCourseForm from "./L2DialogBoxParts/Course/BasicCourseForm";
+import FallbackCourseForm from "./L2DialogBoxParts/Course/FallbackCourseForm";
+import StudyAbroadForm from "./L2DialogBoxParts/Course/StudyAbroadForm";
+import KindergartenForm from "./L3DialogBoxParts/KindergartenForm";
+import CollegeForm from "./L3DialogBoxParts/CollegeForm";
+import StateDistrictFields from "./L2DialogBoxParts/Course/common/StateDistrictFields";
+import BranchForm from "./L2DialogBoxParts/Branch/BranchForm";
+import {
+  exportAndUploadInstitutionAndCourses,
+} from "@/lib/utility";
+import { L2Schemas } from "@/lib/validations/L2Schema";
+import { uploadToS3 } from "@/lib/awsUpload";
+import AppSelect from "@/components/ui/AppSelect";
+import { toast } from "react-toastify";
+import SchoolForm from "./L3DialogBoxParts/SchoolForm";
+import { sub } from "date-fns";
 
-  interface L2DialogBoxProps {
-    trigger?: React.ReactNode;
-    open?: boolean;
-    onOpenChange?: (open: boolean) => void;
-    onSuccess?: () => void;
-    onPrevious?: () => void;
-    initialSection?: "course" | "branch";
-    renderMode?: "_Dialog" | "inline";
-    mode?: "default" | "subscriptionProgram" | "settingsEdit";
-    institutionId?: string;
-    editMode?: boolean;
-    existingCourseData?: Partial<Course> & { _id?: string; branch?: string };
-    onEditSuccess?: () => void;
-    onLoading?: (loading: boolean) => void;
-    institutionType?: string;
-    adminFlow?: boolean;
-  }
+interface L2DialogBoxProps {
+  trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onSuccess?: () => void;
+  onPrevious?: () => void;
+  initialSection?: "course" | "branch";
+  renderMode?: "_Dialog" | "inline";
+  mode?: "default" | "subscriptionProgram" | "settingsEdit";
+  institutionId?: string;
+  editMode?: boolean;
+  existingCourseData?: Partial<Course> & { _id?: string; branch?: string };
+  onEditSuccess?: () => void;
+  institutionType?: string;
+  adminFlow?: boolean;
+}
 
-  export interface AcademicDetail {
-    subject: string;
-    classTiming: string;
-    specialization: string;
-    monthlyFees: string | number;
-  }
+export interface AcademicDetail {
+  subject: string;
+  classTiming: string;
+  specialization: string;
+  monthlyFees: string | number;
+}
 
-  export interface FacultyDetail {
-    name: string;
-    qualification: string;
-    experience: string;
-    subjectTeach: string;
-  }
+export interface FacultyDetail {
+  name: string;
+  qualification: string;
+  experience: string;
+  subjectTeach: string;
+}
 
-  export interface Course {
-  // --- SECTION 1: COMMON BASE FIELDS ---
+export interface Course {
   id: number;
   _id?: string;
   courseName: string;
@@ -475,6 +473,20 @@ export const getInitialCourseData = (
   ];
 
   const converted = { ...record };
+    tuitionImagePreviewUrl: "",
+    partlyPayment: "",
+    kindergartenImage: null,
+    kindergartenImagePreviewUrl: "",
+    classSizeRatio: "",
+    schoolImage: null,
+    schoolImagePreviewUrl: "",
+    classType: "",
+    intermediateImage: null,
+    intermediateImagePreviewUrl: "",
+    specialization: "",
+    year: "",
+    studyMaterial:"",
+  };
 
   facilityKeys.forEach((key) => {
     if (typeof converted[key] === "boolean") {
@@ -693,6 +705,23 @@ export const getInitialCourseData = (
       const parsed = new Date(trimmed);
       return isNaN(parsed.getTime()) ? trimmed : parsed.toISOString().slice(0, 10);
     };
+    // 2. Define all keys that should be kept as they are (Strings/Numbers/URLs)
+    const entries = Object.entries(course as Record<string, unknown>).map(([key, value]) => {
+      // Convert "Yes"/"No" to true/false
+      if (booleanKeys.includes(key)) return [key, value === "Yes"];
+
+      // Explicitly ensure new URL fields are included
+      if (key === "centerImageUrl") return ["centerImageUrl", value];
+      if (key === "consultancyImageUrl") return ["consultancyImageUrl", value];
+      if (key === "collegeImageUrl") return ["collegeImageUrl", value];
+      if (key === "tuitionImageUrl") return ["tuitionImageUrl", value];
+      if (key === "kindergartenImageUrl") return ["kindergartenImageUrl", value];
+      if (key === "schoolImageUrl") return ["schoolImageUrl", value];
+      if (key === "town") return ["town", value];
+      if (key === "locationURL") return ["locationURL", value];
+
+      return [key, value];
+    });
 
     const sanitizeCourseForLocalDb = (course: Course): import("@/lib/localDb").CourseRecord => {
   // 1. Identify facility keys that we want to ensure stay as "Yes" or "No"
@@ -1198,20 +1227,29 @@ useEffect(() => {
       }
       return course;
     });
+  };
 
-    // --- STEP 2: VALIDATE PREPARED DATA ---
-    const validationMessage = validateCourses(preparedForValidation);
+const handleCourseSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
+  setIsLoading(true);
+
+  try {
+    /* ----------------------------------------------------
+       1. VALIDATION
+    ---------------------------------------------------- */
+    const validationMessage = validateCourses();
     if (validationMessage) {
       toast.error(validationMessage);
-      setIsLoading(false);
-      onLoading?.(false);
       return;
     }
 
-    // --- STEP 3: S3 UPLOADS ---
+    /* ----------------------------------------------------
+       2. UPLOAD FILES TO S3
+    ---------------------------------------------------- */
     const uploadedCourses = await Promise.all(
-      preparedForValidation.map(async (course) => {
-        const updated = { ...course };
+      courses.map(async (course) => {
+        const updated: Partial<Course> = { ...course };
+
         const fileFields: { file: File | null; urlKey: keyof Course }[] = [
           { file: course.image, urlKey: "imageUrl" },
           { file: course.brochure, urlKey: "brochureUrl" },
@@ -1224,127 +1262,83 @@ useEffect(() => {
           { file: course.consultancyImage, urlKey: "consultancyImageUrl" },
         ];
 
-        for (const item of fileFields) {
-          if (item.file instanceof File) {
-            const res = (await uploadToS3(item.file)) as S3UploadResult;
-            if (res.success && res.fileUrl) {
-              (updated[item.urlKey] as string) = res.fileUrl;
+        await Promise.all(
+          fileFields.map(async ({ file, urlKey }) => {
+            if (file instanceof File) {
+              try {
+                const res = (await uploadToS3(file)) as S3UploadResult;
+                if (res.success && res.fileUrl) {
+                  (updated[urlKey] as string) = res.fileUrl;
+                }
+              } catch (err) {
+                console.warn(`Failed to upload ${urlKey}:`, err);
+              }
             }
-          }
-        }
-        return updated;
+          })
+        );
+
+        return updated as Course;
       })
     );
 
-    // Update state to match what we are sending
-    setCourses(uploadedCourses);
+    /* ----------------------------------------------------
+       3. ATTACH BRANCH ID
+    ---------------------------------------------------- */
+    const payload = uploadedCourses.map((course) => ({
+      ...course,
+      branchId: course.selectBranch || null,
+    }));
 
-    // --- STEP 4: API SUBMISSION ---
-    if (isSubscriptionProgram) {
-      if (!institutionId) throw new Error("institutionId required");
+    /* ----------------------------------------------------
+       4. BACKEND API CALL
+    ---------------------------------------------------- */
+    let apiResponse: ApiResponse = { success: false };
 
-      for (const course of uploadedCourses) {
-        const currentDbId = course._id;
-        const filteredData = getCleanedPayload(course);
-
-        const apiPayload = {
-          ...filteredData,
-          _id : currentDbId,
-          institution: institutionId,
-          branch: selectedBranchIdForProgram || null,
-          branchName: uniqueRemoteBranches.find((b) => b._id === selectedBranchIdForProgram)?.branchName || "Main Institution",
-          type: "PROGRAM" as const,
-          courseType: institutionType,
-        };
-
-
-        if (editMode && currentDbId) {
-          await programsAPI.update(currentDbId, apiPayload);
-        } else {
-          await programsAPI.create(apiPayload);
+    if (editMode) {
+      for (const course of payload) {
+        if (!course.id) continue;
+        try {
+          await courseAPI.updateCourse(course.id, course);
+        } catch (err) {
+          console.error("Failed to update course:", course.id, err);
         }
       }
-      await persistAdminProgramsToIndexedDb(uploadedCourses);
-      editMode ? onEditSuccess?.() : onSuccess?.();
-      setIsLoading(false);
+      apiResponse.success = true;
+    } else {
+      apiResponse = await courseAPI.createCourses(payload);
+    }
+
+    if (!apiResponse.success) {
+      toast.error(apiResponse.message || "Failed to save courses");
       return;
     }
 
-    // --- STEP 5: LOCAL DB & REDIRECT (Non-Subscription) ---
-    const allBranches = await getAllBranchesFromDB();
-    const branchMap = new Map<string, BranchGroup>(
-      allBranches.map((b) => [
-        b.branchName.trim().toLowerCase(),
-        {
-          branchName: b.branchName,
-          branchAddress: b.branchAddress,
-          contactInfo: b.contactInfo,
-          locationUrl: b.locationUrl || "",
-          courses: [],
-        },
-      ])
-    );
+    /* ----------------------------------------------------
+       6. FINAL UI ACTIONS
+    ---------------------------------------------------- */
+    toast.success(editMode ? "Course updated" : "Courses created");
+    editMode ? onEditSuccess?.() : onSuccess?.();
 
-    const unassigned: import("@/lib/localDb").CourseRecord[] = [];
-    uploadedCourses.forEach((c) => {
-      const key = (c.createdBranch || "").trim().toLowerCase();
-      const existingBranch = branchMap.get(key);
-      if (existingBranch) {
-        existingBranch.courses.push(sanitizeCourseForLocalDb(c));
-      } else {
-        unassigned.push(sanitizeCourseForLocalDb(c));
-      }
-    });
+    /* ----------------------------------------------------
+       7. ROUTER NAVIGATION
+    ---------------------------------------------------- */
+    router.push("/dashboard/subscription");
 
-    const payload: BranchGroup[] = Array.from(branchMap.values()).filter((b) => b.courses.length > 0);
-
-    if (unassigned.length > 0) {
-      payload.push({
-        branchName: "Main Institution",
-        branchAddress: "Default",
-        contactInfo: "0000000000",
-        locationUrl: "",
-        courses: unassigned,
-      });
-    }
-
-    for (const entry of payload) {
-      const existingGroups = await getCoursesGroupsByBranchName(entry.branchName);
-      if (existingGroups.length > 0) {
-        const currentGroup = existingGroups[0];
-        await updateCoursesGroupInDB({
-          ...currentGroup,
-          ...entry,
-          courses: [...(currentGroup.courses || []), ...entry.courses],
-        });
-      } else {
-        await addCoursesGroupToDB(entry);
-      }
-    }
-
-    const response = (await exportAndUploadInstitutionAndCourses()) as ExportResponse;
-    if (response.success) {
-      router.push("/payment");
-    } else {
-      toast.error(response.message || "Export failed");
-    }
-
-    onSuccess?.();
   } catch (error) {
-    console.error("Error saving:", error);
-    toast.error("An error occurred while saving.");
+    console.error("Course submit error:", error);
+    toast.error("Something went wrong while saving courses");
   } finally {
     setIsLoading(false);
-    onLoading?.(false);
   }
 };
-
-    const handleBranchChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+     
+     const handleBranchChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       const { name, value } = e.target;
       setBranches((prev) => prev.map((b) => b.id === selectedBranchId ? { ...b, [name]: value } : b));
       const { error } = L2Schemas.branch.extract(name).validate(value);
       setBranchErrors((prev) => ({ ...prev, [selectedBranchId]: { ...(prev[selectedBranchId] || {}), [name]: error ? error.details[0].message : "" } }));
     };
+
 
     const handleBranchSubmit = async (e: FormEvent<HTMLFormElement>) => {
       e.preventDefault();
@@ -1463,99 +1457,92 @@ const validateCourses = (dataToValidate: Course[]) => {
       return `Please add at least one Faculty entry.`;
     }
 
-    // 4. Validate Uploads (Checking the fresh data)
-    if (!course.image && !course.imageUrl) return `Please upload an image for course: ${course.courseName || "Unnamed"}`;
-    if (!course.brochure && !course.brochureUrl) return `Please upload a brochure for course: ${course.courseName || "Unnamed"}`;
-  }
-  return null;
-};
+  const getRequiredFields = () => {
+    // Added "town" and "aboutBranch" to the required list
+    const locationFields = ["state", "district", "town", "locationURL", "aboutBranch"];
+    const coachingCommon = ["categoriesType", "domainType", "subDomainType", "courseName", "courseDuration", "startDate", "priceOfCourse", "installments", "emioptions"];
 
-    const getRequiredFields = () => {
-      // Added "town" and "aboutBranch" to the required list
-      const locationFields = ["state", "district", "town", "locationURL", "aboutBranch"];
-      const coachingCommon = ["categoriesType", "domainType", "subDomainType", "courseName", "courseDuration", "startDate", "priceOfCourse", "installments", "emioptions"];
+    switch (true) {
+      case isStudyAbroad: return ["consultancyName", "studentAdmissions", "countriesOffered", "academicOfferings"];
+      case isBasicCourseForm: return [...locationFields, "courseName", "courseDuration", "priceOfCourse", "startDate"];
+      case isKindergarten:
+        return [
+          ...locationFields,
+          "graduationType", "courseName", "categoriesType", "priceOfCourse",
+          "aboutCourse", "courseDuration", "mode", "classSize", "curriculumType",
+          "ownershipType", "operationalDays", "openingTime", "closingTime",
+          "extendedCare", "mealsProvided", "playground", "busService", "classSizeRatio"
+        ];
+      case isSchool:
+        return [
+          ...locationFields,
+          "courseName",
+          "mode",
+          "courseDuration",
+          "startDate",
+          "classlanguage",
+          "ownershipType",
+          "schoolType",
+          "curriculumType",
+          "classType",
+          "priceOfCourse",
+          "playground",
+          "busService",
+          "hostelFacility",
+          "emioptions",
+          "partlyPayment",
+        ];
+      case isIntermediateCollege:
+        return [
+          ...locationFields,
+          "courseName", "mode", "courseDuration", "startDate", "language",
+          "ownershipType", "collegeType", "curriculumType", "year", "classType",
+          "specialization", "priceOfCourse", "playground", "busService",
+          "hostelFacility", "emioptions", "partlyPayment"
+        ];
+      case isUnderPostGraduate:
+        return [
+          ...locationFields,
+          "graduationType",
+          "streamType",
+          "selectBranch",
+          "aboutBranch",
+          "courseDuration",
+          "classSize",
+          "eligibilityCriteria",
+          "ownershipType",
+          "collegeCategory",
+          "affiliationType",
+          "placementDrives",
+          "totalStudentsPlaced",
+          "highestPackage",
+          "averagePackage",
+          "priceOfCourse",
+          "installments",
+          "emioptions"
+        ];
 
-      switch (true) {
-        case isStudyAbroad: return ["consultancyName", "studentAdmissions", "countriesOffered", "academicOfferings"];
-        case isBasicCourseForm: return [...locationFields, "courseName", "courseDuration", "priceOfCourse", "startDate"];
-        case isKindergarten:
-          return [
-            ...locationFields,
-            "graduationType", "courseName", "categoriesType", "priceOfCourse",
-            "aboutCourse", "courseDuration", "mode", "classSize", "curriculumType",
-            "ownershipType", "operationalDays", "openingTime", "closingTime",
-            "extendedCare", "mealsProvided", "playground", "busService", "classSizeRatio"
-          ];
-        case isSchool:
-          return [
-            ...locationFields,
-            "courseName",
-            "mode",
-            "courseDuration",
-            "startDate",
-            "classlanguage",
-            "ownershipType",
-            "schoolType",
-            "curriculumType",
-            "classType",
-            "priceOfCourse",
-            "playground",
-            "busService",
-            "hostelFacility",
-            "emioptions",
-            "partlyPayment",
-          ];
-        case isIntermediateCollege:
-          return [
-            ...locationFields,
-            "courseName", "mode", "courseDuration", "startDate", "language",
-            "ownershipType", "collegeType", "curriculumType", "year", "classType",
-            "specialization", "priceOfCourse", "playground", "busService",
-            "hostelFacility", "emioptions", "partlyPayment"
-          ];
-        case isUnderPostGraduate:
-          return [
-            ...locationFields,
-            "graduationType",
-            "streamType",
-            "selectBranch",
-            "aboutBranch",
-            "courseDuration",
-            "classSize",
-            "eligibilityCriteria",
-            "ownershipType",
-            "collegeCategory",
-            "affiliationType",
-            "placementDrives",
-            "totalStudentsPlaced",
-            "highestPackage",
-            "averagePackage",
-            "priceOfCourse",
-            "installments",
-            "emioptions"
-          ];
+      case isCoachingCenter:
+        return currentCourse.categoriesType === "Upskilling"
+          ? [...locationFields, ...coachingCommon, "classTiming", "courselanguage", "certification", "placementDrives", "highestPackage", "averagePackage", "totalStudentsPlaced"]
+          : [...locationFields, ...coachingCommon, "classlanguage", "classSize", "mockTests", "libraryFacility", "studyMaterial"];
 
-        case isCoachingCenter:
-          return currentCourse.categoriesType === "Upskilling"
-            ? [...locationFields, ...coachingCommon, "classTiming", "courselanguage", "certification", "placementDrives", "highestPackage", "averagePackage", "totalStudentsPlaced"]
-            : [...locationFields, ...coachingCommon, "classlanguage", "classSize", "mockTests", "libraryFacility", "studyMaterial"];
-
-        case isTutionCenter:
-          return [
-            ...locationFields,
-            "courseName",
-            "mode",
-            "operationalDays",
-            "openingTime",
-            "closingTime",
-            "subject",
-            "classSize",
-            "partlyPayment"
-          ];
-        case isStudyHall: return [...locationFields, "hallName", "seatingOption", "openingTime", "closingTime", "operationalDays", "startDate", "totalSeats", "availableSeats", "pricePerSeat", "hasPersonalLocker", "hasWifi", "hasChargingPoints", "hasAC"];
-        default: return [...locationFields, "courseName", "courseDuration", "priceOfCourse"];
-      }
-    };
+      case isTutionCenter:
+        return [
+          ...locationFields,
+          "courseName",
+          "mode",
+          "operationalDays",
+          "openingTime",
+          "closingTime",
+          "subject",
+          "classSize",
+          "partlyPayment"
+        ];
+      case isStudyHall: return [...locationFields, "hallName", "seatingOption", "openingTime", "closingTime", "operationalDays", "startDate", "totalSeats", "availableSeats", "pricePerSeat", "hasPersonalLocker", "hasWifi", "hasChargingPoints", "hasAC"];
+      default: return [...locationFields, "courseName", "courseDuration", "priceOfCourse"];
+    }
+  };
 
     const getSchemaKey = (): keyof typeof L2Schemas => {
       if (isStudyAbroad) return "studyAbroad";
@@ -1757,22 +1744,42 @@ const validateCourses = (dataToValidate: Course[]) => {
     </_Card>
   );
 
-    if (renderMode === "inline") return content;
+  if (renderMode === "inline") return content;
 
-    return (
-      <>
-        {assetPreview && (
-          <div className="fixed inset-0 z-[100] bg-black/80 flex flex-col items-center justify-center p-6">
-            <button onClick={() => setAssetPreview(null)} className="absolute top-5 right-5 bg-white p-2 rounded-full"><X size={18} /></button>
-            {assetPreview.type === "image" ? <img src={assetPreview.url} className="max-h-[85vh] object-contain" alt="Preview" /> : <iframe src={assetPreview.url} className="w-full h-full" />}
-          </div>
-        )}
-        <_Dialog open={DialogOpen} onOpenChange={setDialogOpen}>
-          {trigger && <_DialogTrigger asChild>{trigger}</_DialogTrigger>}
-          <_DialogContent className="w-[95vw] sm:w-[90vw] md:w-[800px] lg:w-[900px] xl:max-w-4xl scrollbar-hide top-[65%]" showCloseButton={false}>
-            {content}
-          </_DialogContent>
-        </_Dialog>
-      </>
-    );
-  }
+  return (
+    <>
+      {assetPreview && (
+        <div className="fixed inset-0 z-[100] bg-black/80 flex flex-col items-center justify-center p-6">
+          <button onClick={() => setAssetPreview(null)} className="absolute top-5 right-5 bg-white p-2 rounded-full"><X size={18} /></button>
+          {assetPreview.type === "image" ? <img src={assetPreview.url} className="max-h-[85vh] object-contain" alt="Preview" /> : <iframe src={assetPreview.url} className="w-full h-full" />}
+        </div>
+      )}
+      <_Dialog open={DialogOpen} onOpenChange={setDialogOpen}>
+        {trigger && <_DialogTrigger asChild>{trigger}</_DialogTrigger>}
+        <_DialogContent className="w-[95vw] sm:w-[90vw] md:w-[800px] lg:w-[900px] xl:max-w-4xl scrollbar-hide top-[65%]" showCloseButton={false}>
+          {content}
+        </_DialogContent>
+      </_Dialog>
+    </>
+  );
+}
+
+function updateCoursesInIndexedDb(payload: {
+  branchId: string | null; id: number; courseName: string; aboutCourse: string; courseDuration: string; startDate: string; endDate: string; mode: string; priceOfCourse: string; locationURL: string; state: string; district: string; town: string; image: File | null; imageUrl: string; imagePreviewUrl: string; brochureUrl: string; brochurePreviewUrl: string; brochure: File | null; graduationType: string; streamType: string; selectBranch: string; aboutBranch: string; educationType: string; classSize: string; classSizeRatio?: string; categoriesType: string; domainType: string; subDomainType: string; courseHighlights: string; seatingOption: string; openingTime: string; closingTime: string; openingTimePeriod: string; closingTimePeriod: string; hallName?: string; operationalDays: string[]; totalSeats: string; availableSeats: string; pricePerSeat: string; hasWifi: string; hasChargingPoints: string; hasAC: string; hasPersonalLocker: string; eligibilityCriteria: string; tuitionType: string; instructorProfile: string; subject: string; createdBranch: string; consultancyName: string; studentAdmissions: string; countriesOffered: string; academicOfferings: string; businessProof: File | null; businessProofPreviewUrl: string; businessProofUrl: string; panAadhaar: File | null; panAadhaarPreviewUrl: string; panAadhaarUrl: string; consultancyImage: File | null; consultancyImagePreviewUrl: string; consultancyImageUrl?: string; centerImage: File | null; centerImagePreviewUrl: string; centerImageUrl?: string;
+  // --- MERGED L3 FIELDS ---
+  collegeType: string; collegeCategory: string; schoolType: string; curriculumType: string; schoolCategory: string; hostelFacility: string; playground: string; busService: string; otherActivities: string; extendedCare: string; mealsProvided: string; outdoorPlayArea: string; placementDrives: string; mockInterviews: string; resumeBuilding: string; linkedinOptimization: string; exclusiveJobPortal: string; certification: string; ownershipType: string; affiliationType: string; library: string; entranceExam: string; managementQuota: string; applicationAssistance: string; visaProcessingSupport: string; testOperation: string; preDepartureOrientation: string; accommodationAssistance: string; educationLoans: string; postArrivalSupport: string; emioptions: string; installments: string; totalNumberRequires: string | number; totalStudentsPlaced: string | number; highestPackage: string; averagePackage: string; budget: string | number; studentsSent: string | number; partTimeHelp: string; academicDetails: AcademicDetail[]; facultyDetails: FacultyDetail[]; qualification?: string; experience?: string; specialization: string; subjectTeach?: string; monthlyFees?: string | number; classTiming?: string; courselanguage: string; classlanguage: string; mockTests: string; collegeImage: File | null; collegeImagePreviewUrl: string; collegeImageUrl?: string; tuitionImage: File | null; tuitionImagePreviewUrl: string; tuitionImageUrl?: string; partlyPayment: string; kindergartenImage: File | null; kindergartenImagePreviewUrl: string; kindergartenImageUrl?: string; schoolImage: File | null; schoolImagePreviewUrl: string; schoolImageUrl?: string; classType: string; intermediateImage: File | null; // ✅ Unique key for campus photos
+  // ✅ Unique key for campus photos
+  intermediateImagePreviewUrl: string; intermediateImageUrl?: string; year: string; studyMaterial: string;
+}[]) {
+  throw new Error("Function not implemented.");
+}
+function persistCoursesToIndexedDb(payload: {
+  branchId: string | null; id: number; courseName: string; aboutCourse: string; courseDuration: string; startDate: string; endDate: string; mode: string; priceOfCourse: string; locationURL: string; state: string; district: string; town: string; image: File | null; imageUrl: string; imagePreviewUrl: string; brochureUrl: string; brochurePreviewUrl: string; brochure: File | null; graduationType: string; streamType: string; selectBranch: string; aboutBranch: string; educationType: string; classSize: string; classSizeRatio?: string; categoriesType: string; domainType: string; subDomainType: string; courseHighlights: string; seatingOption: string; openingTime: string; closingTime: string; openingTimePeriod: string; closingTimePeriod: string; hallName?: string; operationalDays: string[]; totalSeats: string; availableSeats: string; pricePerSeat: string; hasWifi: string; hasChargingPoints: string; hasAC: string; hasPersonalLocker: string; eligibilityCriteria: string; tuitionType: string; instructorProfile: string; subject: string; createdBranch: string; consultancyName: string; studentAdmissions: string; countriesOffered: string; academicOfferings: string; businessProof: File | null; businessProofPreviewUrl: string; businessProofUrl: string; panAadhaar: File | null; panAadhaarPreviewUrl: string; panAadhaarUrl: string; consultancyImage: File | null; consultancyImagePreviewUrl: string; consultancyImageUrl?: string; centerImage: File | null; centerImagePreviewUrl: string; centerImageUrl?: string;
+  // --- MERGED L3 FIELDS ---
+  collegeType: string; collegeCategory: string; schoolType: string; curriculumType: string; schoolCategory: string; hostelFacility: string; playground: string; busService: string; otherActivities: string; extendedCare: string; mealsProvided: string; outdoorPlayArea: string; placementDrives: string; mockInterviews: string; resumeBuilding: string; linkedinOptimization: string; exclusiveJobPortal: string; certification: string; ownershipType: string; affiliationType: string; library: string; entranceExam: string; managementQuota: string; applicationAssistance: string; visaProcessingSupport: string; testOperation: string; preDepartureOrientation: string; accommodationAssistance: string; educationLoans: string; postArrivalSupport: string; emioptions: string; installments: string; totalNumberRequires: string | number; totalStudentsPlaced: string | number; highestPackage: string; averagePackage: string; budget: string | number; studentsSent: string | number; partTimeHelp: string; academicDetails: AcademicDetail[]; facultyDetails: FacultyDetail[]; qualification?: string; experience?: string; specialization: string; subjectTeach?: string; monthlyFees?: string | number; classTiming?: string; courselanguage: string; classlanguage: string; mockTests: string; collegeImage: File | null; collegeImagePreviewUrl: string; collegeImageUrl?: string; tuitionImage: File | null; tuitionImagePreviewUrl: string; tuitionImageUrl?: string; partlyPayment: string; kindergartenImage: File | null; kindergartenImagePreviewUrl: string; kindergartenImageUrl?: string; schoolImage: File | null; schoolImagePreviewUrl: string; schoolImageUrl?: string; classType: string; intermediateImage: File | null; // ✅ Unique key for campus photos
+  // ✅ Unique key for campus photos
+  intermediateImagePreviewUrl: string; intermediateImageUrl?: string; year: string; studyMaterial: string;
+}[]) {
+  throw new Error("Function not implemented.");
+}
+

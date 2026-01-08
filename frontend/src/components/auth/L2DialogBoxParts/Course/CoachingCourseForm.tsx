@@ -4,7 +4,7 @@ import InputField from "@/components/ui/InputField";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import SlidingIndicator from "@/components/ui/SlidingIndicator";
 import { Course } from "../../L2DialogBox";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { STATE_DISTRICT_MAP, STATE_OPTIONS } from "@/constants/stateDistricts";
 import { getMyInstitution } from "@/lib/api";
 import { Clock, FileText, IndianRupee, Plus, Upload, Users, X } from "lucide-react";
@@ -993,16 +993,6 @@ const CATEGORY_DOMAIN_MAPPING = {
   }
 };
 
-interface InstitutionResponse {
-  data?: {
-    headquartersAddress?: string;
-    state?: string;
-    locationURL?: string;
-  };
-  headquartersAddress?: string;
-  state?: string;
-  locationURL?: string;
-}
 
 interface CoachingCourseFormProps {
   currentCourse: Course;
@@ -1018,6 +1008,9 @@ interface CoachingCourseFormProps {
   deleteCourse: (id: number) => void;
   courseErrors?: Record<string, string>;
   labelVariant?: 'course' | 'program';
+  uniqueRemoteBranches?: Array<{ _id: string; branchName: string; branchAddress?: string; state?: string; district?: string; town?: string; locationUrl?: string }>;
+  selectedBranchId?: string;
+  isSubscriptionProgram?: boolean;
 }
 
 export default function CoachingCourseForm({
@@ -1031,7 +1024,10 @@ export default function CoachingCourseForm({
   deleteCourse,
   courseErrors = {},
   labelVariant = 'course',
-  handleFileChange
+  handleFileChange,
+  uniqueRemoteBranches = [],
+  selectedBranchId,
+  isSubscriptionProgram = true  
 }: CoachingCourseFormProps) {
   const yesNoOptions = ["Yes", "No"];
 
@@ -1086,44 +1082,68 @@ export default function CoachingCourseForm({
     ));
   };
 
-  const handleRadioChange = async (name: keyof Course, value: string) => {
+  useEffect(() => {
+    if (isSubscriptionProgram && selectedBranchId && currentCourse.createdBranch === "Main") {
+      const branch = uniqueRemoteBranches.find(b => b._id === selectedBranchId);
+      if (branch) {
+        setCourses(prev => prev.map(c => 
+          c.id === selectedCourseId ? {
+            ...c,
+            // Only sync these two specific fields
+            aboutBranch: branch.branchAddress || "",
+            locationURL: branch.locationUrl || "",
+          } : c
+        ));
+      }
+    }
+  }, [selectedBranchId, uniqueRemoteBranches, selectedCourseId, currentCourse.createdBranch, setCourses, isSubscriptionProgram]);
+   
+     const handleRadioChange = (name: keyof Course, value: string) => {
     if (name === "createdBranch" && value === "Main") {
-      try {
-        // 1. Fetch the logged-in institution's details
-        const response = await getMyInstitution() as InstitutionResponse;
-
-        // 2. Handle the data structure returned by getMyInstitution
-        const mainInst = response?.data || response;
-
-        if (mainInst) {
+      if (selectedBranchId) {
+        const branch = uniqueRemoteBranches.find((b) => b._id === selectedBranchId);
+        if (branch) {
           setCourses((prev) =>
             prev.map((c) =>
               c.id === selectedCourseId
                 ? {
-                  ...c,
-                  createdBranch: "Main",
-                  aboutBranch: mainInst.headquartersAddress || "",
-                  state: mainInst.state || "",
-                  locationUrl: mainInst.locationURL || "",
-
-                  district: c.district || "",
-                  town: c.town || "",
-                }
+                    ...c,
+                    createdBranch: "Main",
+                    // Only pull address and map link
+                    aboutBranch: branch.branchAddress || "",
+                    locationURL: branch.locationUrl || "",
+                  }
                 : c
             )
           );
           return;
         }
-      } catch (error) {
-        console.error("Backend fetch failed:", error);
       }
     }
-
-    // Standard update for "No" or other radio buttons
+  
     setCourses((prev) =>
-      prev.map((c) => (c.id === selectedCourseId ? { ...c, [name]: value } : c))
+      prev.map((c) => {
+        if (c.id === selectedCourseId) {
+          // When switching to "No", only clear the synced fields
+          if (name === "createdBranch" && value === "") {
+            return {
+              ...c,
+              createdBranch: "",
+              aboutBranch: "",
+              locationURL: "",
+            };
+          }
+          return { ...c, [name]: value };
+        }
+        return c;
+      })
     );
   };
+
+
+
+
+
   const districtOptions = useMemo(() => {
     if (!currentCourse.state) return [];
     return STATE_DISTRICT_MAP[currentCourse.state] || [];
@@ -1349,6 +1369,8 @@ export default function CoachingCourseForm({
       {/* LOCATION BOX SECTION [cite: 14-25] */}
       <div className="bg-[#DCDCFF] p-6 rounded-[6px] space-y-6 border border-blue-100 shadow-[0px_4px_20px_rgba(0,0,0,0.1)]">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-4">
+
+          {/* RADIO BUTTON SECTION */}
           <div className="flex flex-col gap-4">
             <span className="font-[Montserrat] font-medium text-[16px] md:text-[18px] text-black">
               This is same as Campus Address
@@ -1360,6 +1382,7 @@ export default function CoachingCourseForm({
                     type="radio"
                     name="sameAsCampus"
                     value={opt}
+                    // If "Yes" is selected, currentCourse.createdBranch should be "Main"
                     checked={currentCourse.createdBranch === (opt === "Yes" ? "Main" : "")}
                     onChange={(e) =>
                       handleRadioChange("createdBranch", e.target.value === "Yes" ? "Main" : "")
@@ -1370,6 +1393,12 @@ export default function CoachingCourseForm({
                 </label>
               ))}
             </div>
+            {/* Show a warning if they click Yes but haven't picked a branch at the top yet */}
+            {currentCourse.createdBranch === "Main" && !selectedBranchId && (
+              <p className="text-red-500 text-[10px] font-bold uppercase mt-1">
+                * Please select a branch at the top first
+              </p>
+            )}
           </div>
 
           <InputField

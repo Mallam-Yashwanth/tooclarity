@@ -241,6 +241,8 @@ export function Listings() {
               initialSection={addInlineMode === "course" ? "course" : "branch"}
               institutionId={inst?._id}
               institutionType={rawInst?.instituteType}
+              mode="subscriptionProgram"
+              adminFlow={true}
               onSuccess={() => {
                 queryClient.invalidateQueries({ queryKey: ["programs-list"] });
                 queryClient.invalidateQueries({
@@ -515,16 +517,8 @@ export function Listings() {
                   {isDeleting ? "..." : "Delete Listing"}
                 </button>
 
-                {viewModal.type === "branch" && !isEditing && (
-                  <Button
-                    onClick={() => {
-                      setEditData(viewModal.data);
-                      setIsEditing(true);
-                    }}
-                    className="w-full sm:w-[200px] h-[48px] bg-blue-600 rounded-xl"
-                  >
-                    Edit Branch
-                  </Button>
+                {viewModal.type === 'branch' && !isEditing && (
+                  <Button onClick={() => { setEditData({ ...viewModal.data }); setIsEditing(true); }} className="w-full sm:w-[200px] h-[48px] bg-blue-600 rounded-xl">Edit Branch</Button>
                 )}
 
                 {isEditing && viewModal.type === "branch" && (

@@ -36,45 +36,47 @@ export const baseCourseSchema = Joi.object({
     "any.required": "End date is required",
   }),
   priceOfCourse: Joi.number()
-    .greater(0) // ensures value is > 0
+    .greater(0)
     .required()
     .messages({
       "number.base": "Price must be a number",
       "number.greater": "Price must be greater than 0",
       "any.required": "Price is required",
     }),
-  location: urlRule.required(),
+  // ✅ Fixed Casing
+  locationURL: urlRule.required().messages({
+    "string.empty": "Location URL is required",
+    "any.required": "Location URL is required",
+  }),
   state: stateRule,
   district: districtRule,
+  town: Joi.string().allow("").optional(),
   mode: Joi.string().valid("Offline", "Online", "Hybrid").required().messages({
     "any.only": "Mode must be Offline, Online, or Hybrid",
     "string.empty": "Mode is required",
   }),
   createdBranch: createdBranchRule,
-  image: Joi.any().optional(),
+  
+  // Assets
   imageUrl: Joi.string().uri().allow("").optional().messages({
     "string.uri": "Must be a valid URL (e.g., https://...)",
   }),
-  imagePreviewUrl: Joi.string().allow("").optional(),
-  brochure: Joi.any().optional(),
   brochureUrl: Joi.string().uri().allow("").optional().messages({
     "string.uri": "Must be a valid URL (e.g., https://...)",
   }),
-  brochurePreviewUrl: Joi.string().allow("").optional(),
+  
+  // System Fields
+  institution: Joi.string().optional(),
+  courseType: Joi.string().optional(),
+  branch: Joi.string().optional(),
+  branchName: Joi.string().optional(),
 
-  // --- MERGED L3 FIELDS FOR SCHOOLS/KINDERGARTEN ---
-  schoolType: Joi.string().valid("Co-ed", "Boys Only", "Girls Only", "Public", "Private (For-profit)", "Private (Non-profit)", "International", "Home - based").optional(),
-  schoolCategory: Joi.string().valid("Public", "Private", "Charter", "International").optional(),
-  curriculumType: Joi.string().optional(),
-  operationalDays: Joi.array().items(Joi.string()).optional(),
-  otherActivities: Joi.string().trim().max(200).optional(),
-  hostelFacility: Joi.string().valid("Yes", "No").optional(),
-  playground: Joi.string().valid("Yes", "No").optional(),
-  busService: Joi.string().valid("Yes", "No").optional(),
-  extendedCare: Joi.string().valid("Yes", "No").optional(),
-  mealsProvided: Joi.string().valid("Yes", "No").optional(),
-  outdoorPlayArea: Joi.string().valid("Yes", "No").optional(),
-});
+  // UI-only placeholders (kept to prevent validation crashes)
+  image: Joi.any().optional(),
+  brochure: Joi.any().optional(),
+  imagePreviewUrl: Joi.string().allow("").optional(),
+  brochurePreviewUrl: Joi.string().allow("").optional(),
+}).unknown(true);
 
 export const CoachingCenterSchema = Joi.object({
   courseName: nameRule.required(),
@@ -87,7 +89,11 @@ export const CoachingCenterSchema = Joi.object({
     "number.base": "Price must be a number",
     "any.required": "Price is required",
   }),
-  location: urlRule.required(),
+  // ✅ Fixed Casing
+  locationURL: urlRule.required().messages({
+    "string.empty": "Location URL is required",
+    "any.required": "Location URL is required",
+  }),
   state: stateRule,
   district: districtRule,
   town: Joi.string().required().messages({
@@ -111,7 +117,7 @@ export const CoachingCenterSchema = Joi.object({
       "any.required": "Class size is required",
     }),
 
-  // --- MERGED L3 COACHING FIELDS ---
+  // ✅ Facility fields changed to strictly validate "Yes"/"No" strings
   placementDrives: Joi.string().valid("Yes", "No").required().messages({
     "any.only": "Please select Yes or No for Placement Drives",
     "string.empty": "Placement Drives selection is required",
@@ -153,7 +159,6 @@ export const CoachingCenterSchema = Joi.object({
     "string.empty": "EMI Options selection is required",
   }),
 
-  // --- STATS & CAREER OUTCOMES ---
   highestPackage: Joi.string().required().messages({
     "string.empty": "Highest Package is required (e.g. 15 LPA)",
     "any.required": "Highest Package is required",
@@ -171,7 +176,6 @@ export const CoachingCenterSchema = Joi.object({
     "any.required": "Students placed is required",
   }),
   
-  // --- LANGUAGE & TIMINGS ---
   classlanguage: Joi.string().required().messages({
     "string.empty": "Language of class is required",
     "any.required": "Language of class is required",
@@ -180,14 +184,13 @@ export const CoachingCenterSchema = Joi.object({
     "string.empty": "Language of course is required",
     "any.required": "Language of course is required",
   }),
-  classTimings: Joi.string().required().messages({
+  // ✅ Fixed key to classTiming (singular) to match interface
+  classTiming: Joi.string().required().messages({
     "string.empty": "Class timings are required (e.g. 9 AM - 5 PM)",
     "any.required": "Class timings are required",
   }),
-  centerImages: Joi.any().required().messages({
-    "any.required": "Please upload at least one center image",
-  }),
-});
+  centerImageUrl: Joi.string().uri().allow("").optional(),
+}).unknown(true);
 
 export const StudyHallSchema = Joi.object({
   hallName: nameRule.required().messages({
@@ -241,6 +244,13 @@ export const StudyHallSchema = Joi.object({
   }),
   state: stateRule,
   district: districtRule,
+  town: Joi.string().required().messages({
+    "string.empty": "Town is required.",
+  }),
+  locationURL: urlRule.required().messages({ // ✅ Key alignment
+    "string.empty": "Location URL is required.",
+    "string.uri": "Please enter a valid URL.",
+  }),
   hasWifi: Joi.string().valid("Yes", "No").required().messages({
     "any.only": "Please select an option for Wi-Fi.",
   }),
@@ -254,10 +264,15 @@ export const StudyHallSchema = Joi.object({
     "any.only": "Please select an option for Personal Lockers.",
   }),
   image: Joi.any().optional(),
+  imageUrl: Joi.string().uri().allow("").optional(),
   createdBranch: createdBranchRule,
-});
+  startDate: Joi.string().required().messages({
+    "string.empty": "Start date is required",
+  }),
+}).unknown(true);
 
 // Sub-schema for individual academic rows
+// Sub-schemas (Keep these as they are used inside TuitionCenterSchema)
 const academicDetailSchema = Joi.object({
   subject: Joi.string().required().messages({ "string.empty": "Subject is required" }),
   classTiming: Joi.string().required().messages({ "string.empty": "Class timing is required" }),
@@ -265,7 +280,6 @@ const academicDetailSchema = Joi.object({
   monthlyFees: Joi.number().min(0).required().messages({ "number.base": "Monthly fees must be a number" }),
 });
 
-// Sub-schema for individual faculty rows
 const facultyDetailSchema = Joi.object({
   name: Joi.string().required().messages({ "string.empty": "Faculty name is required" }),
   qualification: Joi.string().required().messages({ "string.empty": "Qualification is required" }),
@@ -274,13 +288,10 @@ const facultyDetailSchema = Joi.object({
 });
 
 export const TuitionCenterSchema = Joi.object({
-  // Matches name="courseName"
   courseName: Joi.string().required().messages({
     "string.empty": "Tuition centre name is required.",
     "any.required": "Tuition centre name is required.",
   }),
-
-  // Matches SlidingIndicator for Mode
   mode: Joi.string()
     .valid("Offline", "Online", "Hybrid")
     .required()
@@ -289,7 +300,6 @@ export const TuitionCenterSchema = Joi.object({
       "any.only": "Please select a valid Mode.",
       "any.required": "Mode is required.",
     }),
-
   subject: Joi.string()
     .pattern(/^[A-Za-z\s,]+$/)
     .required()
@@ -298,35 +308,27 @@ export const TuitionCenterSchema = Joi.object({
       "string.pattern.base": "Subject can only contain letters, spaces, and commas.",
       "any.required": "Subject is required.",
     }),
-
-  // Matches name="classSize"
   classSize: Joi.number().min(1).required().messages({
     "number.base": "Class size must be a number.",
     "number.min": "Class size must be at least 1.",
     "any.required": "Class size is required.",
   }),
-
-  // Location Fields
   state: stateRule.required(),
   district: districtRule.required(),
   town: Joi.string().required().messages({
     "string.empty": "Town is required.",
     "any.required": "Town is required.",
   }),
-  locationUrl: Joi.string().uri().required().messages({
+  locationURL: Joi.string().uri().required().messages({ // ✅ Fixed casing to match Interface
     "string.empty": "Location URL is required.",
     "string.uri": "Please enter a valid URL.",
     "any.required": "Location URL is required.",
   }),
-
   createdBranch: createdBranchRule.required(),
-
-  // Operational Time & Days
   operationalDays: Joi.array().items(Joi.string()).min(1).required().messages({
     "array.min": "At least one operational day must be selected.",
     "any.required": "At least one operational day must be selected.",
   }),
-
   openingTime: Joi.string()
     .pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
     .required()
@@ -335,7 +337,6 @@ export const TuitionCenterSchema = Joi.object({
       "string.empty": "Opening Time is required.",
       "any.required": "Opening Time is required.",
     }),
-
   closingTime: Joi.string()
     .pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
     .required()
@@ -344,14 +345,10 @@ export const TuitionCenterSchema = Joi.object({
       "string.empty": "Closing Time is required.",
       "any.required": "Closing Time is required.",
     }),
-
-  // Payment Radio
   partlyPayment: Joi.string().valid("Yes", "No").required().messages({
     "any.only": "Please select Yes or No for partly payment.",
     "any.required": "Partly payment selection is required.",
   }),
-
-  // Dynamic Arrays
   academicDetails: Joi.array()
     .items(academicDetailSchema)
     .min(1)
@@ -360,7 +357,6 @@ export const TuitionCenterSchema = Joi.object({
       "array.min": "Please add at least one subject in academic details.",
       "any.required": "Academic details are required.",
     }),
-
   facultyDetails: Joi.array()
     .items(facultyDetailSchema)
     .min(1)
@@ -369,11 +365,10 @@ export const TuitionCenterSchema = Joi.object({
       "array.min": "Please add at least one faculty member.",
       "any.required": "Faculty details are required.",
     }),
-
-});
+  tuitionImageUrl: Joi.string().uri().allow("").optional(),
+}).unknown(true);
 
 export const KindergartenSchema = Joi.object({
-  // --- BASE FIELDS ---
   courseName: nameRule.required().messages({
     "string.empty": "Course name is required",
     "any.required": "Course name is required",
@@ -395,22 +390,17 @@ export const KindergartenSchema = Joi.object({
     "any.only": "Mode must be Offline, Online, or Hybrid",
     "string.empty": "Mode is required",
   }),
-
-  // --- LOCATION ALIGNMENT ---
   state: stateRule,
   district: districtRule,
-
-  // LOCATION FIELDS
   town: Joi.string().required().messages({
     "string.empty": "Town is required.",
   }),
-  locationUrl: Joi.string().uri().required().messages({
+  // ✅ Key alignment: locationURL
+  locationURL: Joi.string().uri().required().messages({
     "string.empty": "Location URL is required.",
     "string.uri": "Please enter a valid URL.",
   }),
   createdBranch: createdBranchRule,
-
-  // --- KINDERGARTEN SPECIFIC ---
   graduationType: Joi.string().valid("Kindergarten").required().messages({
     "any.only": "Invalid Course type",
     "string.empty": "Course type is required",
@@ -432,8 +422,6 @@ export const KindergartenSchema = Joi.object({
   ownershipType: Joi.string().required().messages({
     "string.empty": "Ownership type is required",
   }),
-  
-  // Operational
   operationalDays: Joi.array().items(Joi.string()).min(1).required().messages({
     "array.min": "Please select at least one operational day",
     "any.required": "Operational days are required",
@@ -445,7 +433,7 @@ export const KindergartenSchema = Joi.object({
     "string.empty": "Closing time is required",
   }),
 
-  // Facilities (Strictly Required)
+  // ✅ Facilities as strings
   playground: Joi.string().valid("Yes", "No").required().messages({
     "any.only": "Please select Yes or No for Playground",
   }),
@@ -465,14 +453,13 @@ export const KindergartenSchema = Joi.object({
     "any.only": "Please select Yes or No for EMI Options",
   }),
 
-  // IMAGE & BROCHURE FIELDS (REQUIRED)
+  // ✅ specialized asset keys
+  kindergartenImageUrl: Joi.string().uri().allow("").optional(),
   imageUrl: Joi.string().uri().allow("").optional(),
-  collegeImageUrl: Joi.string().uri().allow("").optional(),
   brochureUrl: Joi.string().uri().allow("").optional(),
-});
+}).unknown(true);
 
 export const SchoolSchema = Joi.object({
-  // --- CORE DETAILS ---
   courseName: nameRule.required().messages({
     "string.empty": "School Name is required",
   }),
@@ -485,12 +472,9 @@ export const SchoolSchema = Joi.object({
   startDate: Joi.string().required().messages({
     "string.empty": "Starting date is required",
   }),
-
-  // ✅ USING ALREADY PRESENT FIELD: classlanguage
   classlanguage: Joi.string().required().messages({
     "string.empty": "Language of class is required",
   }),
-
   ownershipType: Joi.string().valid("Private", "Government", "Trust").required().messages({
     "string.empty": "Ownership Type is required",
   }),
@@ -506,19 +490,20 @@ export const SchoolSchema = Joi.object({
   priceOfCourse: Joi.number().required().messages({
     "number.base": "Price must be a number",
   }),
-
-  // --- LOCATION FIELDS ---
   state: stateRule.required(),
   district: districtRule.required(),
   town: Joi.string().required().messages({
     "string.empty": "Town is required",
   }),
-  locationUrl: Joi.string().uri().required().messages({
+  // ✅ Key alignment: locationURL
+  locationURL: Joi.string().uri().required().messages({
     "string.empty": "Location URL is required",
     "string.uri": "Invalid URL format",
   }),
-
-  // --- FACILITIES (BOOLEAN RADIOS) ---
+  operationalDays: Joi.array().items(Joi.string()).min(1).required().messages({
+    "array.min": "Please select at least one operational day",
+    "any.required": "Operational days are required",
+  }),
   playground: Joi.string().valid("Yes", "No").required().messages({
     "any.only": "Please select Yes or No for Playground",
   }),
@@ -534,17 +519,14 @@ export const SchoolSchema = Joi.object({
   partlyPayment: Joi.string().valid("Yes", "No").required().messages({
     "any.only": "Please select Yes or No for Partial Payment",
   }),
-// IMAGE & BROCHURE FIELDS (REQUIRED)
+  // ✅ specialized asset keys
+  schoolImageUrl: Joi.string().uri().allow("").optional(),
   imageUrl: Joi.string().uri().allow("").optional(),
-  collegeImageUrl: Joi.string().uri().allow("").optional(),
   brochureUrl: Joi.string().uri().allow("").optional(),
-
-  graduationType: Joi.string().allow(""),
   createdBranch: createdBranchRule.required(),
-});
+}).unknown(true);
 
 export const CollegeSchema = Joi.object({
-  // --- CORE DETAILS ---
   courseName: nameRule.required().messages({
     "string.empty": "Intermediate Name is required",
     "any.required": "Intermediate Name is required",
@@ -573,19 +555,20 @@ export const CollegeSchema = Joi.object({
   ownershipType: Joi.string().required().messages({
     "string.empty": "Ownership type is required",
   }),
-
-  // --- LOCATION FIELDS ---
-   state: stateRule.required(),
+  operationalDays: Joi.array().items(Joi.string()).min(1).required().messages({
+    "array.min": "Please select at least one operational day",
+    "any.required": "Operational days are required",
+  }),
+  state: stateRule.required(),
   district: districtRule.required(),
   town: Joi.string().required().messages({
     "string.empty": "Town is required",
   }),
-  locationUrl: Joi.string().uri().required().messages({
+  // ✅ Fixed Key
+  locationURL: Joi.string().uri().required().messages({
     "string.empty": "Location URL is required",
     "string.uri": "Invalid URL format",
   }),
-
-  // --- ACADEMIC SPECIFICS ---
   year: Joi.string().required().messages({
     "string.empty": "Please select the year",
   }),
@@ -599,8 +582,6 @@ export const CollegeSchema = Joi.object({
     "number.base": "Fees must be a number",
     "any.required": "Fees are required",
   }),
-
-  // --- FACILITIES (BOOLEAN RADIOS) ---
   playground: Joi.string().valid("Yes", "No").required().messages({
     "any.only": "Please select Yes or No for Playground",
   }),
@@ -616,15 +597,12 @@ export const CollegeSchema = Joi.object({
   partlyPayment: Joi.string().valid("Yes", "No").required().messages({
     "any.only": "Please select Yes or No for Partial Payment",
   }),
-
-  // IMAGE & BROCHURE FIELDS (REQUIRED)
+  // ✅ Asset Keys
+  intermediateImageUrl: Joi.string().uri().allow("").optional(),
   imageUrl: Joi.string().uri().allow("").optional(),
-  collegeImageUrl: Joi.string().uri().allow("").optional(),
   brochureUrl: Joi.string().uri().allow("").optional(),
-
-  graduationType: Joi.string().allow(""),
   createdBranch: createdBranchRule.required(),
-});
+}).unknown(true);
 
 export const UGPGSchema = Joi.object({
   graduationType: graduationTypeRule,
@@ -655,16 +633,14 @@ export const UGPGSchema = Joi.object({
   }),
   state: stateRule,
   district: districtRule,
-
-  // LOCATION FIELDS
   town: Joi.string().required().messages({
     "string.empty": "Town is required.",
   }),
-  locationUrl: Joi.string().uri().required().messages({
+  // ✅ Fixed Casing
+  locationURL: Joi.string().uri().required().messages({
     "string.empty": "Location URL is required.",
     "string.uri": "Please enter a valid URL.",
   }),
-
   createdBranch: createdBranchRule,
 
   // --- MERGED L3 UG/PG FIELDS ---
@@ -680,7 +656,7 @@ export const UGPGSchema = Joi.object({
     "string.empty": "Affiliation Type is required.",
   }),
 
-  // PLACEMENT FIELDS (REQUIRED)
+  // PLACEMENT FIELDS
   totalStudentsPlaced: Joi.number().min(0).required().messages({
     "number.base": "Total students placed must be a number.",
     "any.required": "Total students placed is required.",
@@ -696,6 +672,7 @@ export const UGPGSchema = Joi.object({
     "string.empty": "Average package info is required (e.g. 6 LPA).",
   }),
 
+  // ✅ FACILITY RADIOS (Strictly validated as Strings)
   placementDrives: Joi.string().valid("Yes", "No").required().messages({
     "any.only": "Please select Yes or No for Placement Drives",
   }),
@@ -738,11 +715,11 @@ export const UGPGSchema = Joi.object({
     "any.only": "Please select Yes or No for EMI Options",
   }),
 
-  // IMAGE & BROCHURE FIELDS (REQUIRED)
-  imageUrl: Joi.string().uri().allow("").optional(),
+  // ASSETS
   collegeImageUrl: Joi.string().uri().allow("").optional(),
+  imageUrl: Joi.string().uri().allow("").optional(),
   brochureUrl: Joi.string().uri().allow("").optional(),
-});
+}).unknown(true);
 
 export const StudyAbroadSchema = Joi.object({
   consultancyName: nameRule.required().messages({
@@ -758,8 +735,6 @@ export const StudyAbroadSchema = Joi.object({
   academicOfferings: Joi.string().required().invalid("Select Academic type").messages({
     "any.invalid": "Please select a valid academic type",
   }),
-
-  // --- ADDED LOCATION FIELDS ---
   state: Joi.string().required().messages({
     "string.empty": "State is required",
   }),
@@ -769,15 +744,14 @@ export const StudyAbroadSchema = Joi.object({
   town: Joi.string().required().messages({
     "string.empty": "Town is required",
   }),
-  locationUrl: Joi.string().uri().required().messages({
+  // ✅ Fixed Casing
+  locationURL: Joi.string().uri().required().messages({
     "string.empty": "Location URL is required",
     "string.uri": "Must be a valid URL",
   }),
   aboutBranch: Joi.string().required().messages({
     "string.empty": "Headquarters address is required",
   }),
-
-  // --- ADDED BUDGET & STAT FIELDS ---
   budget: Joi.string().required().messages({
     "string.empty": "Budget is required",
   }),
@@ -786,21 +760,16 @@ export const StudyAbroadSchema = Joi.object({
     "any.required": "Students sent count is required",
   }),
 
-  image: Joi.any().optional(),
+  // ASSETS (Urls from S3)
   imageUrl: Joi.string().uri().allow("").optional(),
-  imagePreviewUrl: Joi.string().allow("").optional(),
-  brochure: Joi.any().optional(),
   brochureUrl: Joi.string().uri().allow("").optional(),
-  brochurePreviewUrl: Joi.string().allow("").optional(),
-  businessProof: Joi.any().optional(),
   businessProofUrl: Joi.string().uri().allow("").optional(),
-  businessProofPreviewUrl: Joi.string().allow("").optional(),
-  panAadhaar: Joi.any().optional(),
   panAadhaarUrl: Joi.string().uri().allow("").optional(),
-  panAadhaarPreviewUrl: Joi.string().allow("").optional(),
+  consultancyImageUrl: Joi.string().uri().allow("").optional(),
+
   createdBranch: createdBranchRule,
 
-  // --- MERGED L3 STUDY ABROAD FIELDS ---
+  // ✅ Radios as Strings
   applicationAssistance: Joi.string().valid("Yes", "No").required().messages({
     "any.only": "Please select Yes or No for Application Assistance",
   }),
@@ -822,13 +791,11 @@ export const StudyAbroadSchema = Joi.object({
   postArrivalSupport: Joi.string().valid("Yes", "No").required().messages({
     "any.only": "Please select Yes or No for Post-arrival support",
   }),
-
-  // --- ADDED MISSING UI FIELD ---
   partTimeHelp: Joi.string().valid("Yes", "No").required().messages({
     "any.only": "Please select Yes or No for Part-time opportunities",
     "string.empty": "Part-time help selection is required",
   }),
-});
+}).unknown(true);
 
 export const branchSchema = Joi.object({
   branchName: Joi.string()

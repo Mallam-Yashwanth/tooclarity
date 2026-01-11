@@ -219,16 +219,15 @@ export default function CollegeForm({
       )}
     </div>
 
-    <InputField
-      label="Location URL"
-      name="locationURL" 
-      value={currentCourse.locationURL || ""}
-      onChange={handleCourseChange}
-      placeholder="https://maps.app.goo.gl/4mPv8SX6cD52i9B"
-      error={courseErrors.locationURL}
-      required
-      disabled={currentCourse.createdBranch === "Main"} 
-    />
+          <InputField
+            label="Location URL"
+            name="locationURL"
+            value={currentCourse.locationURL || ""}
+            onChange={handleCourseChange}
+            placeholder="https://maps.app.goo.gl/4mPv8SX6cD52i9B"
+            error={courseErrors.locationUrl}
+            required
+          />
 
     <InputField
       label="headquarters address"

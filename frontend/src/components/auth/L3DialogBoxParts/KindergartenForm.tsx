@@ -285,61 +285,59 @@ export default function KindergartenForm({
           </div>
 
           <InputField
-                label="Location URL"
-                name="locationURL" 
-                value={currentCourse.locationURL || ""}
-                onChange={handleCourseChange}
-                placeholder="https://maps.app.goo.gl/4mPv8SX6cD52i9B"
-                error={courseErrors.locationURL}
-                required
-                disabled={currentCourse.createdBranch === "Main"} 
-              />
-          
-              <InputField
-                label="headquarters address"
-                name="aboutBranch"
-                value={currentCourse.aboutBranch || ""}
-                onChange={handleCourseChange}
-                placeholder="2-3, Uppal Hills Colony, Peerzadiguda"
-                error={courseErrors.aboutBranch}
-                required
-                disabled={currentCourse.createdBranch === "Main"}
-              />
-          
-              <SearchableSelect
-                label="State"
-                name="state"
-                value={currentCourse.state}
-                onChange={handleCourseChange}
-                options={STATE_OPTIONS}
-                placeholder="Select state"
-                required
-                error={courseErrors.state}
-                disabled={false} 
-              />
-          
-              <SearchableSelect
-                label="District"
-                name="district"
-                value={currentCourse.district}
-                onChange={handleCourseChange}
-                options={districtOptions}
-                placeholder={currentCourse.state ? "Select district" : "Select state first"}
-                required
-                error={courseErrors.district}
-                disabled={!currentCourse.state} 
-              />
-          
-              <InputField
-                label="Town"
-                name="town"
-                value={currentCourse.town}
-                onChange={handleCourseChange}
-                placeholder="Medchal"
-                error={courseErrors.town}
-                required
-                disabled={false} 
-              />
+            label="Location URL"
+            name="locationURL"
+            value={currentCourse.locationURL || ""}
+            onChange={handleCourseChange}
+            placeholder="https://maps.app.goo.gl/4mPv8SX6cD52i9B"
+            error={courseErrors.locationUrl}
+            required
+          />
+
+          <InputField
+            label="headquarters address"
+            name="aboutBranch"
+            value={currentCourse.aboutBranch || ""}
+            onChange={handleCourseChange}
+            placeholder="2-3, Uppal Hills Colony, Peerzadiguda"
+            error={courseErrors.aboutBranch}
+            required
+          />
+
+          <SearchableSelect
+            label="State"
+            name="state"
+            value={currentCourse.state}
+            onChange={handleCourseChange}
+            options={STATE_OPTIONS}
+            placeholder="Select state"
+            required
+            error={courseErrors.state}
+          />
+
+          <SearchableSelect
+            label="District"
+            name="district"
+            value={currentCourse.district}
+            onChange={handleCourseChange}
+            options={districtOptions}
+            placeholder={
+              currentCourse.state ? "Select district" : "Select state first"
+            }
+            required
+            disabled={!currentCourse.state}
+            error={courseErrors.district}
+          />
+
+          <InputField
+            label="Town"
+            name="town"
+            value={currentCourse.town}
+            onChange={handleCourseChange}
+            placeholder="Medchal"
+            error={courseErrors.town}
+            required
+          />
         </div>
       </div>
 

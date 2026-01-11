@@ -21,16 +21,67 @@ import {
   PaginationLink,
 } from "@/components/ui/pagination";
 
-// --- Types ---
+// --- 1. Define specific interfaces for your Blue Box variations ---
+
+interface KindergartenSubItem {
+  courseName?: string;
+  categoriesType: string;
+  priceOfCourse: string | number;
+  classSizeRatio: string;
+  aboutCourse: string;
+}
+
+interface IntermediateSubItem {
+  courseName?: string;
+  year: string;
+  classType: string;
+  specialization: string;
+  priceOfCourse: string | number;
+}
+
+interface SchoolSubItem {
+  courseName?: string;
+  classType: string;
+  priceOfCourse: string | number;
+}
+
+interface StudyAbroadSubItem {
+  courseName?: string;
+  countriesOffered: string;
+  academicOfferings: string;
+  budget: string | number;
+  studentsSent: string | number;
+}
+
+interface TuitionSubItem {
+  courseName?: string;
+  subject: string;
+  classSize: string;
+  academicDetails: any[]; // Replace 'any' with your AcademicDetail interface
+  facultyDetails: any[];  // Replace 'any' with your FacultyDetail interface
+  priceOfCourse: string | number;
+}
+
+// --- 2. Create the Union and update the Parent Interface ---
+
+type CourseSubItem = 
+  | KindergartenSubItem 
+  | IntermediateSubItem 
+  | SchoolSubItem 
+  | StudyAbroadSubItem 
+  | TuitionSubItem;
+
 interface ExtendedProgram {
   _id: string;
   programName: string;
+  courseType?: string;
+  // Shared root-level preview fields
   courseName?: string;
   categoriesType?: string;
-  domainType?: string;
-  subDomainType?: string;
   mode?: string;
   courseDuration?: string;
+  // The nested array
+  courses?: CourseSubItem[]; 
 }
 
 interface BranchDetail {
@@ -79,6 +130,39 @@ export function Listings() {
   const [coursePage, setCoursePage] = useState(1);
   const itemsPerPage = 4;
 
+  const normalizedPrograms: ExtendedProgram[] = (programs || []).map((p: ExtendedProgram) => {
+  // If this is a nested bulk document, extract the first item for the card preview
+  if (p.courses && p.courses.length > 0) {
+    const firstSub = p.courses[0];
+    
+    // Create a normalized copy
+    const normalized: ExtendedProgram = { ...p };
+
+    // 1. Resolve the Title (programName)
+    normalized.courseName = firstSub.courseName || p.courseName;
+
+    // 2. Resolve the Subtitle/Type (categoriesType)
+    // We check which unique field exists in the first sub-item to populate the badge
+    if ("specialization" in firstSub) {
+      normalized.categoriesType = firstSub.specialization;
+    } else if ("categoriesType" in firstSub) {
+      normalized.categoriesType = firstSub.categoriesType;
+    } else if ("subject" in firstSub) {
+      normalized.categoriesType = firstSub.subject;
+    } else if ("classType" in firstSub) {
+      normalized.categoriesType = firstSub.classType;
+    }
+
+    // 3. Final Fallback for UI Title
+    normalized.programName = normalized.courseName || normalized.categoriesType || "Multiple Programs";
+
+    return normalized;
+  }
+  
+  // Return flat object as is if it's an older record
+  return p;
+});
+
   const { data: branchList, isLoading: isBranchesLoading } = useQuery({
     queryKey: ['programs-page-branches', inst?._id],
     enabled: !!inst?._id,
@@ -100,10 +184,13 @@ export function Listings() {
   if (loading || !user) return null;
 
   const currentBranches = (branchList || []).slice((branchPage - 1) * itemsPerPage, branchPage * itemsPerPage);
-  const currentCourses = (programs || []).slice((coursePage - 1) * itemsPerPage, coursePage * itemsPerPage) as ExtendedProgram[];
+ const currentCourses = normalizedPrograms.slice(
+  (coursePage - 1) * itemsPerPage, 
+  coursePage * itemsPerPage
+);
 
   const totalBranchPages = Math.ceil((branchList?.length || 0) / itemsPerPage);
-  const totalCoursePages = Math.ceil((programs?.length || 0) / itemsPerPage);
+ const totalCoursePages = Math.ceil((normalizedPrograms.length || 0) / itemsPerPage);
 
   // --- Handlers ---
   const handleDeleteBranch = async (id: string) => {
@@ -122,19 +209,22 @@ export function Listings() {
   };
 
   const handleDeleteCourse = async (id: string) => {
-    if (!inst?._id || !window.confirm("Delete this course?")) return;
-    setIsDeleting(true);
-    try {
-      const res = await programsAPI.remove(id, inst._id);
-      if (res.success) {
-        queryClient.invalidateQueries({ queryKey: ['programs-list'] });
-        setViewModal(null);
-        toast.success("Course removed");
-      }
-    } finally {
-      setIsDeleting(false);
+  // Ensure we are passing the root level _id, which normalizedPrograms preserves
+  if (!inst?._id || !window.confirm("Delete this listing and all associated programs?")) return;
+  
+  setIsDeleting(true);
+  try {
+    const res = await programsAPI.remove(id, inst._id);
+    if (res.success) {
+      // Invalidate both lists to ensure the UI stays in sync
+      queryClient.invalidateQueries({ queryKey: ['programs-list'] });
+      setViewModal(null);
+      toast.success("Listing removed");
     }
-  };
+  } finally {
+    setIsDeleting(false);
+  }
+};
 
   const handleUpdateBranch = async () => {
     if (!editData || !inst?._id) return;
@@ -234,6 +324,11 @@ export function Listings() {
                   <div>
                     <h3 className="font-bold text-lg">{p.courseName || p.programName}</h3>
                     <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded font-bold uppercase">{p.categoriesType || "Standard"}</span>
+                  {p.courses && p.courses.length > 1 && (
+                    <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded font-bold uppercase">
+                      + {p.courses.length - 1} More
+                    </span>
+                  )}
                   </div>
                   <Button variant="link" onClick={() => { setViewModal({ type: 'course', data: p }); setIsEditing(true); }} className="text-blue-600 font-bold p-0">Edit Listing</Button>
                </div>
@@ -367,3 +462,7 @@ export function Listings() {
     </motion.div>
   );
 }
+
+
+
+

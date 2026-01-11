@@ -115,6 +115,11 @@ const courseSchema = new mongoose.Schema(
       required: false,
       index: true,
     },
+    courses: [
+      {
+        type: mongoose.Schema.Types.Mixed, 
+      }
+    ],
   },
   { timestamps: true }
 );

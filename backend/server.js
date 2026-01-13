@@ -47,11 +47,7 @@ mongoose.connection.once('open', async () => {
 const port = process.env.PORT || 3001;
 const server = app.listen(port, () => {
   console.log(`🚀 App running on port ${port}...`);
-  try {
-    require('./jobs/notification.job').startNotificationWorker();
-  } catch (e) {
-    console.error('Failed to start notification worker:', e?.message || e);
-  }
+  // Notification worker is handled by workers/index.js
 });
 
 
@@ -99,19 +95,40 @@ io.use((socket, next) => {
 
 
 // socket connection with the user
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
   const { id: userId, role: userRole } = socket.user;
   console.log(`Secure Connection: User ${userId} (${userRole})`);
 
 
   if (userRole === 'institutionAdmin') {
     socket.join(`institutionAdmin:${userId}`);
+
+    try {
+      const institution = await Institution.findOne({ institutionAdmin: userId }).select('_id');
+      if (institution) {
+        socket.join(`institution:${institution._id}`);
+        console.log(`Joined room: institution:${institution._id}`);
+      }
+    } catch (err) {
+      console.error('Error joining institution room:', err);
+    }
+
   } else if (userRole === 'student') {
     socket.join(`student:${userId}`);
   } else if (userRole === 'admin') {
     socket.join(`admin:${userId}`);
   }
 
+  // ✅ Handle dynamic room joining from frontend
+  socket.on('join', (room) => {
+    console.log(`User ${userId} joining room: ${room}`);
+    socket.join(room);
+  });
+
+  socket.on('leave', (room) => {
+    console.log(`User ${userId} leaving room: ${room}`);
+    socket.leave(room);
+  });
 
   socket.on('disconnect', () => {
     console.log('User disconnected');

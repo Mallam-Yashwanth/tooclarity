@@ -1,20 +1,37 @@
 // server.js
-const mongoose = require('mongoose');
 const dotenv = require('dotenv');
-const path = require('path');
-const { Institution } = require('./models/Institution');
-const { initializeElasticsearch } = require('./config/esSync');
-
-// ✅ Load correct environment file
+// ✅ Load correct environment file immediately
 const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development';
 dotenv.config({ path: envFile });
+
+
+const cookieParser = require('cookie-parser');
+const globalAuthMiddleware = require('./middleware/globalAuth.middleware');
+
+
+
+
+
 
 console.log(`Environment loaded: ${process.env.NODE_ENV}`);
 console.log(`Using file: ${envFile}`);
 
+
+const mongoose = require('mongoose');
+const path = require('path');
+const { Institution } = require('./models/Institution');
+const { initializeElasticsearch } = require('./config/esSync');
+
+
+console.log(`Environment loaded: ${process.env.NODE_ENV}`);
+console.log(`Using file: ${envFile}`);
+
+
 const app = require('./app');
 
+
 const DB = process.env.MONGO_URI;
+
 
 mongoose.connection.once('open', async () => {
   console.log('✅ MongoDB connection successful!');
@@ -25,19 +42,19 @@ mongoose.connection.once('open', async () => {
   }
 });
 
+
 // ✅ Start Express server
 const port = process.env.PORT || 3001;
 const server = app.listen(port, () => {
   console.log(`🚀 App running on port ${port}...`);
-  try {
-    require('./jobs/notification.job').startNotificationWorker();
-  } catch (e) {
-    console.error('Failed to start notification worker:', e?.message || e);
-  }
+  // Notification worker is handled by workers/index.js
 });
+
 
 // ✅ Attach Socket.IO
 const { Server } = require('socket.io');
+
+
 const io = new Server(server, {
   cors: {
     origin: process.env.CLIENT_ORIGIN_WEB,
@@ -46,19 +63,78 @@ const io = new Server(server, {
 });
 app.set('io', io);
 
+
 // Socket singleton for workers
 try {
   require('./utils/socket').setIO(io);
-} catch {}
+} catch { }
 
-io.on('connection', (socket) => {
-  socket.on('joinInstitution', (institutionId) => institutionId && socket.join(`institution:${institutionId}`));
-  socket.on('joinInstitutionAdmin', (adminId) => adminId && socket.join(`institutionAdmin:${adminId}`));
-  socket.on('joinStudent', (studentId) => studentId && socket.join(`student:${studentId}`));
-  socket.on('joinProgram', (programId) => programId && socket.join(`program:${programId}`));
-  socket.on('joinAdmin', (adminId) => adminId && socket.join(`admin:${adminId}`));
-  socket.on('joinBranch', (branchId) => branchId && socket.join(`branch:${branchId}`));
+
+//socket connection with the cookie //
+io.use((socket, next) => {
+  const req = socket.request;
+  const res = {
+    cookie: () => { },
+    clearCookie: () => { },
+    status: (code) => ({
+      json: (errBody) => next(new Error(errBody.message || 'Authentication Failed'))
+    })
+  };
+
+
+  const parseCookies = cookieParser(process.env.JWT_SECRET);
+  parseCookies(req, res, async (err) => {
+    if (err) return next(new Error('Cookie Parse Error'));
+    await globalAuthMiddleware(req, res, (authErr) => {
+      if (authErr) return next(authErr);
+      socket.user = { id: req.userId, role: req.userRole };
+      next();
+    });
+  });
 });
+
+
+// socket connection with the user
+io.on('connection', async (socket) => {
+  const { id: userId, role: userRole } = socket.user;
+  console.log(`Secure Connection: User ${userId} (${userRole})`);
+
+
+  if (userRole === 'institutionAdmin') {
+    socket.join(`institutionAdmin:${userId}`);
+
+    try {
+      const institution = await Institution.findOne({ institutionAdmin: userId }).select('_id');
+      if (institution) {
+        socket.join(`institution:${institution._id}`);
+        console.log(`Joined room: institution:${institution._id}`);
+      }
+    } catch (err) {
+      console.error('Error joining institution room:', err);
+    }
+
+  } else if (userRole === 'student') {
+    socket.join(`student:${userId}`);
+  } else if (userRole === 'admin') {
+    socket.join(`admin:${userId}`);
+  }
+
+  // ✅ Handle dynamic room joining from frontend
+  socket.on('join', (room) => {
+    console.log(`User ${userId} joining room: ${room}`);
+    socket.join(room);
+  });
+
+  socket.on('leave', (room) => {
+    console.log(`User ${userId} leaving room: ${room}`);
+    socket.leave(room);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('User disconnected');
+  });
+});
+
 
 // ✅ Integrate Workers Here (the magic)
 (async () => {
@@ -71,6 +147,7 @@ io.on('connection', (socket) => {
   }
 })();
 
+
 // ✅ Watch for Course changes (realtime updates)
 (async () => {
   try {
@@ -79,6 +156,7 @@ io.on('connection', (socket) => {
     const changeStream = Course.watch([{ $match: { operationType: { $in: ['update', 'replace'] } } }], {
       fullDocument: 'updateLookup',
     });
+
 
     changeStream.on('change', async (change) => {
       try {
@@ -91,6 +169,7 @@ io.on('connection', (socket) => {
         const viewsRollupsChanged = keys.some((k) => k.startsWith('viewsRollups'));
         const comparisonsRollupsChanged = keys.some((k) => k.startsWith('comparisonRollups'));
 
+
         // courseViews or viewsRollups change → emit events
         if (typeof updated.courseViews !== 'undefined' || viewsRollupsChanged || change.operationType === 'replace') {
           if (institutionId)
@@ -100,6 +179,7 @@ io.on('connection', (socket) => {
               courseViews: doc.courseViews,
             });
 
+
           if (inst?.institutionAdmin) {
             const adminId = String(inst.institutionAdmin);
             io.to(`institutionAdmin:${adminId}`).emit('courseViewsUpdated', {
@@ -107,6 +187,7 @@ io.on('connection', (socket) => {
               courseId: String(doc._id),
               courseViews: doc.courseViews,
             });
+
 
             const institutions = await Institution.find({ institutionAdmin: adminId }).select('_id');
             const ids = institutions.map((i) => i._id);
@@ -121,6 +202,7 @@ io.on('connection', (socket) => {
           }
         }
 
+
         // comparisons change → emit comparison events
         if (typeof updated.comparisons !== 'undefined' || comparisonsRollupsChanged || change.operationType === 'replace') {
           if (institutionId)
@@ -130,6 +212,7 @@ io.on('connection', (socket) => {
               comparisons: doc.comparisons,
             });
 
+
           if (inst?.institutionAdmin) {
             const adminId = String(inst.institutionAdmin);
             io.to(`institutionAdmin:${adminId}`).emit('comparisonsUpdated', {
@@ -137,6 +220,7 @@ io.on('connection', (socket) => {
               courseId: String(doc._id),
               comparisons: doc.comparisons,
             });
+
 
             const institutions = await Institution.find({ institutionAdmin: adminId }).select('_id');
             const ids = institutions.map((i) => i._id);
@@ -159,6 +243,7 @@ io.on('connection', (socket) => {
   }
 })();
 
+
 // ✅ Watch Enquiries for realtime updates
 (async () => {
   try {
@@ -168,6 +253,7 @@ io.on('connection', (socket) => {
       fullDocument: 'updateLookup',
     });
 
+
     stream.on('change', async (change) => {
       try {
         const doc = change.fullDocument;
@@ -175,10 +261,12 @@ io.on('connection', (socket) => {
         const institutionId = String(doc.institution);
         if (institutionId) io.to(`institution:${institutionId}`).emit('enquiryCreated', { enquiry: doc });
 
+
         const inst = await Institution.findById(institutionId).select('institutionAdmin');
         if (inst?.institutionAdmin) {
           const adminId = String(inst.institutionAdmin);
           io.to(`institutionAdmin:${adminId}`).emit('enquiryCreated', { enquiry: doc });
+
 
           const institutions = await Institution.find({ institutionAdmin: adminId }).select('_id');
           const ids = institutions.map((i) => i._id);
@@ -197,9 +285,11 @@ io.on('connection', (socket) => {
   }
 })();
 
+
 // ✅ Global error handling
 process.on('unhandledRejection', (err) => {
   console.error('UNHANDLED REJECTION! 💥 Shutting down...');
   console.error(err.name, err.message);
   server.close(() => process.exit(1));
 });
+

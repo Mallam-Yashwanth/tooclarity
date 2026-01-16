@@ -19,6 +19,18 @@ console.log(`Using file: ${envFile}`);
 
 const mongoose = require('mongoose');
 const path = require('path');
+const redisConnection = require('./config/redisConfig'); // Added Missing Import
+const { createWorker: createNotificationWorker } = require('./jobs/notification.job');
+const { createWorker: createEmailWorker } = require('./jobs/email.job');
+const { createFlushWorker, scheduleFlushJob } = require('./jobs/flush-notifications.job'); // New Import
+
+// Create Workers
+createNotificationWorker(redisConnection);
+createEmailWorker(redisConnection);
+const flushWorker = createFlushWorker(redisConnection); // Initialize Flush Worker
+
+// Schedule the Flush Job (Cron)
+scheduleFlushJob().catch(err => console.error('Failed to schedule notification flush:', err));
 const { Institution } = require('./models/Institution');
 const { initializeElasticsearch } = require('./config/esSync');
 
@@ -73,6 +85,10 @@ try {
 //socket connection with the cookie //
 io.use((socket, next) => {
   const req = socket.request;
+  // Polyfill req.path if missing (Socket.IO request is raw http)
+  if (!req.path && req.url) {
+    req.path = req.url.split('?')[0];
+  }
   const res = {
     cookie: () => { },
     clearCookie: () => { },
@@ -99,8 +115,10 @@ io.on('connection', async (socket) => {
   const { id: userId, role: userRole } = socket.user;
   console.log(`Secure Connection: User ${userId} (${userRole})`);
 
+  // Normalize role to lowercase to handle 'STUDENT' vs 'student'
+  const roleLower = userRole.toLowerCase();
 
-  if (userRole === 'institutionAdmin') {
+  if (roleLower === 'institutionadmin') {
     socket.join(`institutionAdmin:${userId}`);
 
     try {
@@ -113,16 +131,34 @@ io.on('connection', async (socket) => {
       console.error('Error joining institution room:', err);
     }
 
-  } else if (userRole === 'student') {
+  } else if (roleLower === 'student') {
     socket.join(`student:${userId}`);
-  } else if (userRole === 'admin') {
+  } else if (roleLower === 'admin') {
     socket.join(`admin:${userId}`);
   }
 
-  // ✅ Handle dynamic room joining from frontend
-  socket.on('join', (room) => {
-    console.log(`User ${userId} joining room: ${room}`);
-    socket.join(room);
+
+
+  // Explicit listeners to match frontend NotificationSocketBridge.tsx
+  socket.on('joinStudent', (id) => {
+    console.log(`[Socket DEBUG] Received joinStudent request for ${id} from ${userId}`);
+    if (String(id) === String(userId)) {
+      console.log(`[Socket DEBUG] User ${userId} explicitly joined student:${id}`);
+      socket.join(`student:${id}`);
+    }
+  });
+
+  socket.on('joinInstitutionAdmin', (id) => {
+    if (String(id) === String(userId)) {
+      console.log(`User ${userId} explicitly joined institutionAdmin:${id}`);
+      socket.join(`institutionAdmin:${id}`);
+    }
+  });
+
+  socket.on('joinAdmin', (id) => {
+    if (String(id) === String(userId)) {
+      socket.join(`admin:${id}`);
+    }
   });
 
   socket.on('leave', (room) => {

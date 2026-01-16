@@ -4,12 +4,13 @@ import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { 
-  faBell, 
-  faMoon, 
-  faUser
-} from "@fortawesome/free-regular-svg-icons";
-import { faSun,faSearch, faTimes } from "@fortawesome/free-solid-svg-icons";
+import {
+  faBell,
+  faMoon,
+  faUser,
+  faSpinner
+} from "@fortawesome/free-solid-svg-icons"; // Added faSpinner
+import { faSun, faSearch, faTimes } from "@fortawesome/free-solid-svg-icons";
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -17,9 +18,10 @@ import { notificationsAPI } from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
-import { cacheSet, CACHE_DURATION } from "@/lib/localDb";
 import { useProfile } from "@/lib/hooks/user-hooks";
 import { useSearch } from "@/lib/search-context";
+import { useInfiniteNotifications, NOTIFICATION_QUERY_KEY } from "@/lib/hooks/notification-hooks"; // Import hook
+import { useInView } from "react-intersection-observer"; // You might need to install this or use a simple ref-based observer
 
 
 interface TopbarProps {
@@ -39,40 +41,54 @@ type NotificationItem = {
   metadata?: Record<string, unknown>;
 };
 
-const STORAGE_KEY = "app_notifications_v1";
-const QUERY_KEY = ['notifications','list'] as const;
-const CACHE_KEY = 'notifications:list:v1';
-
-const Topbar: React.FC<TopbarProps> = ({ 
-  userName, 
-  onSearch, 
-  //onNotificationClick,
-  onProfileClick 
+const Topbar: React.FC<TopbarProps> = ({
+  userName,
+  onSearch,
+  onProfileClick
 }) => {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { searchQuery, setSearchQuery, searchInPage, clearSearch, /*_isSearchActive */ } = useSearch();
+  const { searchQuery, setSearchQuery, searchInPage, clearSearch } = useSearch();
   const { theme, setTheme, systemTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const [notificationCount, setNotificationCount] = useState(0);
+  // Derived state from allNotifications
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const themeMenuRef = useRef<HTMLDivElement | null>(null);
-  const [institutionAdminId, setInstitutionAdminId] = useState<string | null>(null);
-  const [studentId, setStudentId] = useState<string | null>(null);
-  const [platformAdminId, setPlatformAdminId] = useState<string | null>(null);
-  const [roleLabel, setRoleLabel] = useState<string>('');
-
-  const allNotificationsRef = useRef<NotificationItem[]>([]);
   const hideTimerRef = useRef<number | null>(null);
-  const [allNotifications, setAllNotifications] = useState<NotificationItem[]>([]);
-  // Update ref whenever allNotifications changes
-  useEffect(() => {
-    allNotificationsRef.current = allNotifications;
-  }, [allNotifications]);
 
-  const [unreadTop, setUnreadTop] = useState<NotificationItem[]>([]);
+  const { data: userProfile } = useProfile();
+  const roleLabel = (userProfile?.role || '').toString().toUpperCase();
+
+  // --- Infinite Scroll Hook Integration ---
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch, // <-- Added refetch
+    status
+  } = useInfiniteNotifications();
+
+  // Flatten the infinite query data into a single list
+  const allNotifications = React.useMemo(() => {
+    return data?.pages.flatMap(page => page.items) || [];
+  }, [data]);
+
+  const notificationCount = allNotifications.filter(n => !n.read).length;
+  const unreadTop = allNotifications.filter(n => !n.read).slice(0, 3);
+
+  // Sentinel for infinite scroll
+  const { ref: loadMoreRef, inView } = useInView();
+
+  useEffect(() => {
+    if (inView && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  // ----------------------------------------
+
   const timeAgo = (ts: number): string => {
     const diff = Date.now() - ts;
     const m = Math.floor(diff / 60000);
@@ -84,39 +100,6 @@ const Topbar: React.FC<TopbarProps> = ({
     return `${d}d ago`;
   };
 
-  const seedIfEmpty = () => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      const existing: NotificationItem[] = raw ? JSON.parse(raw) : [];
-      if (!existing || existing.length === 0) {
-        const now = Date.now();
-        const seed: NotificationItem[] = [
-          { id: "n1", title: "Welcome to TooClarity", description: "Thanks for joining!", time: now - 2 * 60 * 1000, read: false, category: "user" },
-          { id: "n2", title: "Subscription renewed", description: "Your Pro plan was renewed.", time: now - 60 * 60 * 1000, read: false, category: "billing" },
-          { id: "n3", title: "Maintenance complete", description: "Servers are back online.", time: now - 3 * 60 * 60 * 1000, read: true, category: "system" },
-          { id: "n4", title: "Backup completed", description: "Nightly backup finished.", time: now - 26 * 60 * 60 * 1000, read: true, category: "system" },
-        ];
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
-      }
-    } catch (err) {
-      if (process.env.NODE_ENV === 'development') if (process.env.NODE_ENV === 'development') console.error('Topbar: seedIfEmpty failed', err);
-    }
-  };
-
-  const loadFromStorage = () => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      const items: NotificationItem[] = raw ? JSON.parse(raw) : [];
-      const sorted = items.sort((a, b) => b.time - a.time);
-      const unread = sorted.filter(n => !n.read);
-      setAllNotifications(sorted);
-      setNotificationCount(unread.length);
-      setUnreadTop(unread.slice(0, 3));
-    } catch (err) {
-      if (process.env.NODE_ENV === 'development') if (process.env.NODE_ENV === 'development') console.error('Topbar: loadFromStorage failed', err);
-    }
-  };
-
   const clearHideTimer = () => {
     if (hideTimerRef.current !== null) {
       clearTimeout(hideTimerRef.current);
@@ -124,72 +107,49 @@ const Topbar: React.FC<TopbarProps> = ({
     }
   };
 
-  const { data: userProfile } = useProfile();
+  const openDropdown = () => {
+    clearHideTimer();
+    setShowDropdown(true);
+    refetch(); // <-- Retrieve latest on open
 
-  const loadFromBackend = React.useCallback(async () => {
-    try {
-      // Default admin scope if available
-      const scopeParams: { scope?: "student" | "institute_admin" | "branch" | "admin"; studentId?: string; institutionId?: string; branchId?: string; institutionAdminId?: string } = {};
-      try {
-        const prof = userProfile;
-        const role = prof?.role;
-        const id = prof?.id || prof?._id;
-        const upper = (role || '').toString().toUpperCase();
-        setRoleLabel(upper || '');
-        if (upper === 'INSTITUTE_ADMIN' && id) {
-          scopeParams.scope = 'admin';
-          scopeParams.institutionAdminId = id;
-          setInstitutionAdminId(id);
-          setPlatformAdminId(null);
-          setStudentId(null);
-        } else if (upper === 'ADMIN' && id) {
-          // Platform admin
-          scopeParams.scope = 'admin';
-          scopeParams.institutionAdminId = id;
-          setPlatformAdminId(id);
-          setInstitutionAdminId(null);
-          setStudentId(null);
-        } else if (upper === 'STUDENT' && id) {
-          scopeParams.scope = 'student';
-          scopeParams.studentId = id;
-          setStudentId(id);
-          setInstitutionAdminId(null);
-          setPlatformAdminId(null);
-        }
-      } catch (err) {
-        if (process.env.NODE_ENV === 'development') if (process.env.NODE_ENV === 'development') console.error('Topbar: failed to read profile for notifications scope', err);
+    // Auto mark all notifications as read when dropdown opens
+    if (notificationCount > 0) {
+      const unreadIds = allNotifications.filter(n => !n.read).map(n => n.id);
+      if (unreadIds.length > 0) {
+        notificationsAPI.markRead(unreadIds).then(() => {
+          // Iterate over all pages in the cache and update 'read' status
+          queryClient.setQueryData(NOTIFICATION_QUERY_KEY, (oldData: any) => {
+            if (!oldData) return oldData;
+            return {
+              ...oldData,
+              pages: oldData.pages.map((page: any) => ({
+                ...page,
+                items: page.items.map((item: NotificationItem) => ({ ...item, read: true }))
+              }))
+            };
+          });
+        }).catch(err => {
+          if (process.env.NODE_ENV === 'development') console.error('Topbar: markRead failed', err);
+        });
       }
-      const res = await notificationsAPI.list(scopeParams as { scope?: "student" | "institution" | "branch" | "admin"; studentId?: string; institutionId?: string; branchId?: string; institutionAdminId?: string; page?: number; limit?: number; cursor?: string | null; unread?: boolean; category?: string; });
-      if ((res as { success?: boolean; data?: { items?: Array<Record<string, unknown>> } }).success) {
-        const items = ((res as { data?: { items?: Array<Record<string, unknown>> } }).data?.items || []).map((n: Record<string, unknown>) => ({
-          id: String(n._id || n.id || ''),
-          title: String(n.title || ''),
-          description: String(n.description || ''),
-          time: n.createdAt ? new Date(n.createdAt as string).getTime() : Date.now(),
-          read: !!n.read,
-          category: String(n.category || '')  ,
-          metadata: n.metadata,
-        })) as NotificationItem[];
-        const sorted = items.sort((a, b) => b.time - a.time);
-        const unread = sorted.filter(n => !n.read);
-        setAllNotifications(sorted);
-        setNotificationCount(unread.length);
-        setUnreadTop(unread.slice(0, 3));
-        // Persist to IndexedDB and update Query cache so notifications page updates
-        try {
-          await cacheSet(CACHE_KEY, sorted, CACHE_DURATION.INSTITUTION);
-          queryClient.setQueryData(QUERY_KEY, sorted);
-        } catch (err) {
-          if (process.env.NODE_ENV === 'development') if (process.env.NODE_ENV === 'development') console.error('Topbar: cacheSet/queryCache update failed', err);
-        }
-      }
-    } catch (err) {
-      if (process.env.NODE_ENV === 'development') if (process.env.NODE_ENV === 'development') console.error('Topbar: loadFromBackend failed', err);
     }
-  }, [queryClient, userProfile]);
+  };
+
+
+  const closeDropdownSoon = () => {
+    clearHideTimer();
+    hideTimerRef.current = window.setTimeout(() => {
+      setShowDropdown(false);
+      hideTimerRef.current = null;
+    }, 120);
+  };
+  useEffect(() => () => clearHideTimer(), []);
+
+  // Ensure mounted before reading theme to avoid hydration mismatch
+  useEffect(() => { setMounted(true); }, []);
 
   // Socket event handlers
-  const handleNotificationCreated = useCallback(async (data: unknown) => {
+  const handleNotificationCreated = useCallback((data: unknown) => {
     const notification = data as { notification: Record<string, unknown> };
     const newNotification: NotificationItem = {
       id: String(notification.notification._id || notification.notification.id || ''),
@@ -200,87 +160,68 @@ const Topbar: React.FC<TopbarProps> = ({
       category: String(notification.notification.category || '') as NotificationItem['category'],
       metadata: notification.notification.metadata as Record<string, unknown> | undefined,
     };
-    // Toast popup per role/category
-    try {
-      const cat = (newNotification.category || 'other').toString().toLowerCase();
-      const message = `${newNotification.title}${newNotification.description ? ` — ${newNotification.description}` : ''}`;
-      if (cat === 'system') toast.info(message);
-      else if (cat === 'billing') toast.warning(message);
-      else if (cat === 'security') toast.error(message);
-      else toast.success(message);
-    } catch {}
-    // Update local UI list
-    setAllNotifications(prev => {
-      const updated = [newNotification, ...prev].sort((a, b) => b.time - a.time);
-      return updated;
+
+    // Optimistically update Infinite Query Cache (Inject at top)
+    queryClient.setQueryData(NOTIFICATION_QUERY_KEY, (oldData: any) => {
+      if (!oldData) return { pages: [{ items: [newNotification], nextCursor: null }], pageParams: [null] };
+      const newPages = [...oldData.pages];
+      // Prepend to the first page's items
+      if (newPages.length > 0) {
+        newPages[0] = {
+          ...newPages[0],
+          items: [newNotification, ...newPages[0].items]
+        };
+      }
+      return { ...oldData, pages: newPages };
     });
-    setNotificationCount(prev => prev + 1);
-    setUnreadTop(prev => {
-      const updated = [newNotification, ...prev].slice(0, 3);
-      return updated;
-    });
-    // Persist and update Query cache for notifications page
-    try {
-      const current = (queryClient.getQueryData(QUERY_KEY) as NotificationItem[] | undefined) || [];
-      const next = [newNotification, ...current].sort((a, b) => b.time - a.time);
-      await cacheSet(CACHE_KEY, next, CACHE_DURATION.INSTITUTION);
-      queryClient.setQueryData(QUERY_KEY, next);
-    } catch (err) {
-      if (process.env.NODE_ENV === 'development') console.error('Topbar: cacheSet/queryCache update on socket create failed', err);
-    }
   }, [queryClient]);
 
-  const handleNotificationUpdated = useCallback(async (data: unknown) => {
+  const handleNotificationUpdated = useCallback((data: unknown) => {
     const notification = data as { notificationId: string, read: boolean };
-    setAllNotifications(prev => 
-      prev.map(n => n.id === notification.notificationId ? { ...n, read: notification.read } : n)
-    );
-    if (notification.read) {
-      setNotificationCount(prev => Math.max(0, prev - 1));
-      setUnreadTop(prev => prev.filter(n => n.id !== notification.notificationId));
-    }
-    // Persist and update Query cache
-    try {
-      const current = (queryClient.getQueryData(QUERY_KEY) as NotificationItem[] | undefined) || [];
-      const next = current.map(n => n.id === notification.notificationId ? { ...n, read: notification.read } : n);
-      await cacheSet(CACHE_KEY, next, CACHE_DURATION.STUDENTS);
-      queryClient.setQueryData(QUERY_KEY, next);
-    } catch (err) {
-      if (process.env.NODE_ENV === 'development') console.error('Topbar: cacheSet/queryCache update on socket update failed', err);
-    }
+    queryClient.setQueryData(NOTIFICATION_QUERY_KEY, (oldData: any) => {
+      if (!oldData) return oldData;
+      return {
+        ...oldData,
+        pages: oldData.pages.map((page: any) => ({
+          ...page,
+          items: page.items.map((n: NotificationItem) => n.id === notification.notificationId ? { ...n, read: notification.read } : n)
+        }))
+      };
+    });
   }, [queryClient]);
 
-  const handleNotificationRemoved = useCallback(async (data: unknown) => {
+  const handleNotificationRemoved = useCallback((data: unknown) => {
     const notification = data as { notificationId: string };
-    setAllNotifications(prev => prev.filter(n => n.id !== notification.notificationId));
-    setUnreadTop(prev => prev.filter(n => n.id !== notification.notificationId));
-    setNotificationCount(prev => {
-      const wasUnread = allNotificationsRef.current.some(n => n.id === notification.notificationId && !n.read);
-      return wasUnread ? Math.max(0, prev - 1) : prev;
+    queryClient.setQueryData(NOTIFICATION_QUERY_KEY, (oldData: any) => {
+      if (!oldData) return oldData;
+      return {
+        ...oldData,
+        pages: oldData.pages.map((page: any) => ({
+          ...page,
+          items: page.items.filter((n: NotificationItem) => n.id !== notification.notificationId)
+        }))
+      };
     });
-    try {
-      const current = (queryClient.getQueryData(QUERY_KEY) as NotificationItem[] | undefined) || [];
-      const next = current.filter(n => n.id !== notification.notificationId);
-      await cacheSet(CACHE_KEY, next, CACHE_DURATION.INSTITUTION);
-      queryClient.setQueryData(QUERY_KEY, next);
-    } catch (err) {
-      if (process.env.NODE_ENV === 'development') console.error('Topbar: cacheSet/queryCache update on socket removal failed', err);
-    }
   }, [queryClient]);
 
   // Setup Socket.IO for real-time notifications
   useEffect(() => {
-    let socket: { on: (ev: string, h: (...args: unknown[]) => void) => void; off: (ev: string, h: (...args: unknown[]) => void) => void; emit: (ev: string, ...args: unknown[]) => void } | null;
-    
+    let socket: { on: (ev: string, h: (...args: unknown[]) => void) => void; off: (ev: string, h: (...args: unknown[]) => void) => void; emit: (ev: string, ...args: unknown[]) => void } | null = null;
+    let isMounted = true;
+
     const setupSocket = async () => {
       try {
         const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
-        let origin = apiBase.replace('/api','');
+        let origin = apiBase.replace('/api', '');
         if (!origin) origin = typeof window !== 'undefined' ? window.location.origin : '';
-        
-        socket = await getSocket(origin);
-        
+
+        const s = await getSocket(origin);
+        if (!isMounted) return;
+        socket = s;
+
         socket?.on('connect', async () => {
+          if (!isMounted) return;
+          // console.log('[Topbar DEBUG] Socket connected:', (socket as any)?.id);
           // Join appropriate room based on role
           const prof = userProfile;
           const role = (prof?.role || '').toString().toUpperCase();
@@ -295,86 +236,11 @@ const Topbar: React.FC<TopbarProps> = ({
         });
 
         // Listen for new notifications
-        socket?.on('notificationCreated', async (data: unknown) => {
-          const notification = data as { notification: Record<string, unknown> };
-          const newNotification: NotificationItem = {
-            id: String(notification.notification._id || notification.notification.id || ''),
-            title: String(notification.notification.title || ''),
-            description: String(notification.notification.description || ''),
-            time: notification.notification.createdAt ? new Date(notification.notification.createdAt as string).getTime() : Date.now(),
-            read: false,
-            category: String(notification.notification.category || '') as NotificationItem['category'],
-            metadata: notification.notification.metadata as Record<string, unknown> | undefined,
-          };
-          // Toast popup per role/category
-          try {
-            const cat = (newNotification.category || 'other').toString().toLowerCase();
-            const message = `${newNotification.title}${newNotification.description ? ` — ${newNotification.description}` : ''}`;
-            if (cat === 'system') toast.info(message);
-            else if (cat === 'billing') toast.warning(message);
-            else if (cat === 'security') toast.error(message);
-            else toast.success(message);
-          } catch {}
-          // Update local UI list
-          setAllNotifications(prev => {
-            const updated = [newNotification, ...prev].sort((a, b) => b.time - a.time);
-            return updated;
-          });
-          setNotificationCount(prev => prev + 1);
-          setUnreadTop(prev => {
-            const updated = [newNotification, ...prev].slice(0, 3);
-            return updated;
-          });
-          // Persist and update Query cache for notifications page
-          try {
-            const current = (queryClient.getQueryData(QUERY_KEY) as NotificationItem[] | undefined) || [];
-            const next = [newNotification, ...current].sort((a, b) => b.time - a.time);
-            await cacheSet(CACHE_KEY, next, CACHE_DURATION.INSTITUTION);
-            queryClient.setQueryData(QUERY_KEY, next);
-          } catch (err) {
-            if (process.env.NODE_ENV === 'development') console.error('Topbar: cacheSet/queryCache update on socket create failed', err);
-          }
-        });
-
+        socket?.on('notificationCreated', handleNotificationCreated);
         // Listen for notification updates (mark as read)
-        socket?.on('notificationUpdated', async (data: unknown) => {
-          const notification = data as { notificationId: string, read: boolean };
-          setAllNotifications(prev => 
-            prev.map(n => n.id === notification.notificationId ? { ...n, read: notification.read } : n)
-          );
-          if (notification.read) {
-            setNotificationCount(prev => Math.max(0, prev - 1));
-            setUnreadTop(prev => prev.filter(n => n.id !== notification.notificationId));
-          }
-          // Persist and update Query cache
-          try {
-            const current = (queryClient.getQueryData(QUERY_KEY) as NotificationItem[] | undefined) || [];
-            const next = current.map(n => n.id === notification.notificationId ? { ...n, read: notification.read } : n);
-            await cacheSet(CACHE_KEY, next, CACHE_DURATION.STUDENTS);
-            queryClient.setQueryData(QUERY_KEY, next);
-          } catch (err) {
-            if (process.env.NODE_ENV === 'development') console.error('Topbar: cacheSet/queryCache update on socket update failed', err);
-          }
-        });
-
+        socket?.on('notificationUpdated', handleNotificationUpdated);
         // Listen for notification deletions
-        socket?.on('notificationRemoved', async (data: unknown) => {
-          const notification = data as { notificationId: string };
-          setAllNotifications(prev => prev.filter(n => n.id !== notification.notificationId));
-          setUnreadTop(prev => prev.filter(n => n.id !== notification.notificationId));
-          setNotificationCount(prev => {
-            const wasUnread = allNotificationsRef.current.some(n => n.id === notification.notificationId && !n.read);
-            return wasUnread ? Math.max(0, prev - 1) : prev;
-          });
-          try {
-            const current = (queryClient.getQueryData(QUERY_KEY) as NotificationItem[] | undefined) || [];
-            const next = current.filter(n => n.id !== notification.notificationId);
-            await cacheSet(CACHE_KEY, next, CACHE_DURATION.INSTITUTION);
-            queryClient.setQueryData(QUERY_KEY, next);
-          } catch (err) {
-            if (process.env.NODE_ENV === 'development') console.error('Topbar: cacheSet/queryCache update on socket removal failed', err);
-          }
-        });
+        socket?.on('notificationRemoved', handleNotificationRemoved);
 
       } catch (error) {
         if (process.env.NODE_ENV === 'development') console.error('Topbar: socket setup error', error);
@@ -384,42 +250,17 @@ const Topbar: React.FC<TopbarProps> = ({
     setupSocket();
 
     return () => {
+      isMounted = false;
       try {
-        socket?.off('notificationCreated', handleNotificationCreated as (d: unknown) => void);
-        socket?.off('notificationUpdated', handleNotificationUpdated as (d: unknown) => void);
+        socket?.off('notificationCreated', handleNotificationCreated);
+        socket?.off('notificationUpdated', handleNotificationUpdated);
         socket?.off('notificationRemoved', handleNotificationRemoved);
       } catch (err) {
         if (process.env.NODE_ENV === 'development') console.error('Topbar: socket cleanup error', err);
       }
     };
-  }, [institutionAdminId, studentId, platformAdminId, queryClient, userProfile, handleNotificationCreated, handleNotificationUpdated, handleNotificationRemoved]);
+  }, [queryClient, userProfile, handleNotificationCreated, handleNotificationUpdated, handleNotificationRemoved]);
 
-  const openDropdown = () => {
-    clearHideTimer();
-    setShowDropdown(true);
-    // refresh from backend when opening
-    loadFromBackend();
-  };
-
-  
-  const closeDropdownSoon = () => {
-    clearHideTimer();
-    hideTimerRef.current = window.setTimeout(() => {
-      setShowDropdown(false);
-      hideTimerRef.current = null;
-    }, 120);
-  };
-  useEffect(() => () => clearHideTimer(), []);
-
-  // Ensure mounted before reading theme to avoid hydration mismatch
-  useEffect(() => { setMounted(true); }, []);
-
-  // Load notifications on mount
-  useEffect(() => {
-    seedIfEmpty();
-    loadFromStorage();
-    loadFromBackend();
-  }, [loadFromBackend]);
 
   const topbarVariants = {
     hidden: { y: -50, opacity: 0 },
@@ -469,21 +310,24 @@ const Topbar: React.FC<TopbarProps> = ({
   }, [showThemeMenu]);
 
   const _markOneUnreadAsRead = (id: string) => {
-    const updated = allNotifications.map(n => n.id === id ? { ...n, read: true } : n);
-    setAllNotifications(updated);
-    // saveToStorage(updated); // Socket.IO handles updates
-    const unread = updated.filter(n => !n.read).sort((a, b) => (b.time || 0) - (a.time || 0));
-    setNotificationCount(unread.length);
-    setUnreadTop(unread.slice(0, 3));
+    // Optimistically update cache
+    queryClient.setQueryData(NOTIFICATION_QUERY_KEY, (oldData: any) => {
+      if (!oldData) return oldData;
+      return {
+        ...oldData,
+        pages: oldData.pages.map((page: any) => ({
+          ...page,
+          items: page.items.map((n: NotificationItem) => n.id === id ? { ...n, read: true } : n)
+        }))
+      };
+    });
   };
 
   const badge = notificationCount > 99 ? "99+" : String(notificationCount);
 
-  const { data: _profileData } = useProfile();
-
   return (
     <>
-      <motion.header 
+      <motion.header
         className="sticky top-0 z-40 flex items-center justify-between pl-3 rounded-lg py-4 bg-white/80 dark:bg-gray-900/70 backdrop-blur border-b border-gray-100 dark:border-gray-800"
         variants={topbarVariants}
         initial="hidden"
@@ -493,15 +337,15 @@ const Topbar: React.FC<TopbarProps> = ({
         <div className="hidden sm:flex items-center gap-3">
           <form onSubmit={handleSearch} className="relative">
             <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <Input 
+            <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search"
-              className="pl-10 md:w-[400px] w-[220px]" 
+              className="pl-10 md:w-[400px] w-[220px]"
             />
             {searchQuery && (
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
                 onClick={clearSearch}
               >
@@ -517,14 +361,14 @@ const Topbar: React.FC<TopbarProps> = ({
             TooClarity
           </Link>
         </div>
-        
+
         {/* Right Side Icons and Profile */}
         <div className="flex items-center gap-2 sm:gap-3 md:mr-[170px]">
           {/* Mobile Search Icon */}
           <motion.div className="sm:hidden">
-            <Button 
-              size="icon" 
-              variant="ghost" 
+            <Button
+              size="icon"
+              variant="ghost"
               className="h-8 w-8 rounded-full border border-gray-200 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
               onClick={toggleSearch}
               aria-label="Search"
@@ -541,9 +385,9 @@ const Topbar: React.FC<TopbarProps> = ({
             onMouseEnter={openDropdown}
             onMouseLeave={closeDropdownSoon}
           >
-            <Button 
-              size="icon" 
-              variant="ghost" 
+            <Button
+              size="icon"
+              variant="ghost"
               className="h-8 w-8 sm:h-11 sm:w-11 rounded-full border border-gray-200 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
               onClick={() => router.push("/notifications")}
               aria-label="Notifications"
@@ -581,60 +425,74 @@ const Topbar: React.FC<TopbarProps> = ({
                       <span className="text-[10px] sm:text-sm text-gray-500 dark:text-gray-400">{notificationCount} unread</span>
                     </div>
                   </div>
-                  
+
                   <div className="max-h-[55vh] sm:max-h-80 overflow-y-auto">
-                    {unreadTop.length === 0 ? (
+                    {allNotifications.length === 0 ? (
                       <div className="p-3 sm:p-4 text-center text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                         No new notifications
                       </div>
                     ) : (
-                      unreadTop.map((notification) => (
-                        <motion.div
-                          key={notification.id}
-                          className="p-2 sm:p-3 border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
-                          whileHover={{ backgroundColor: "rgba(0,0,0,0.05)" }}
-                          onClick={() => {
-                            try {
-                              const t = (notification.metadata?.type || '').toString().toUpperCase();
-                              if (t === 'CALLBACK_REQUEST') router.push('/dashboard/leads');
-                              else if (t === 'NEW_STUDENT') router.push('/dashboard');
-                              else if (t === 'WELCOME') router.push('/dashboard');
-                              else router.push('/notifications');
-                            } catch { router.push('/notifications'); }
-                          }}
-                        >
-                          <div className="flex items-start gap-2 sm:gap-3">
-                            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs sm:text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                                {notification.title}
-                              </p>
-                              {notification.description && (
-                                <p className="text-[11px] sm:text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
-                                  {notification.description}
-                                </p>
+                      <>
+                        {allNotifications.map((notification) => (
+                          <motion.div
+                            key={notification.id}
+                            className="p-2 sm:p-3 border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
+                            whileHover={{ backgroundColor: "rgba(0,0,0,0.05)" }}
+                            onClick={() => {
+                              // Auto-read on interaction
+                              if (!notification.read) {
+                                // Optimistically update local state
+                                _markOneUnreadAsRead(notification.id);
+                                // Sync to backend
+                                notificationsAPI.markRead([notification.id]).catch(err => {
+                                  if (process.env.NODE_ENV === 'development') console.error('Topbar: markRead on click failed', err);
+                                });
+                              }
+
+                              try {
+                                const t = (notification.metadata?.type || '').toString().toUpperCase();
+                                if (t === 'CALLBACK_REQUEST') router.push('/dashboard/leads');
+                                else if (t === 'NEW_STUDENT') router.push('/dashboard');
+                                else if (t === 'WELCOME') router.push('/dashboard');
+                                else router.push('/notifications');
+                              } catch { router.push('/notifications'); }
+                            }}
+                          >
+                            <div className="flex items-start gap-2 sm:gap-3">
+                              {!notification.read && (
+                                <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
                               )}
-                              <p className="text-[10px] sm:text-xs text-gray-400 dark:text-gray-500 mt-1">
-                                {timeAgo(notification.time)}
-                              </p>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-xs sm:text-sm font-medium truncate ${!notification.read ? 'text-gray-900 dark:text-gray-100 font-bold' : 'text-gray-600 dark:text-gray-300'}`}>
+                                  {notification.title}
+                                </p>
+                                {notification.description && (
+                                  <p className="text-[11px] sm:text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+                                    {notification.description}
+                                  </p>
+                                )}
+                                <p className="text-[10px] sm:text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                  {timeAgo(notification.time)}
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                        </motion.div>
-                      ))
+                          </motion.div>
+                        ))}
+                        {/* Sentinel and Loading Spinner */}
+                        <div ref={loadMoreRef} className="py-4 flex justify-center w-full">
+                          {isFetchingNextPage ? (
+                            <FontAwesomeIcon icon={faSpinner} className="animate-spin text-gray-400" />
+                          ) : hasNextPage ? (
+                            <span className="text-xs text-gray-400">Scroll for more...</span>
+                          ) : (
+                            <span className="text-xs text-gray-300">No more notifications</span>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
-                  
-                  <div className="p-2 sm:p-3 border-t border-gray-100 dark:border-gray-800">
-                    <button 
-                      className="w-full text-center text-xs sm:text-base cursor-pointer text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
-                      onClick={() => {
-                        router.push("/notifications");
-                        setShowDropdown(false);
-                      }}
-                    >
-                      View all notifications
-                    </button>
-                  </div>
+
+
                 </motion.div>
               )}
             </AnimatePresence>
@@ -647,17 +505,17 @@ const Topbar: React.FC<TopbarProps> = ({
             className="relative"
             ref={themeMenuRef}
           >
-            <Button 
-              size="icon" 
-              variant="ghost" 
+            <Button
+              size="icon"
+              variant="ghost"
               className="h-8 w-8 sm:h-11 sm:w-11 rounded-full border border-gray-200 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
               onClick={() => setShowThemeMenu((v) => !v)}
               aria-label="Toggle theme menu"
             >
               {mounted && (
-                <FontAwesomeIcon 
+                <FontAwesomeIcon
                   icon={(theme === 'dark' || (theme === 'system' && systemTheme === 'dark')) ? faSun : faMoon}
-                  className="text-sm sm:text-lg dark:text-gray-100" 
+                  className="text-sm sm:text-lg dark:text-gray-100"
                 />
               )}
             </Button>
@@ -694,18 +552,18 @@ const Topbar: React.FC<TopbarProps> = ({
               )}
             </AnimatePresence>
           </motion.div>
-          
+
           <div className="h-6 w-px sm:h-9 bg-gray-400 mx-1 sm:mx-2 border border-gray-400 dark:bg-gray-600 dark:border-gray-600" />
-          
+
           {/* User Profile */}
-          <motion.div 
+          <motion.div
             className="flex items-center gap-2 sm:gap-3 cursor-pointer"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             transition={{ duration: 0.2 }}
             onClick={onProfileClick}
           >
-            <motion.div 
+            <motion.div
               className="h-8 w-8 sm:h-11 sm:w-11 rounded-full bg-yellow-400 flex items-center justify-center text-gray-600"
               whileHover={{ rotate: 360 }}
               transition={{ duration: 0.5 }}
@@ -714,7 +572,7 @@ const Topbar: React.FC<TopbarProps> = ({
             </motion.div>
             <div className="leading-tight hidden sm:block">
               <div className="text-sm font-bold text-gray-900 dark:text-gray-100">{userName}</div>
-              <div className="text-xs text-gray-500 dark:text-gray-300">{roleLabel||"User"}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-300">{roleLabel || "User"}</div>
             </div>
           </motion.div>
         </div>
@@ -732,16 +590,16 @@ const Topbar: React.FC<TopbarProps> = ({
           >
             <form onSubmit={handleSearch} className="relative">
               <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <Input 
+              <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search..."
-                className="pl-10 w-full h-10" 
+                className="pl-10 w-full h-10"
                 autoFocus
               />
               {searchQuery && (
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
                   onClick={clearSearch}
                 >

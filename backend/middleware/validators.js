@@ -1214,99 +1214,51 @@ exports.validateUploadedFile = async (req, res, next) => {
   }
 };  
 
-// 🚨 SECURITY: Whitelist of all possible filters. This is critical to prevent
-// parameter pollution and NoSQL injection attempts with unknown fields.
+// 1. Updated Whitelist (Fixed typos and added missing fields from L2)
 const allowedFilters = new Set([
-  // General
-  "page",
-  "limit",
-  "state",
-  "pincode",
-  "instituteType",
-
-  // Kindergarten/childcare center
-  "extendedCare",
-  "mealsProvided",
-  "outdoorPlayArea",
-  "curriculumType",
-
-  // School's & Intermediate college(K12)
-  "schoolType",
-  "schoolCategory",
-  "hostelFacility",
-  "playground",
-  "busService",
-
-  // Under Graduation/Post Graduation
-  "library",
-  "entranceExam",
-  "managementQuota",
-
-  // Coaching centers & UG/PG Placements
-  "placementDrives",
-  "mockInterviews",
-  "resumeBuilding",
-  "linkedinOptimization",
-  "exclusiveJobPortal",
-  "certification",
+  "page", "limit", "state", "pincode", "instituteType", "district", "town",
+  "playground", "busService", "hostelFacility", "extendedCare", "mealsProvided",
+  "outdoorPlayArea", "placementDrives", "mockInterviews", "resumeBuilding",
+  "linkedinOptimization", "certification", "library", "entranceExam", 
+  "managementQuota", "emioptions", "partlyPayment"
 ]);
 
 exports.validateInstitutionFilter = [
-  // --- Pagination Sanitization ---
-  query("page")
-    .optional()
-    .isInt({ min: 1 })
-    .withMessage("Page must be a positive integer.")
-    .toInt(),
-  query("limit")
-    .optional()
-    .isInt({ min: 1, max: 100 })
-    .withMessage("Limit must be between 1 and 100.")
-    .toInt(),
+  query("page").optional().isInt({ min: 1 }).toInt(),
+  query("limit").optional().isInt({ min: 1, max: 100 }).toInt(),
 
-  // --- General Filter Validation ---
-  query("state").optional().isString().trim().escape(),
-  query("pincode")
-    .optional()
-    .isPostalCode("IN")
-    .withMessage("Invalid pincode format.")
-    .trim(),
+  query("state").optional().isString().trim(),
   query("instituteType")
     .optional()
-    .isString()
     .isIn([
       "Kindergarten/childcare center",
       "School's",
       "Intermediate college(K12)",
       "Under Graduation/Post Graduation",
       "Coaching centers",
-      "Tution Center's",
+      "Tuition Center's", // Fixed spelling
       "Study Halls",
       "Study Abroad",
-    ])
-    .withMessage("Invalid institute type."),
+    ]),
 
-  // --- Boolean Filter Validation & Sanitization ---
-  query("playground").optional().toBoolean(),
-  query("busService").optional().toBoolean(),
-  query("hostelFacility").optional().toBoolean(),
-  query("extendedCare").optional().toBoolean(),
-  query("mealsProvided").optional().toBoolean(),
-  query("outdoorPlayArea").optional().toBoolean(),
-  query("placementDrives").optional().isBoolean().toBoolean(),
-  query("mockInterviews").optional().isBoolean().toBoolean(),
-  query("resumeBuilding").optional().isBoolean().toBoolean(),
-  query("linkedinOptimization").optional().isBoolean().toBoolean(),
-  query("exclusiveJobPortal").optional().isBoolean().toBoolean(),
-  query("certification").optional().isBoolean().toBoolean(),
-  query("library").optional().isBoolean().toBoolean(),
-  query("entranceExam").optional().isBoolean().toBoolean(),
-  query("managementQuota").optional().isBoolean().toBoolean(),
+  // Updated Amenity Validation: Match the "Yes"/"No" logic used in L2 rules
+  [
+    "playground", "busService", "hostelFacility", "extendedCare", 
+    "mealsProvided", "outdoorPlayArea", "placementDrives", "mockInterviews",
+    "resumeBuilding", "linkedinOptimization", "certification", "library",
+    "entranceExam", "managementQuota", "emioptions", "partlyPayment"
+  ].map(field => 
+    query(field)
+      .optional()
+      .isIn(["Yes", "No"])
+      .withMessage(`${field} must be either 'Yes' or 'No'.`)
+  ),
 
+  // 3. Strict Whitelist Check
   query().custom((value, { req }) => {
     for (const param in req.query) {
       if (!allowedFilters.has(param)) {
-        throw new Error(`Unknown or disallowed filter parameter: '${param}'.`);
+        throw new Error(`Unknown filter parameter: '${param}'.`);
       }
     }
     return true;

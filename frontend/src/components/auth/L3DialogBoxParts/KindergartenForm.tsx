@@ -164,17 +164,17 @@ export default function KindergartenForm({
     <div className="space-y-8">
       {/* Primary Course Details [cite: 4-13] */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
-        <InputField
-          label="Course type"
-          name="courseType"
-          value={currentCourse.courseType}
+        {/* <InputField
+          label="Course Type"
+          name="graduationType"
+          value={currentCourse.graduationType}
           onChange={handleCourseChange}
           isSelect
           options={["Kindergarten"]}
           placeholder="Select Course type"
           required
-          error={courseErrors.courseType}
-        />
+          error={courseErrors.graduationType}
+        /> */}
 
         <InputField
           label="Name of Course"

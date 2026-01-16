@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, ChangeEvent, FormEvent } from "react";
+import { useState, useEffect, ChangeEvent, FormEvent, useMemo } from "react";
 import React from "react";
 import { branchAPI, programsAPI } from "@/lib/api";
 import { useRouter } from "next/navigation";
@@ -140,8 +140,9 @@ export interface Course {
   categoriesType: string;
   domainType: string;
   subDomainType: string;
-  classTiming?: string;
+  classTiming: string;
   courselanguage: string;
+  branchDescription: string;
   classlanguage: string;
   certification: string;
   placementDrives: string;
@@ -221,6 +222,7 @@ export interface Course {
   installments: string;
   partlyPayment: string;
   graduationType: string;
+  courseType: string;
   streamType: string;
   selectBranch: string;
   educationType: string;
@@ -242,7 +244,7 @@ const FORM_WHITELISTS: Record<string, (keyof Course)[]> = {
     "categoriesType", "domainType", "subDomainType", "courseName", "mode", "courseDuration", "startDate", "createdBranch", "aboutBranch", "state", "district", "town", "locationURL", "classTiming", "courselanguage", "classlanguage", "certification", "placementDrives", "totalStudentsPlaced", "highestPackage", "averagePackage", "mockInterviews", "resumeBuilding", "linkedinOptimization", "mockTests", "library", "studyMaterial", "priceOfCourse", "installments", "emioptions", "centerImageUrl", "imageUrl", "brochureUrl"
   ],
   "Kindergarten/childcare center": [
-    "courseName", "categoriesType", "priceOfCourse", "createdBranch", "aboutBranch", "state", "district", "town", "locationURL", "aboutCourse", "courseDuration", "mode", "classSize", "curriculumType", "ownershipType", "operationalDays", "openingTime", "openingTimePeriod", "closingTime", "closingTimePeriod", "extendedCare", "mealsProvided", "playground", "busService", "installments", "emioptions", "classSizeRatio", "kindergartenImageUrl", "imageUrl", "brochureUrl"
+    "courseName","courseType", "categoriesType", "priceOfCourse", "createdBranch", "aboutBranch", "state", "district", "town", "locationURL", "aboutCourse", "courseDuration", "mode", "classSize", "curriculumType", "ownershipType", "operationalDays", "openingTime", "openingTimePeriod", "closingTime", "closingTimePeriod", "extendedCare", "mealsProvided", "playground", "busService", "installments", "emioptions", "classSizeRatio", "kindergartenImageUrl", "imageUrl", "brochureUrl"
   ],
   "Study Abroad": [
     "consultancyName", "studentAdmissions", "createdBranch", "aboutBranch", "state", "district", "town", "locationURL", "countriesOffered", "academicOfferings", "budget", "studentsSent", "applicationAssistance", "visaProcessingSupport", "preDepartureOrientation", "accommodationAssistance", "educationLoans", "postArrivalSupport", "partTimeHelp", "consultancyImageUrl", "imageUrl", "brochureUrl", "businessProofUrl", "panAadhaarUrl"
@@ -254,7 +256,7 @@ const FORM_WHITELISTS: Record<string, (keyof Course)[]> = {
     "hallName", "seatingOption", "totalSeats", "availableSeats", "pricePerSeat", "openingTime", "closingTime", "operationalDays", "startDate", "endDate", "hasWifi", "hasChargingPoints", "hasAC", "hasPersonalLocker", "imageUrl", "brochureUrl", "state", "district", "town", "locationURL"
   ],
   "Under Graduation/Post Graduation": [
-    "graduationType", "streamType", "selectBranch", "aboutBranch", "createdBranch", "state", "district", "town", "locationURL", "educationType", "mode", "classSize", "eligibilityCriteria", "ownershipType", "collegeCategory", "affiliationType", "courseDuration", "library", "hostelFacility", "entranceExam", "managementQuota", "playground", "busService", "placementDrives", "totalNumberRequires", "highestPackage", "averagePackage", "totalStudentsPlaced", "mockInterviews", "resumeBuilding", "linkedinOptimization", "priceOfCourse", "installments", "emioptions", "collegeImageUrl", "imageUrl", "brochureUrl"
+    "graduationType", "streamType", "selectBranch","branchDescription", "createdBranch", "aboutBranch", "state", "district", "town", "locationURL", "educationType", "mode", "classSize", "eligibilityCriteria", "ownershipType", "collegeCategory", "affiliationType", "courseDuration", "library", "hostelFacility", "entranceExam", "managementQuota", "playground", "busService", "placementDrives", "totalNumberRequires", "highestPackage", "averagePackage", "totalStudentsPlaced", "mockInterviews", "resumeBuilding", "linkedinOptimization", "priceOfCourse", "installments", "emioptions", "collegeImageUrl", "imageUrl", "brochureUrl"
   ]
 };
 
@@ -331,11 +333,14 @@ export const getInitialCourseData = (
     collegeCategory: (existing?.collegeCategory as string) || "",
     specialization: (existing?.specialization as string) || "",
     year: (existing?.year as string) || "",
+    branchDescription: (existing?.branchDescription as string) || "",
+    classTiming: (existing?.classTiming as string) || "",
     intermediateImage: null,
     schoolType: (existing?.schoolType as string) || "",
     curriculumType: (existing?.curriculumType as string) || "",
     schoolCategory: (existing?.schoolCategory as string) || "",
     classType: (existing?.classType as string) || "",
+    courseType: (existing?.courseType as string) || "",
     extendedCare: (existing?.extendedCare as string) || "No",
     mealsProvided: (existing?.mealsProvided as string) || "No",
     schoolImage: null,
@@ -540,6 +545,7 @@ export default function L2DialogBox({
     curriculumType: "",
     schoolCategory: "",
     classType: "",
+    courseType: "",
     classSizeRatio: "",
     extendedCare: "No",
     mealsProvided: "No",
@@ -552,6 +558,7 @@ export default function L2DialogBox({
     domainType: "",
     subDomainType: "",
     classTiming: "",
+    branchDescription: "",
     courselanguage: "",
     classlanguage: "",
     certification: "No",
@@ -1174,6 +1181,20 @@ export default function L2DialogBox({
     return cleaned as Partial<Course>;
   };
 
+  const handleSaveAndAddAnother = () => {
+  // Validate ONLY the current tab's data
+  const currentCourseToValidate = courses.filter(c => c.id === selectedCourseId);
+  const validationError = validateCourses(currentCourseToValidate);
+
+  if (validationError) {
+    toast.error(validationError);
+    return;
+  }
+
+  addNewCourse(); 
+  toast.success("Course details saved locally. You can now add another!");
+};
+
   const handleCourseSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
@@ -1288,7 +1309,12 @@ export default function L2DialogBox({
         }
 
         await persistAdminProgramsToIndexedDb(uploadedCourses);
-        editMode ? onEditSuccess?.() : onSuccess?.();
+        if (editMode) {
+            onEditSuccess?.();
+        } else {
+            router.push("/dashboard/subscription");
+            onSuccess?.();
+        }
         return;
       }
 
@@ -1599,6 +1625,24 @@ export default function L2DialogBox({
     return "basic";
   };
 
+   const isFormIncomplete = useMemo(() => {
+  const requiredFields = getRequiredFields();
+  const hasMissingTextFields = requiredFields.some((field) => {
+    const value = currentCourse[field as keyof Course];
+    if (Array.isArray(value)) return value.length === 0;
+    return !value || String(value).trim() === "";
+  });
+
+  const hasMissingFiles = !currentCourse.imagePreviewUrl || !currentCourse.brochurePreviewUrl;
+  let hasMissingCampusImage = false;
+  if (isKindergarten) hasMissingCampusImage = !currentCourse.kindergartenImagePreviewUrl;
+  if (isSchool) hasMissingCampusImage = !currentCourse.schoolImagePreviewUrl;
+  if (isUnderPostGraduate) hasMissingCampusImage = !currentCourse.collegeImagePreviewUrl;
+  if (isCoachingCenter) hasMissingCampusImage = !currentCourse.centerImagePreviewUrl;
+
+  return hasMissingTextFields || hasMissingFiles || hasMissingCampusImage;
+}, [currentCourse, institutionType]);
+
   const content = (
     <_Card className="w-full sm:p-6 rounded-[24px] bg-[#F5F6F9] dark:bg-gray-900 border-0 shadow-none">
       <_CardContent className="space-y-6 text-gray-900 dark:text-gray-100 ">
@@ -1737,11 +1781,8 @@ export default function L2DialogBox({
                 {isCoachingOrUGPG && (
                   <Button
                     type="button"
-                    disabled={isLoading}
-                    onClick={() => {
-                      addNewCourse();
-                      toast.info("Course added! Select branch for the next one.");
-                    }}
+                    disabled={isLoading || isFormIncomplete}
+                    onClick={handleSaveAndAddAnother}
                     className="w-full sm:w-[280px] h-[48px] border-2 border-[#0222D7] text-[#0222D7] bg-white hover:bg-blue-50 rounded-[12px] font-semibold text-[16px] flex items-center justify-center gap-2 transition-all active:scale-95"
                   >
                     <Plus size={18} strokeWidth={3} />
@@ -1751,7 +1792,7 @@ export default function L2DialogBox({
 
                 <Button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={isLoading || isFormIncomplete}
                   className={`${isCoachingOrUGPG ? 'w-full sm:w-[280px]' : 'w-full sm:w-[400px]'} h-[48px] bg-[#0222D7] hover:bg-[#021bb0] text-white rounded-[12px] font-semibold text-[16px] shadow-md transition-all flex items-center justify-center gap-2 active:scale-95`}
                 >
                   {isLoading ? "Saving..." : <><Upload size={18} /> Save & Listing Now</>}

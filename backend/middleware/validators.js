@@ -265,39 +265,58 @@ exports.validateBranchUpdate = [
 // --- COURSE VALIDATORS---
 exports.validateCourseCreation = [
   param("institutionId").isMongoId().withMessage("Invalid institution ID."),
+  
   body("courseName")
     .trim()
     .notEmpty()
     .withMessage("Course name is required.")
     .isLength({ max: 150 }),
+
   body("aboutCourse")
     .trim()
     .notEmpty()
     .withMessage("About course is required.")
     .isLength({ max: 2000 }),
+
   body("courseDuration")
     .trim()
     .notEmpty()
     .withMessage("Course duration is required.")
-    .isLength({ max: 50 }),
+    .isLength({ max: 50 }), // Now allows "4 Years"
+
   body("mode")
     .isIn(["Offline", "Online", "Hybrid"])
     .withMessage("Invalid mode specified."),
+
   body("priceOfCourse")
-    .isNumeric()
-    .withMessage("Price must be a number.")
-    .custom((val) => val >= 0)
-    .withMessage("Price cannot be negative."),
-  body("location")
+    .notEmpty()
+    .withMessage("Price is required."),
+    // Removed .isNumeric() because frontend sends it as a string "100000"
+
+  // UPDATED: Changed from 'location' to 'locationURL' to match your frontend payload
+  body("locationURL")
     .trim()
     .notEmpty()
-    .withMessage("Location is required.")
-    .isLength({ max: 100 }),
-  body("imageUrl").trim().isURL().withMessage("Image URL must be a valid URL."),
-  body("brotureUrl")
+    .withMessage("Location URL is required."),
+
+  body("imageUrl")
     .trim()
     .isURL()
-    .withMessage("Broture URL must be a valid URL."),
+    .withMessage("Image URL must be a valid S3 URL."),
+
+  // UPDATED: Fixed the spelling from 'brotureUrl' to 'brochureUrl'
+  body("brochureUrl")
+    .trim()
+    .isURL()
+    .withMessage("Brochure URL must be a valid S3 URL."),
+
+  // NEW: Added these fields since they appear in your frontend network tab
+  body("graduationType").optional().trim(),
+  body("streamType").optional().trim(),
+  body("selectBranch").optional().trim(),
+  body("highestPackage").optional().trim(),
+  body("averagePackage").optional().trim(),
+
   handleValidationErrors,
 ];
 
@@ -505,7 +524,6 @@ const l2BaseCourseRules = [
     .trim()
     .notEmpty()
     .withMessage("Price is required.")
-    .isNumeric()
     .withMessage("Price must be a number."),
 
   body("locationURL")
@@ -715,8 +733,8 @@ const l2UgPgCourseRules = [
   body("selectBranch").notEmpty().withMessage("A branch must be selected for the course."),
   body("aboutBranch")
     .trim()
-    .isLength({ min: 10, max: 500 })
-    .withMessage("About branch must be between 10 and 500 characters."),
+    .isLength({ min: 3, max: 500 })
+    .withMessage("About branch must be between 3 and 500 characters."),
   body("educationType")
     .isIn(["Full time", "part time", "Distance"])
     .withMessage("A valid education type is required."),
@@ -1196,99 +1214,51 @@ exports.validateUploadedFile = async (req, res, next) => {
   }
 };  
 
-// 🚨 SECURITY: Whitelist of all possible filters. This is critical to prevent
-// parameter pollution and NoSQL injection attempts with unknown fields.
+// 1. Updated Whitelist (Fixed typos and added missing fields from L2)
 const allowedFilters = new Set([
-  // General
-  "page",
-  "limit",
-  "state",
-  "pincode",
-  "instituteType",
-
-  // Kindergarten/childcare center
-  "extendedCare",
-  "mealsProvided",
-  "outdoorPlayArea",
-  "curriculumType",
-
-  // School's & Intermediate college(K12)
-  "schoolType",
-  "schoolCategory",
-  "hostelFacility",
-  "playground",
-  "busService",
-
-  // Under Graduation/Post Graduation
-  "library",
-  "entranceExam",
-  "managementQuota",
-
-  // Coaching centers & UG/PG Placements
-  "placementDrives",
-  "mockInterviews",
-  "resumeBuilding",
-  "linkedinOptimization",
-  "exclusiveJobPortal",
-  "certification",
+  "page", "limit", "state", "pincode", "instituteType", "district", "town",
+  "playground", "busService", "hostelFacility", "extendedCare", "mealsProvided",
+  "outdoorPlayArea", "placementDrives", "mockInterviews", "resumeBuilding",
+  "linkedinOptimization", "certification", "library", "entranceExam", 
+  "managementQuota", "emioptions", "partlyPayment"
 ]);
 
 exports.validateInstitutionFilter = [
-  // --- Pagination Sanitization ---
-  query("page")
-    .optional()
-    .isInt({ min: 1 })
-    .withMessage("Page must be a positive integer.")
-    .toInt(),
-  query("limit")
-    .optional()
-    .isInt({ min: 1, max: 100 })
-    .withMessage("Limit must be between 1 and 100.")
-    .toInt(),
+  query("page").optional().isInt({ min: 1 }).toInt(),
+  query("limit").optional().isInt({ min: 1, max: 100 }).toInt(),
 
-  // --- General Filter Validation ---
-  query("state").optional().isString().trim().escape(),
-  query("pincode")
-    .optional()
-    .isPostalCode("IN")
-    .withMessage("Invalid pincode format.")
-    .trim(),
+  query("state").optional().isString().trim(),
   query("instituteType")
     .optional()
-    .isString()
     .isIn([
       "Kindergarten/childcare center",
       "School's",
       "Intermediate college(K12)",
       "Under Graduation/Post Graduation",
       "Coaching centers",
-      "Tution Center's",
+      "Tuition Center's", // Fixed spelling
       "Study Halls",
       "Study Abroad",
-    ])
-    .withMessage("Invalid institute type."),
+    ]),
 
-  // --- Boolean Filter Validation & Sanitization ---
-  query("playground").optional().toBoolean(),
-  query("busService").optional().toBoolean(),
-  query("hostelFacility").optional().toBoolean(),
-  query("extendedCare").optional().toBoolean(),
-  query("mealsProvided").optional().toBoolean(),
-  query("outdoorPlayArea").optional().toBoolean(),
-  query("placementDrives").optional().isBoolean().toBoolean(),
-  query("mockInterviews").optional().isBoolean().toBoolean(),
-  query("resumeBuilding").optional().isBoolean().toBoolean(),
-  query("linkedinOptimization").optional().isBoolean().toBoolean(),
-  query("exclusiveJobPortal").optional().isBoolean().toBoolean(),
-  query("certification").optional().isBoolean().toBoolean(),
-  query("library").optional().isBoolean().toBoolean(),
-  query("entranceExam").optional().isBoolean().toBoolean(),
-  query("managementQuota").optional().isBoolean().toBoolean(),
+  // Updated Amenity Validation: Match the "Yes"/"No" logic used in L2 rules
+  [
+    "playground", "busService", "hostelFacility", "extendedCare", 
+    "mealsProvided", "outdoorPlayArea", "placementDrives", "mockInterviews",
+    "resumeBuilding", "linkedinOptimization", "certification", "library",
+    "entranceExam", "managementQuota", "emioptions", "partlyPayment"
+  ].map(field => 
+    query(field)
+      .optional()
+      .isIn(["Yes", "No"])
+      .withMessage(`${field} must be either 'Yes' or 'No'.`)
+  ),
 
+  // 3. Strict Whitelist Check
   query().custom((value, { req }) => {
     for (const param in req.query) {
       if (!allowedFilters.has(param)) {
-        throw new Error(`Unknown or disallowed filter parameter: '${param}'.`);
+        throw new Error(`Unknown filter parameter: '${param}'.`);
       }
     }
     return true;

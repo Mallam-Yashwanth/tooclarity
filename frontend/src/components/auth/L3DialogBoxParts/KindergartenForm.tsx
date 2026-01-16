@@ -166,14 +166,14 @@ export default function KindergartenForm({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
         <InputField
           label="Course type"
-          name="graduationType"
-          value={currentCourse.graduationType}
+          name="courseType"
+          value={currentCourse.courseType}
           onChange={handleCourseChange}
           isSelect
           options={["Kindergarten"]}
           placeholder="Select Course type"
           required
-          error={courseErrors.graduationType}
+          error={courseErrors.courseType}
         />
 
         <InputField
@@ -563,15 +563,16 @@ export default function KindergartenForm({
             >
               {/* 2. Check for the specific Kindergarten preview key */}
               {(currentCourse.kindergartenImage || currentCourse.kindergartenImagePreviewUrl) ? (
-                <div className="flex items-center gap-2 w-full">
-                  <div className="h-8 w-8 shrink-0">
+                <div className="absolute inset-0 w-full h-full">
                     <img
                       src={currentCourse.kindergartenImagePreviewUrl}
                       alt="Center Preview"
-                      className="h-full w-full object-cover rounded border border-blue-200"
+                      className="w-full h-full object-cover"
                     />
+                  {/* Optional: Add a semi-transparent overlay on hover to show it's still clickable */}
+                  <div className="absolute inset-0 bg-black/0 hover:bg-black/10 transition-colors flex items-center justify-center">
+                    <span className="text-white text-xs font-bold opacity-0 hover:opacity-100 bg-black/40 px-2 py-1 rounded">Change Photo</span>
                   </div>
-                  <span className="text-xs text-blue-600 font-bold truncate">Center Photos Selected</span>
                 </div>
               ) : (
                 <>

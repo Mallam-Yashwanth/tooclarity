@@ -52,13 +52,12 @@ interface StudyAbroadSubItem {
   budget: string | number;
   studentsSent: string | number;
 }
-
 interface TuitionSubItem {
   courseName?: string;
   subject: string;
   classSize: string;
-  academicDetails: any[]; // Replace 'any' with your AcademicDetail interface
-  facultyDetails: any[];  // Replace 'any' with your FacultyDetail interface
+  academicDetails: any[];
+  facultyDetails: any[];  
   priceOfCourse: string | number;
 }
 
@@ -75,13 +74,17 @@ interface ExtendedProgram {
   _id: string;
   programName: string;
   courseType?: string;
-  // Shared root-level preview fields
   courseName?: string;
+  branchName?: string;
   categoriesType?: string;
   mode?: string;
   courseDuration?: string;
-  // The nested array
   courses?: CourseSubItem[]; 
+  // Add these root-level fields found in your UG/PG data
+  selectBranch?: string;
+  streamType?: string;
+  specialization?: string;
+  countriesOffered?: string;
 }
 
 interface BranchDetail {
@@ -128,39 +131,50 @@ export function Listings() {
   // Pagination
   const [branchPage, setBranchPage] = useState(1);
   const [coursePage, setCoursePage] = useState(1);
-  const itemsPerPage = 4;
+  const itemsPerPage = 10;
+ const normalizedPrograms: ExtendedProgram[] = (programs as ExtendedProgram[] || []).map((p: ExtendedProgram) => {
+  const normalized: ExtendedProgram = { ...p };
 
-  const normalizedPrograms: ExtendedProgram[] = (programs || []).map((p: ExtendedProgram) => {
-  // If this is a nested bulk document, extract the first item for the card preview
-  if (p.courses && p.courses.length > 0) {
-    const firstSub = p.courses[0];
-    
-    // Create a normalized copy
-    const normalized: ExtendedProgram = { ...p };
+  // Safety check for sub-items
+  const hasSubItems = p.courses && p.courses.length > 0;
+  const firstSub = hasSubItems ? p.courses![0] : null;
 
-    // 1. Resolve the Title (programName)
-    normalized.courseName = firstSub.courseName || p.courseName;
+  /**
+   * 1. RESOLVE TITLE (Course Name)
+   * Priority: Root selectBranch (UGPG) -> Root courseName -> Nested courseName (Kindergarten)
+   */
+  let resolvedTitle: string = "";
 
-    // 2. Resolve the Subtitle/Type (categoriesType)
-    // We check which unique field exists in the first sub-item to populate the badge
-    if ("specialization" in firstSub) {
-      normalized.categoriesType = firstSub.specialization;
-    } else if ("categoriesType" in firstSub) {
-      normalized.categoriesType = firstSub.categoriesType;
-    } else if ("subject" in firstSub) {
-      normalized.categoriesType = firstSub.subject;
-    } else if ("classType" in firstSub) {
-      normalized.categoriesType = firstSub.classType;
-    }
-
-    // 3. Final Fallback for UI Title
-    normalized.programName = normalized.courseName || normalized.categoriesType || "Multiple Programs";
-
-    return normalized;
+  if (p.selectBranch) {
+    resolvedTitle = String(p.selectBranch);
+  } else if (p.courseName) {
+    resolvedTitle = String(p.courseName);
+  } else if (firstSub && "courseName" in firstSub && firstSub.courseName) {
+    resolvedTitle = String(firstSub.courseName);
+  } else {
+    resolvedTitle = String(p.programName || "Unnamed Listing");
   }
-  
-  // Return flat object as is if it's an older record
-  return p;
+
+  /**
+   * 2. RESOLVE CATEGORY TYPE (The Badge)
+   * Priority: Root streamType (UGPG) -> Root categoriesType -> Nested categoriesType (Kindergarten)
+   */
+  let resolvedCategory: string = "Standard";
+
+  if (p.streamType) {
+    resolvedCategory = String(p.streamType);
+  } else if (p.categoriesType) {
+    resolvedCategory = String(p.categoriesType);
+  } else if (firstSub && "categoriesType" in firstSub && firstSub.categoriesType) {
+    resolvedCategory = String(firstSub.categoriesType);
+  }
+
+  // Update properties for the Card UI
+  normalized.courseName = resolvedTitle;
+  normalized.categoriesType = resolvedCategory;
+  normalized.programName = resolvedTitle;
+
+  return normalized;
 });
 
   const { data: branchList, isLoading: isBranchesLoading } = useQuery({
@@ -322,7 +336,7 @@ export function Listings() {
             <_Card key={p._id} className="border-none shadow-sm rounded-[32px] bg-white dark:bg-gray-900 p-8">
                <div className="flex justify-between items-start mb-6">
                   <div>
-                    <h3 className="font-bold text-lg">{p.courseName || p.programName}</h3>
+                    <h3 className="font-bold text-lg">{ p.programName ||p.courseName}</h3>
                     <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded font-bold uppercase">{p.categoriesType || "Standard"}</span>
                   {p.courses && p.courses.length > 1 && (
                     <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded font-bold uppercase">
@@ -330,7 +344,7 @@ export function Listings() {
                     </span>
                   )}
                   </div>
-                  <Button variant="link" onClick={() => { setViewModal({ type: 'course', data: p }); setIsEditing(true); }} className="text-blue-600 font-bold p-0">Edit Listing</Button>
+                  <Button variant="link" onClick={() => {setViewModal({ type: 'course', data: p }); setIsEditing(true); }} className="text-blue-600 font-bold p-0">Edit Listing</Button>
                </div>
                <div className="grid grid-cols-2 gap-4 text-sm pt-4 border-t border-gray-50">
                   <div><p className="text-[10px] text-gray-400 font-bold uppercase">Mode</p><p>{p.mode || "Offline"}</p></div>

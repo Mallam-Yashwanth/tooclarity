@@ -118,7 +118,7 @@ export default function BasicCourseForm({
         value={currentCourse.locationURL}
         onChange={handleCourseChange}
         placeholder="Enter Place name"
-        error={courseErrors.location} // ✅ 3. Display the error
+        error={courseErrors.locationURL} // ✅ 3. Display the error
         required
       />
     </div>

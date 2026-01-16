@@ -8,6 +8,7 @@ const router = express.Router({ mergeParams: true });
 router.route('/')
     .post(
         uploadCourseFiles,
+        validateCourseCreation,
         courseController.createCourse
     )
     .get(courseController.getAllCoursesForInstitution);

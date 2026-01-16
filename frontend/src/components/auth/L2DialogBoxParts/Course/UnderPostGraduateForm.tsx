@@ -2487,6 +2487,8 @@ export default function UnderPostGraduateForm({
   selectedBranchId,
   isSubscriptionProgram = true,
 }: UnderPostGraduateFormProps) {
+
+  if (!currentCourse) return null;
   const isProgram = labelVariant === 'program';
 
   // Get available streams based on selected graduation type (pure in-memory)
@@ -2543,7 +2545,7 @@ export default function UnderPostGraduateForm({
     if (isSubscriptionProgram && selectedBranchId && currentCourse.createdBranch === "Main") {
       const branch = uniqueRemoteBranches.find(b => b._id === selectedBranchId);
       if (branch) {
-        setCourses(prev => prev.map(c => 
+        setCourses(prev => prev.map(c =>
           c.id === selectedCourseId ? {
             ...c,
             // Only sync these two specific fields
@@ -2554,8 +2556,8 @@ export default function UnderPostGraduateForm({
       }
     }
   }, [selectedBranchId, uniqueRemoteBranches, selectedCourseId, currentCourse.createdBranch, setCourses, isSubscriptionProgram]);
-   
-     const handleRadioChange = (name: keyof Course, value: string) => {
+
+  const handleRadioChange = (name: keyof Course, value: string) => {
     if (name === "createdBranch" && value === "Main") {
       if (selectedBranchId) {
         const branch = uniqueRemoteBranches.find((b) => b._id === selectedBranchId);
@@ -2564,12 +2566,12 @@ export default function UnderPostGraduateForm({
             prev.map((c) =>
               c.id === selectedCourseId
                 ? {
-                    ...c,
-                    createdBranch: "Main",
-                    // Only pull address and map link
-                    aboutBranch: branch.branchAddress || "",
-                    locationURL: branch.locationUrl || "",
-                  }
+                  ...c,
+                  createdBranch: "Main",
+                  // Only pull address and map link
+                  aboutBranch: branch.branchAddress || "",
+                  locationURL: branch.locationUrl || "",
+                }
                 : c
             )
           );
@@ -2577,7 +2579,7 @@ export default function UnderPostGraduateForm({
         }
       }
     }
-  
+
     setCourses((prev) =>
       prev.map((c) => {
         if (c.id === selectedCourseId) {
@@ -2604,27 +2606,43 @@ export default function UnderPostGraduateForm({
   return (
     <div className="space-y-8">
 
-      <div className="flex items-center justify-between border-b border-gray-200 pb-4 mb-6">
-        <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-1">
-          {courses.map((course, index) => (
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 flex-wrap">
+          {courses.map((course) => (
             <Button
               key={course.id}
               type="button"
+              variant="ghost"
               onClick={() => setSelectedCourseId(course.id)}
-              className={`px-4 py-2 rounded-lg text-sm border transition-all flex items-center gap-2 ${selectedCourseId === course.id
-                ? "bg-[#0222D7] text-white border-[#0222D7]"
-                : "bg-white text-gray-600 border-gray-200 hover:border-[#0222D7]"
+              className={`px-3 py-2 rounded-lg text-sm border transition-colors flex items-center gap-2 ${selectedCourseId === course.id
+                ? "bg-blue-50 border-blue-200 text-blue-700 font-medium"
+                : "bg-gray-50 border-gray-200 dark:bg-gray-800 text-gray-600 hover:bg-gray-100"
                 }`}
             >
-              {course.selectBranch || `Degree ${index + 1}`}
+              {course.courseName || `Course ${course.id}`}
               {courses.length > 1 && (
-                <X size={14} className="ml-1 hover:text-red-500 transition-colors" onClick={(e) => { e.stopPropagation(); deleteCourse(course.id); }} />
+                <span
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    deleteCourse(course.id);
+                  }}
+                  className="ml-1 hover:text-red-500 transition-colors cursor-pointer"
+                >
+                  <X size={14} />
+                </span>
               )}
             </Button>
           ))}
         </div>
-        <Button type="button" onClick={addNewCourse} className="bg-white text-[#0222D7] border-2 border-dashed border-[#0222D7]/50 hover:bg-blue-50 px-4 py-2 rounded-lg font-bold flex items-center gap-2">
-          <Plus size={16} strokeWidth={3} />
+        <Button
+          type="button"
+          onClick={addNewCourse}
+          className="bg-[#0222D7] text-white flex items-center gap-2 px-5 py-2 rounded-lg font-semibold shadow-sm transition-transform active:scale-95"
+        >
+          <div className="bg-white rounded-full p-0.5 flex items-center justify-center">
+            <Plus size={12} className="text-[#0222D7]" strokeWidth={3} />
+          </div>
           Add Course
         </Button>
       </div>
@@ -2669,12 +2687,12 @@ export default function UnderPostGraduateForm({
 
         <InputField
           label="About branch"
-          name="aboutBranch"
-          value={currentCourse.aboutBranch}
+          name="branchDescription"
+          value={currentCourse.branchDescription || ""}
           onChange={handleCourseChange}
           placeholder="Enter the course info"
           required
-          error={courseErrors.aboutBranch}
+          error={courseErrors.branchDescription}
         />
 
       </div>
@@ -2701,8 +2719,10 @@ export default function UnderPostGraduateForm({
                 </label>
               ))}
             </div>
-            {currentCourse.createdBranch === "Main" && !selectedBranchId && (
-              <p className="text-red-600 text-[10px] font-bold italic">* Select a branch at the top first</p>
+            {currentCourse.createdBranch === "Main" && !selectedBranchId && !currentCourse._id && (
+              <p className="text-red-600 text-[10px] font-bold italic">
+                * Select a branch at the top first
+              </p>
             )}
           </div>
 
@@ -3093,17 +3113,24 @@ export default function UnderPostGraduateForm({
         />
 
         <div className="space-y-3">
-          <label className="font-medium text-[16px] text-gray-900">College/Center Images <span className="text-red-500">*</span></label>
+          <label className="font-medium text-[16px] text-gray-900">
+            College/Center Images <span className="text-red-500">*</span>
+          </label>
           <div
             onClick={() => document.getElementById('college-images-input')?.click()}
-            className="flex items-center justify-center w-full h-[60px] bg-white border border-[#DADADD] rounded-[12px] cursor-pointer hover:bg-gray-50 transition-all px-4"
+            className="relative flex items-center justify-center w-full h-[60px] bg-white border border-[#DADADD] rounded-[12px] cursor-pointer hover:bg-gray-50 transition-all overflow-hidden"
           >
             {(currentCourse.collegeImage || currentCourse.collegeImagePreviewUrl) ? (
-              <div className="flex items-center gap-3 w-full">
-                <div className="h-10 w-10 bg-blue-50 rounded border border-blue-200 flex items-center justify-center overflow-hidden">
-                  <img src={currentCourse.collegeImagePreviewUrl} className="object-cover w-full h-full" alt="college preview" />
+              <div className="absolute inset-0 w-full h-full">
+                <img
+                  src={currentCourse.collegeImagePreviewUrl}
+                  className="w-full h-full object-cover" // object-cover ensures it fills the box without distortion
+                  alt="college preview"
+                />
+                {/* Optional: Add a semi-transparent overlay on hover to show it's still clickable */}
+                <div className="absolute inset-0 bg-black/0 hover:bg-black/10 transition-colors flex items-center justify-center">
+                  <span className="text-white text-xs font-bold opacity-0 hover:opacity-100 bg-black/40 px-2 py-1 rounded">Change Photo</span>
                 </div>
-                <span className="text-sm text-blue-600 font-bold">College Image Selected</span>
               </div>
             ) : (
               <div className="flex items-center gap-2 text-slate-500">
@@ -3111,9 +3138,17 @@ export default function UnderPostGraduateForm({
                 <span className="text-[13px]">Upload College Photos</span>
               </div>
             )}
-            <input id="college-images-input" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, "collegeImage")} />
+            <input
+              id="college-images-input"
+              type="file"
+              className="hidden"
+              accept="image/*"
+              onChange={(e) => handleFileChange(e, "collegeImage")}
+            />
           </div>
-          {courseErrors.collegeImageUrl && <p className="text-red-500 text-xs">{courseErrors.collegeImageUrl}</p>}
+          {courseErrors.collegeImageUrl && (
+            <p className="text-red-500 text-xs">{courseErrors.collegeImageUrl}</p>
+          )}
         </div>
 
         {/* Row 2: Installments & EMI Options */}

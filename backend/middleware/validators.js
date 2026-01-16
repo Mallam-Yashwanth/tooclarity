@@ -265,39 +265,58 @@ exports.validateBranchUpdate = [
 // --- COURSE VALIDATORS---
 exports.validateCourseCreation = [
   param("institutionId").isMongoId().withMessage("Invalid institution ID."),
+  
   body("courseName")
     .trim()
     .notEmpty()
     .withMessage("Course name is required.")
     .isLength({ max: 150 }),
+
   body("aboutCourse")
     .trim()
     .notEmpty()
     .withMessage("About course is required.")
     .isLength({ max: 2000 }),
+
   body("courseDuration")
     .trim()
     .notEmpty()
     .withMessage("Course duration is required.")
-    .isLength({ max: 50 }),
+    .isLength({ max: 50 }), // Now allows "4 Years"
+
   body("mode")
     .isIn(["Offline", "Online", "Hybrid"])
     .withMessage("Invalid mode specified."),
+
   body("priceOfCourse")
-    .isNumeric()
-    .withMessage("Price must be a number.")
-    .custom((val) => val >= 0)
-    .withMessage("Price cannot be negative."),
-  body("location")
+    .notEmpty()
+    .withMessage("Price is required."),
+    // Removed .isNumeric() because frontend sends it as a string "100000"
+
+  // UPDATED: Changed from 'location' to 'locationURL' to match your frontend payload
+  body("locationURL")
     .trim()
     .notEmpty()
-    .withMessage("Location is required.")
-    .isLength({ max: 100 }),
-  body("imageUrl").trim().isURL().withMessage("Image URL must be a valid URL."),
-  body("brotureUrl")
+    .withMessage("Location URL is required."),
+
+  body("imageUrl")
     .trim()
     .isURL()
-    .withMessage("Broture URL must be a valid URL."),
+    .withMessage("Image URL must be a valid S3 URL."),
+
+  // UPDATED: Fixed the spelling from 'brotureUrl' to 'brochureUrl'
+  body("brochureUrl")
+    .trim()
+    .isURL()
+    .withMessage("Brochure URL must be a valid S3 URL."),
+
+  // NEW: Added these fields since they appear in your frontend network tab
+  body("graduationType").optional().trim(),
+  body("streamType").optional().trim(),
+  body("selectBranch").optional().trim(),
+  body("highestPackage").optional().trim(),
+  body("averagePackage").optional().trim(),
+
   handleValidationErrors,
 ];
 
@@ -505,7 +524,6 @@ const l2BaseCourseRules = [
     .trim()
     .notEmpty()
     .withMessage("Price is required.")
-    .isNumeric()
     .withMessage("Price must be a number."),
 
   body("locationURL")
@@ -715,8 +733,8 @@ const l2UgPgCourseRules = [
   body("selectBranch").notEmpty().withMessage("A branch must be selected for the course."),
   body("aboutBranch")
     .trim()
-    .isLength({ min: 10, max: 500 })
-    .withMessage("About branch must be between 10 and 500 characters."),
+    .isLength({ min: 3, max: 500 })
+    .withMessage("About branch must be between 3 and 500 characters."),
   body("educationType")
     .isIn(["Full time", "part time", "Distance"])
     .withMessage("A valid education type is required."),

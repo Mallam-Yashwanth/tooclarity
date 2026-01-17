@@ -90,8 +90,8 @@ export default function FallbackCourseForm({
 
       <InputField
         label={isProgram ? "Location" : "Location"}
-        name="location"
-        value={currentCourse.location}
+        name="locationURL"
+        value={currentCourse.locationURL}
         onChange={handleCourseChange}
         placeholder="Enter Place name"
         required

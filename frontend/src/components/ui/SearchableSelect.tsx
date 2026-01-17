@@ -105,7 +105,7 @@ function SearchableSelect({
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
-      <label className="font-medium text-[16px] text-gray-900">
+      <label className="font-[Montserrat] font-medium text-[16px] md:text-[18px] text-black">
         {label}
         {required && <span className="text-red-500 ml-1">*</span>}
       </label>

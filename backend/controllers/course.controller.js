@@ -1,4 +1,4 @@
-const Course = require("../models/Course");
+const  Course  = require("../models/Course");
 const { Institution } = require("../models/Institution");
 const InstituteAdminModel = require("../models/InstituteAdmin");
 const AppError = require("../utils/appError");
@@ -306,7 +306,9 @@ exports.createCourse = asyncHandler(async (req, res, next) => {
   }
 
   const pipeline = [
-    // 1️⃣ Match institute admin
+    /* ----------------------------------------------------
+       1. Match Institute Admin
+    ---------------------------------------------------- */
     {
       $match: {
         _id: new mongoose.Types.ObjectId(userId),
@@ -314,7 +316,9 @@ exports.createCourse = asyncHandler(async (req, res, next) => {
       },
     },
 
-    // 2️⃣ Convert input courses array into documents
+    /* ----------------------------------------------------
+       2. Attach institution + defaults to each course
+    ---------------------------------------------------- */
     {
       $project: {
         courses: {
@@ -326,6 +330,19 @@ exports.createCourse = asyncHandler(async (req, res, next) => {
                 "$$course",
                 {
                   institution: "$institution",
+                  branch: {
+                    $cond: [
+                      {
+                        $regexMatch: {
+                          input: "$$course.branch",
+                          regex: /^[0-9a-fA-F]{24}$/,
+                        },
+                      },
+                      { $toObjectId: "$$course.branch" },
+                      null,
+                    ],
+                  },
+                  
                   status: "Inactive",
                   createdAt: new Date(),
                   updatedAt: new Date(),
@@ -337,62 +354,23 @@ exports.createCourse = asyncHandler(async (req, res, next) => {
       },
     },
 
-    // 3️⃣ Unwind courses → one document per course
+    /* ----------------------------------------------------
+       3. One document per course
+    ---------------------------------------------------- */
     { $unwind: "$courses" },
 
-    // 4️⃣ Lookup branch if branchName exists
-    {
-      $lookup: {
-        from: "branches",
-        let: {
-          branchName: "$courses.branchName",
-          institutionId: "$courses.institution",
-        },
-        pipeline: [
-          {
-            $match: {
-              $expr: {
-                $and: [
-                  { $eq: ["$branchName", "$$branchName"] },
-                  { $eq: ["$institution", "$$institutionId"] },
-                ],
-              },
-            },
-          },
-          { $project: { _id: 1 } },
-        ],
-        as: "branchData",
-      },
-    },
-
-    // 5️⃣ Attach branch ObjectId (if found)
-    {
-      $addFields: {
-        "courses.branch": {
-          $cond: {
-            if: { $gt: [{ $size: "$branchData" }, 0] },
-            then: { $arrayElemAt: ["$branchData._id", 0] },
-            else: null,
-          },
-        },
-      },
-    },
-
-    // 6️⃣ Cleanup temporary fields
-    {
-      $project: {
-        branchData: 0,
-      },
-    },
-
-    // 7️⃣ Replace root with final course object
+    /* ----------------------------------------------------
+       4. Replace root with course document
+    ---------------------------------------------------- */
     {
       $replaceRoot: {
         newRoot: "$courses",
       },
     },
 
-    // 8️⃣ Insert into courses collection
+    /* ----------------------------------------------------
+       5. Insert into courses collection
+    ---------------------------------------------------- */
     {
       $merge: {
         into: "courses",
@@ -410,6 +388,7 @@ exports.createCourse = asyncHandler(async (req, res, next) => {
     count: courses.length,
   });
 });
+
 
 exports.getAllCoursesForInstitution = asyncHandler(async (req, res, next) => {
   const userId = req.userId;
@@ -604,9 +583,12 @@ exports.getCourseById = asyncHandler(async (req, res) => {
 
 exports.updateCourse = asyncHandler(async (req, res, next) => {
   const { institutionId, courseId } = req.params;
+
+  // Check ownership
   await checkOwnership(institutionId, req.userId);
 
-  let course = await Course.findById(courseId);
+  // Find course
+  const course = await Course.findById(courseId);
   if (!course || course.institution.toString() !== institutionId) {
     return next(
       new AppError(
@@ -616,40 +598,22 @@ exports.updateCourse = asyncHandler(async (req, res, next) => {
     );
   }
 
-  const updateData = { ...req.body };
-  const folderPath = `tco_clarity/courses/${institutionId}`;
-
-  if (req.files) {
-    const uploadPromises = [];
-    if (req.files.image) {
-      uploadPromises.push(
-        uploadStream(req.files.image[0].buffer, {
-          folder: `${folderPath}/images`,
-          resource_type: "image",
-        }).then((result) => (updateData.image = result.secure_url))
-      );
-    }
-    if (req.files.brochure) {
-      uploadPromises.push(
-        uploadStream(req.files.brochure[0].buffer, {
-          folder: `${folderPath}/brochures`,
-          resource_type: "auto",
-        }).then((result) => (updateData.brochure = result.secure_url))
-      );
-    }
-    await Promise.all(uploadPromises);
-  }
-
-  const updatedCourse = await Course.findByIdAndUpdate(courseId, updateData, {
+  const updatedCourse = await Course.findByIdAndUpdate(
+  courseId,
+  { $set: req.body },
+  {
     new: true,
-    runValidators: true,
-  });
+    runValidators: false,  
+    strict: false,         
+  }
+);
 
   res.status(200).json({
     success: true,
     data: updatedCourse,
   });
 });
+
 
 exports.deleteCourse = asyncHandler(async (req, res, next) => {
   const { institutionId, courseId } = req.params;

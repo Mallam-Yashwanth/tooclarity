@@ -7,13 +7,14 @@ export type CourseRecord = {
   endDate?: string;
   mode?: string;
   priceOfCourse?: string;
-  location?: string;
+  locationURL?: string;
+  town?: string;
   image?: File | null;
-  imageUrl?: string,
-  imagePreviewUrl?: string,
-  brochureUrl?: string,
+  imageUrl?: string;
+  imagePreviewUrl?: string;
+  brochureUrl?: string;
   brochure?: File | null;
-  brochurePreviewUrl?: string,
+  brochurePreviewUrl?: string;
   graduationType?: string;
   streamType?: string;
   selectBranch?: string;
@@ -27,22 +28,25 @@ export type CourseRecord = {
   seatingOption?: string;
   openingTime?: string;
   closingTime?: string;
+  openingTimePeriod?: string;
+  closingTimePeriod?: string;
   operationalDays?: string[];
   totalSeats?: string;
   availableSeats?: string;
   pricePerSeat?: string;
-  hasWifi?: boolean;
-  hasChargingPoints?: boolean;
-  hasAC?: boolean;
-  hasPersonalLocker?: boolean;
+  // --- Standardized to String "Yes"/"No" for L2/L3 Consistency ---
+  hasWifi?: string; 
+  hasChargingPoints?: string;
+  hasAC?: string;
+  hasPersonalLocker?: string;
   tuitionType?: string;
   instructorProfile?: string;
   subject?: string;
-  createdBranch?: string; // optional UI field
+  createdBranch?: string; 
   eligibilityCriteria?: string;
   hallName?: string;
   consultancyName?: string;
-  studentAdmissions?: number;
+  studentAdmissions?: number | string;
   countriesOffered?: string;
   academicOfferings?: string;
   state?: string;
@@ -51,6 +55,57 @@ export type CourseRecord = {
   businessProofUrl?: string;
   panAadhaarUrl?: string;
   panAadhaarPreviewUrl?: string;
+
+  // --- Specialized Institutional Fields ---
+  ownershipType?: string;
+  collegeCategory?: string;
+  affiliationType?: string;
+  placementDrives?: string;
+  mockInterviews?: string;
+  resumeBuilding?: string;
+  linkedinOptimization?: string;
+  exclusiveJobPortal?: string;
+  library?: string;
+  hostelFacility?: string;
+  entranceExam?: string;
+  managementQuota?: string;
+  playground?: string;
+  busService?: string;
+  collegeType?: string;
+  curriculumType?: string;
+  otherActivities?: string;
+  certification?: string;
+  schoolType?: string;
+  schoolCategory?: string;
+  extendedCare?: string;
+  mealsProvided?: string;
+  outdoorPlayArea?: string;
+  emioptions?: string;
+  installments?: string;
+  partlyPayment?: string;
+  
+  // Image Specifics
+  collegeImageUrl?: string;       
+  centerImageUrl?: string;         
+  consultancyImageUrl?: string;
+  schoolImageUrl?: string;
+  kindergartenImageUrl?: string;
+  intermediateImageUrl?: string;
+  tuitionImageUrl?: string;
+
+  // Arrays/Complex
+  academicDetails?: any[]; // Matching your AcademicDetail[]
+  facultyDetails?: any[];  // Matching your FacultyDetail[]
+  
+  totalStudentsPlaced?: string | number; 
+  highestPackage?: string;
+  averagePackage?: string;
+  totalNumberRequires?: string | number;
+  year?: string;
+  specialization?: string;
+  studyMaterial?: string;
+  classSizeRatio?: string;
+  classType?: string;
 };
 
 export type BranchCoursesRecord = {
@@ -86,6 +141,7 @@ export type InstitutionRecord = {
   additionalContactInfo?: string;
   headquartersAddress?: string;
   state?: string;
+  town?: string;
   pincode?: string;
   locationURL?: string;
   createdAt?: number;

@@ -172,7 +172,7 @@ export const CACHE_DURATION = {
 };
 
 const DB_NAME = "tooclarity";
-const DB_VERSION = 5; // bump version when adding new stores
+const DB_VERSION = 7; // bump version when adding new stores
 const BRANCH_STORE = "branches";
 const INSTITUTION_STORE = "institutions";
 const COURSES_STORE = "courses"; // new store to link courses to branches

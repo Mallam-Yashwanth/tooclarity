@@ -14,8 +14,8 @@ export async function getSocket(origin?: string) {
   // Disable Socket.IO in development if backend is not available
   if (process.env.NODE_ENV === 'development') {
     try {
-      const backendUrl =  process.env.NEXT_PUBLIC_API_URL|| 'http://localhost:3001/api';
-      const response = await fetch(`${backendUrl}/health`, { 
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const response = await fetch(`${backendUrl}/health`, {
         method: 'GET',
         signal: AbortSignal.timeout(2000)
       });
@@ -30,17 +30,34 @@ export async function getSocket(origin?: string) {
     }
   }
 
-  if (socketInstance && socketInstance.connected) return socketInstance;
+  // Check if instance exists (connected or connecting)
+  if (socketInstance) return socketInstance;
+
   const { io } = await import('socket.io-client');
-  const url = origin || process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3001';
-  socketInstance = io(url, { 
-    withCredentials: true, 
+
+  // Double-check after await to handle concurrent calls
+  if (socketInstance) return socketInstance;
+  // Robustly determine the socket URL (Origin only)
+  let url = origin || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  try {
+    // If it URL contains a path (like /api), strip it to ensure we connect to the root namespace
+    if (!url.startsWith('http')) url = `http://${url}`; // safety for partial URLs
+    const u = new URL(url);
+    url = u.origin; // e.g., "http://localhost:3001"
+  } catch (e) {
+    console.warn('[Socket] Failed to parse API URL, falling back to default', e);
+    url = 'http://localhost:3001';
+  }
+
+  console.log('[SocketManager] Connecting to:', url); // clean log
+  socketInstance = io(url, {
+    withCredentials: true,
     transports: ['websocket'],
     timeout: 5000,
     forceNew: true
   });
   return socketInstance;
-} 
+}
 
 // ------- Production-grade Socket Manager -------
 
@@ -67,7 +84,7 @@ class SocketManager {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      this.origin = process.env.NEXT_PUBLIC_API_URL|| 'http://localhost:3001';
+      this.origin = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
       window.addEventListener('online', this.onOnline);
       window.addEventListener('offline', this.onOffline);
       document.addEventListener('visibilitychange', this.onVisibility);

@@ -4,7 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "../lib/auth-context";
 import ToastProvider from "@/components/ui/ToastProvider";
 import { QueryProvider } from "@/components/providers/QueryProvider";
-import NotificationSocketBridge from "@/components/providers/NotificationSocketBridge";
+
 import ThemeProvider from "@/components/providers/ThemeProvider";
 
 const geistSans = Geist({
@@ -42,7 +42,7 @@ export default function RootLayout({
             <AuthProvider>
               {children}
               <ToastProvider /> {/* 👈 This must exist ONCE globally */}
-              <NotificationSocketBridge />
+
             </AuthProvider>
           </QueryProvider>
         </ThemeProvider>

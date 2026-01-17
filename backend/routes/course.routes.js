@@ -35,7 +35,7 @@ router.route('/:courseId')
     .get(courseController.getCourseById)
     .put(
         uploadCourseFiles,
-        validateCourseUpdate,
+        // validateCourseUpdate,
         courseController.updateCourse
     )
     .delete(courseController.deleteCourse);

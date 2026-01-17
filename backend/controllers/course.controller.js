@@ -1,4 +1,4 @@
-const Course = require("../models/Course");
+const  Course  = require("../models/Course");
 const { Institution } = require("../models/Institution");
 const InstituteAdminModel = require("../models/InstituteAdmin");
 const AppError = require("../utils/appError");
@@ -298,58 +298,185 @@ const checkOwnership = async (institutionId, userId) => {
 };
 
 exports.createCourse = asyncHandler(async (req, res, next) => {
-  const { institutionId } = req.params;
+  const userId = req.userId;
+  const { courses } = req.body;
 
-  // Ensure the user owns the institution
-  await checkOwnership(institutionId, req.userId);
-
-  const { courses, totalCourses } = req.body;
-
-  if (!totalCourses || !Array.isArray(courses) || courses.length < 1) {
+  if (!Array.isArray(courses) || courses.length === 0) {
     return next(new AppError("No courses provided", 400));
   }
 
-  // Add institutionId and defaults to each course object
-  const coursesToInsert = courses.map((course) => ({
-    ...course,
-    institution: institutionId,
-    image: course.image || "",
-    brochure: course.brochure || "",
-  }));
+  const pipeline = [
+    /* ----------------------------------------------------
+       1. Match Institute Admin
+    ---------------------------------------------------- */
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(userId),
+        role: "INSTITUTE_ADMIN",
+      },
+    },
 
-  // Insert all courses at once
-  const createdCourses = await Course.insertMany(coursesToInsert);
+    /* ----------------------------------------------------
+       2. Attach institution + defaults to each course
+    ---------------------------------------------------- */
+    {
+      $project: {
+        courses: {
+          $map: {
+            input: courses,
+            as: "course",
+            in: {
+              $mergeObjects: [
+                "$$course",
+                {
+                  institution: "$institution",
+                  branch: {
+                    $cond: [
+                      {
+                        $regexMatch: {
+                          input: "$$course.branch",
+                          regex: /^[0-9a-fA-F]{24}$/,
+                        },
+                      },
+                      { $toObjectId: "$$course.branch" },
+                      null,
+                    ],
+                  },
+                  
+                  status: "Inactive",
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+
+    /* ----------------------------------------------------
+       3. One document per course
+    ---------------------------------------------------- */
+    { $unwind: "$courses" },
+
+    /* ----------------------------------------------------
+       4. Replace root with course document
+    ---------------------------------------------------- */
+    {
+      $replaceRoot: {
+        newRoot: "$courses",
+      },
+    },
+
+    /* ----------------------------------------------------
+       5. Insert into courses collection
+    ---------------------------------------------------- */
+    {
+      $merge: {
+        into: "courses",
+        whenMatched: "fail",
+        whenNotMatched: "insert",
+      },
+    },
+  ];
+
+  await InstituteAdminModel.aggregate(pipeline);
 
   res.status(201).json({
     success: true,
-    count: createdCourses.length,
-    data: createdCourses,
+    message: "Courses created successfully",
+    count: courses.length,
   });
 });
 
-exports.getAllCoursesForInstitution = asyncHandler(async (req, res, next) => {
-  const { institutionId } = req.params;
 
-  await checkOwnership(institutionId, req.userId);
+exports.getAllCoursesForInstitution = asyncHandler(async (req, res, next) => {
+  const userId = req.userId;
 
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
   const skip = (page - 1) * limit;
 
-  const q = { institution: institutionId };
-  if (req.query.type) {
-    q.type = req.query.type; // optional filter by type: 'PROGRAM' | 'COURSE'
+  const pipeline = [
+    // 1️⃣ Match institute admin
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(userId),
+        role: "INSTITUTE_ADMIN",
+      },
+    },
+
+    // 2️⃣ SINGLE lookup with facet
+    {
+      $lookup: {
+        from: "courses",
+        let: { institutionId: "$institution" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $eq: ["$institution", "$$institutionId"],
+              },
+            },
+          },
+
+          // Optional: only active courses
+          // { $match: { status: "Active" } },
+
+          {
+            $facet: {
+              data: [
+                { $sort: { createdAt: -1 } },
+                { $skip: skip },
+                { $limit: limit },
+              ],
+              totalCount: [
+                { $count: "count" },
+              ],
+            },
+          },
+        ],
+        as: "coursesResult",
+      },
+    },
+
+    // 3️⃣ Flatten result
+    {
+      $project: {
+        courses: {
+          $ifNull: [
+            { $arrayElemAt: ["$coursesResult.data", 0] },
+            [],
+          ],
+        },
+        total: {
+          $ifNull: [
+            { $arrayElemAt: ["$coursesResult.totalCount.count", 0] },
+            0,
+          ],
+        },
+      },
+    },
+  ];
+
+  const result = await InstituteAdminModel.aggregate(pipeline);
+
+  if (!result.length) {
+    return res.status(403).json({
+      success: false,
+      message: "Unauthorized or institute admin not found",
+    });
   }
-  const courses = await Course.find(q).skip(skip).limit(limit);
-  const totalCourses = await Course.countDocuments(q);
+
+  const { courses, total } = result[0];
 
   res.status(200).json({
     success: true,
     count: courses.length,
     pagination: {
-      total: totalCourses,
+      total,
       page,
-      pages: Math.ceil(totalCourses / limit),
+      pages: Math.ceil(total / limit),
     },
     data: courses,
   });
@@ -456,9 +583,12 @@ exports.getCourseById = asyncHandler(async (req, res) => {
 
 exports.updateCourse = asyncHandler(async (req, res, next) => {
   const { institutionId, courseId } = req.params;
+
+  // Check ownership
   await checkOwnership(institutionId, req.userId);
 
-  let course = await Course.findById(courseId);
+  // Find course
+  const course = await Course.findById(courseId);
   if (!course || course.institution.toString() !== institutionId) {
     return next(
       new AppError(
@@ -468,40 +598,22 @@ exports.updateCourse = asyncHandler(async (req, res, next) => {
     );
   }
 
-  const updateData = { ...req.body };
-  const folderPath = `tco_clarity/courses/${institutionId}`;
-
-  if (req.files) {
-    const uploadPromises = [];
-    if (req.files.image) {
-      uploadPromises.push(
-        uploadStream(req.files.image[0].buffer, {
-          folder: `${folderPath}/images`,
-          resource_type: "image",
-        }).then((result) => (updateData.image = result.secure_url))
-      );
-    }
-    if (req.files.brochure) {
-      uploadPromises.push(
-        uploadStream(req.files.brochure[0].buffer, {
-          folder: `${folderPath}/brochures`,
-          resource_type: "auto",
-        }).then((result) => (updateData.brochure = result.secure_url))
-      );
-    }
-    await Promise.all(uploadPromises);
-  }
-
-  const updatedCourse = await Course.findByIdAndUpdate(courseId, updateData, {
+  const updatedCourse = await Course.findByIdAndUpdate(
+  courseId,
+  { $set: req.body },
+  {
     new: true,
-    runValidators: true,
-  });
+    runValidators: false,  
+    strict: false,         
+  }
+);
 
   res.status(200).json({
     success: true,
     data: updatedCourse,
   });
 });
+
 
 exports.deleteCourse = asyncHandler(async (req, res, next) => {
   const { institutionId, courseId } = req.params;

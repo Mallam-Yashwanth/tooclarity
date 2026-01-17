@@ -98,6 +98,7 @@ interface OriginalInputFieldProps {
 	error?: string;
 	className?: string;
 	rows?: number;
+	variant?: "default" | "white";
 }
 
 function InputField({

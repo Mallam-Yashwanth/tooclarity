@@ -135,6 +135,12 @@ app.use(
 );
 
 app.use(
+  "/api/v1/course",
+  requireInstituteAdmin,
+  courseRoutes
+)
+
+app.use(
   "api/v1/analytics/",
   requireInstituteAdmin,
   analyticsRoutes

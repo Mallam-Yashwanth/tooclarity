@@ -11,6 +11,7 @@ import {
   faCreditCard,
 } from "@fortawesome/free-regular-svg-icons";
 import { faGear, faRightFromBracket } from "@fortawesome/free-solid-svg-icons";
+import { faPlus } from "@fortawesome/free-solid-svg-icons";
 import { useAuth } from "@/lib/auth-context";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
@@ -23,6 +24,7 @@ const Sidebar: React.FC = () => {
     { icon: faHome, label: "Dashboard", href: "/dashboard" },
     { icon: faUser, label: "Leads", href: "/dashboard/leads" },
     { icon: faChartBar, label: "Analytics", href: "/dashboard/analytics" },
+    { icon: faPlus, label: "Listings", href: "/dashboard/listings" },
     {
       icon: faCreditCard,
       label: "Subscription",

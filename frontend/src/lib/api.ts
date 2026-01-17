@@ -1,5 +1,7 @@
 // API configuration and methods for authentication
 
+import { AcademicDetail, FacultyDetail } from "@/components/auth/L2DialogBox";
+
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
 // Types for API requests and responses
@@ -10,7 +12,7 @@ export interface SignUpData {
   contactNumber: string;
   designation?: string;
   linkedin?: string;
-  password: string;
+  password?: string;
   type?: "admin" | "institution" | "student";
 }
 
@@ -25,6 +27,7 @@ export interface OTPData {
   email?: string;
   contactNumber?: string;
   otp: string;
+  isLogin?: boolean 
 }
 
 export interface resendOtpData {
@@ -58,43 +61,181 @@ export interface InstitutionData {
 
 // L2DialogBox Types
 export interface CourseData {
+  // id: number;
+  // courseName: string;
+  // aboutCourse: string;
+  // courseDuration: string;
+  // mode: string;
+  // priceOfCourse: string;
+  // location: string;
+  // image?: File | null;
+  // brochure?: File | null;
+  // // Additional fields for Under Graduate/Post graduate
+  // graduationType?: string;
+  // streamType?: string;
+  // selectBranch?: string;
+  // aboutBranch?: string;
+  // educationType?: string;
+  // classSize?: string;
+  // // Additional fields for Coaching centers
+  // categoriesType?: string;
+  // domainType?: string;
+  // subDomainType?: string;
+  // courseHighlights?: string;
+  // // Additional fields for Study Hall
+  // seatingOption?: string;
+  // openingTime?: string;
+  // closingTime?: string;
+  // operationalDays?: string[];
+  // totalSeats?: string;
+  // availableSeats?: string;
+  // pricePerSeat?: string;
+  // hasWifi?: boolean;
+  // hasChargingPoints?: boolean;
+  // hasAC?: boolean;
+  // hasPersonalLocker?: boolean;
+  // // Additional fields for Tuition Centers
+  // tuitionType?: string;
+  // instructorProfile?: string;
+  // subject?: string;
+
   id: number;
   courseName: string;
   aboutCourse: string;
   courseDuration: string;
+  startDate: string;
+  endDate: string;
   mode: string;
   priceOfCourse: string;
-  location: string;
-  image?: File | null;
-  brochure?: File | null;
-  // Additional fields for Under Graduate/Post graduate
-  graduationType?: string;
-  streamType?: string;
-  selectBranch?: string;
-  aboutBranch?: string;
-  educationType?: string;
-  classSize?: string;
-  // Additional fields for Coaching centers
-  categoriesType?: string;
-  domainType?: string;
-  subDomainType?: string;
-  courseHighlights?: string;
-  // Additional fields for Study Hall
-  seatingOption?: string;
-  openingTime?: string;
-  closingTime?: string;
-  operationalDays?: string[];
-  totalSeats?: string;
-  availableSeats?: string;
-  pricePerSeat?: string;
-  hasWifi?: boolean;
-  hasChargingPoints?: boolean;
-  hasAC?: boolean;
-  hasPersonalLocker?: boolean;
-  // Additional fields for Tuition Centers
-  tuitionType?: string;
-  instructorProfile?: string;
-  subject?: string;
+  locationURL: string;
+  state: string;
+  district: string;
+  town: string;
+  image: File | null;
+  imageUrl: string;
+  imagePreviewUrl: string;
+  brochureUrl: string;
+  brochurePreviewUrl: string;
+  brochure: File | null;
+  graduationType: string;
+  streamType: string;
+  selectBranch: string;
+  aboutBranch: string;
+  educationType: string;
+  classSize: string;
+  classSizeRatio?: string;
+  categoriesType: string;
+  domainType: string;
+  subDomainType: string;
+  courseHighlights: string;
+  seatingOption: string;
+  openingTime: string;
+  closingTime: string;
+  openingTimePeriod: string;
+  closingTimePeriod: string;
+  hallName?: string;
+  operationalDays: string[];
+  totalSeats: string;
+  availableSeats: string;
+  pricePerSeat: string;
+  hasWifi: string;
+  hasChargingPoints: string;
+  hasAC: string;
+  hasPersonalLocker: string;
+  eligibilityCriteria: string;
+  tuitionType: string;
+  instructorProfile: string;
+  subject: string;
+  createdBranch: string;
+  consultancyName: string;
+  studentAdmissions: string;
+  countriesOffered: string;
+  academicOfferings: string;
+  businessProof: File | null;
+  businessProofPreviewUrl: string;
+  businessProofUrl: string;
+  panAadhaar: File | null;
+  panAadhaarPreviewUrl: string;
+  panAadhaarUrl: string;
+  consultancyImage: File | null;
+  consultancyImagePreviewUrl: string;
+  consultancyImageUrl?: string;
+  centerImage: File | null;
+  centerImagePreviewUrl: string;
+  centerImageUrl?: string;
+
+  // --- MERGED L3 FIELDS ---
+  collegeType: string;
+  collegeCategory: string;
+  schoolType: string;
+  curriculumType: string;
+  schoolCategory: string;
+  hostelFacility: string;
+  playground: string;
+  busService: string;
+  otherActivities: string;
+  extendedCare: string;
+  mealsProvided: string;
+  outdoorPlayArea: string;
+  placementDrives: string;
+  mockInterviews: string;
+  resumeBuilding: string;
+  linkedinOptimization: string;
+  exclusiveJobPortal: string;
+  certification: string;
+  ownershipType: string;
+  affiliationType: string;
+  library: string;
+  entranceExam: string;
+  managementQuota: string;
+  applicationAssistance: string;
+  visaProcessingSupport: string;
+  testOperation: string;
+  preDepartureOrientation: string;
+  accommodationAssistance: string;
+  educationLoans: string;
+  postArrivalSupport: string;
+  emioptions: string;
+  installments: string;
+  totalNumberRequires: string | number;
+  totalStudentsPlaced: string | number;
+  highestPackage: string;
+  averagePackage: string;
+  budget: string | number;
+  studentsSent: string | number;
+  partTimeHelp: string;
+  academicDetails: AcademicDetail[];
+  facultyDetails: FacultyDetail[];
+  qualification?: string;
+  experience?: string;
+  specialization: string;
+  subjectTeach?: string;
+  monthlyFees?: string | number;
+  classTiming?: string;
+  courselanguage: string;
+  classlanguage: string;
+  mockTests: string;
+  collegeImage: File | null;
+  collegeImagePreviewUrl: string;
+  collegeImageUrl?: string;
+  tuitionImage: File | null;
+  tuitionImagePreviewUrl: string;
+  tuitionImageUrl?: string;
+  partlyPayment: string;
+  kindergartenImage: File | null;
+  kindergartenImagePreviewUrl: string;
+  kindergartenImageUrl?: string;
+
+  schoolImage: File | null;
+  schoolImagePreviewUrl: string;
+  schoolImageUrl?: string;
+  classType: string;
+
+  intermediateImage: File | null;      // ✅ Unique key for campus photos
+  intermediateImagePreviewUrl: string;
+  intermediateImageUrl?: string;
+  year: string;
+  studyMaterial:string;
 }
 
 export interface BranchData {
@@ -353,6 +494,21 @@ export const institutionAPI = {
       body: formData,
     });
   },
+
+
+
+  saveL1Details: async (formData: any, logoUrl: string): Promise<ApiResponse> => {
+    const payload = {
+      ...formData,
+      logoUrl: logoUrl,
+    };
+
+    // Use the base apiRequest helper
+    return apiRequest("/v1/institutions", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
 };
 
 
@@ -519,9 +675,17 @@ export const courseAPI = {
    */
   createCourses: async (
     coursesData: CourseData[],
-    institutionId?: string
   ): Promise<ApiResponse> => {
-    return courseAPI.createCourse(coursesData, institutionId);
+    const response = {
+      courses : coursesData
+    }
+    return apiRequest(`/v1/course/create`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(response),
+    });
   },
 
   // Update course
@@ -616,25 +780,29 @@ export const branchAPI = {
 
   // Update branch
   updateBranch: async (
-    branchId: number,
-    branchData: Partial<BranchData>
+    branchId: string,
+    branchData: Partial<BranchData>,
+    institutionId : string,
   ): Promise<ApiResponse> => {
-    return apiRequest(`/v1/branches/${branchId}`, {
+    return apiRequest(`/v1/institutions/${institutionId}/branches/${branchId}`, {
       method: "PUT",
       body: JSON.stringify(branchData),
     });
   },
 
   // Get branches
-  getBranches: async (): Promise<ApiResponse> => {
-    return apiRequest("/v1/branches", {
+  getBranches: async (institutionId: string): Promise<ApiResponse> => {
+    return apiRequest("/v1/institutions/${institutionId}/branches", {
       method: "GET",
     });
   },
 
   // Delete branch
-  deleteBranch: async (branchId: number): Promise<ApiResponse> => {
-    return apiRequest(`/v1/branches/${branchId}`, {
+  deleteBranch: async (
+    branchId: number,
+    institutionId :string
+  ): Promise<ApiResponse> => {
+    return apiRequest(`/v1/institutions/${institutionId}/branches/${branchId}`, {
       method: "DELETE",
     });
   },
@@ -945,7 +1113,7 @@ export const programsAPI = {
     const cacheKey = `programs_${institutionId}`;
     const cached = programsCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < PROGRAMS_CACHE_DURATION) return cached.data as ApiResponse<unknown>;
-    const res = await apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses`, { method: 'GET' });
+    const res = await apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses?limit=1000`, { method: 'GET' });
     const payload = res as { data?: unknown; courses?: unknown };
     const raw = payload?.data || payload?.courses || [];
     const arr = Array.isArray(raw) ? raw : Array.isArray((raw as { data?: unknown })?.data) ? (raw as { data: unknown[] }).data : [];
@@ -1015,6 +1183,7 @@ export const programsAPI = {
     programsCache.set(cacheKey, { data: res, timestamp: Date.now() });
     return res;
   },
+
   subscriptionHistory: async (institutionId: string): Promise<ApiResponse> => {
     // Use unified institutions scope with single controller/routes; fallback safe
     try {

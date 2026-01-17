@@ -5,11 +5,10 @@ import { Button } from "../ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faBell,
-  faMoon,
   faUser,
   faSpinner
 } from "@fortawesome/free-solid-svg-icons"; // Added faSpinner
+import { faBell, faMoon } from "@fortawesome/free-regular-svg-icons"; // Outline icons
 import { faSun, faSearch, faTimes } from "@fortawesome/free-solid-svg-icons";
 import { useTheme } from "next-themes";
 import Link from "next/link";
@@ -110,7 +109,7 @@ const Topbar: React.FC<TopbarProps> = ({
   const openDropdown = () => {
     clearHideTimer();
     setShowDropdown(true);
-    refetch(); // <-- Retrieve latest on open
+
 
     // Auto mark all notifications as read when dropdown opens
     if (notificationCount > 0) {
@@ -392,7 +391,7 @@ const Topbar: React.FC<TopbarProps> = ({
               onClick={() => router.push("/notifications")}
               aria-label="Notifications"
             >
-              <FontAwesomeIcon icon={faBell} className="text-sm sm:text-lg dark:text-gray-100" />
+              <FontAwesomeIcon icon={faBell} className="text-sm sm:text-lg text-[#060B13] dark:text-gray-100" />
             </Button>
             <AnimatePresence>
               {notificationCount > 0 && (
@@ -515,7 +514,7 @@ const Topbar: React.FC<TopbarProps> = ({
               {mounted && (
                 <FontAwesomeIcon
                   icon={(theme === 'dark' || (theme === 'system' && systemTheme === 'dark')) ? faSun : faMoon}
-                  className="text-sm sm:text-lg dark:text-gray-100"
+                  className={`text-sm sm:text-lg ${(theme === 'dark' || (theme === 'system' && systemTheme === 'dark')) ? "text-yellow-400" : "text-[#060B13] dark:text-gray-100"}`}
                 />
               )}
             </Button>

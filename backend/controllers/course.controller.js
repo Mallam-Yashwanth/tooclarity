@@ -11,7 +11,6 @@ const { esClient } = require("../config/elasticsearch");
 const UserStats = require("../models/userStats");
 const Enquiries = require("../models/Enquiries");
 const ObjectId = mongoose.Types.ObjectId;
-
 // Generic helpers
 async function incrementMetricGeneric(req, res, next, cfg) {
   const { institutionId, courseId } = req.params;
@@ -23,7 +22,7 @@ async function incrementMetricGeneric(req, res, next, cfg) {
   const course = await Course.findOneAndUpdate(
     { _id: courseId, institution: institutionId },
     { $inc: incUpdate },
-    { new: true }
+    { new: true },
   );
   if (!course) return next(new AppError("Course not found", 404));
 
@@ -48,7 +47,7 @@ async function incrementMetricGeneric(req, res, next, cfg) {
   } catch (err) {
     console.error(
       "CourseController: rollup update failed",
-      err?.message || err
+      err?.message || err,
     );
   }
 
@@ -60,9 +59,8 @@ async function incrementMetricGeneric(req, res, next, cfg) {
       payload[metricField] = course[metricField];
       io.to(`institution:${institutionId}`).emit(updatedEvent, payload);
 
-      const inst = await Institution.findById(institutionId).select(
-        "institutionAdmin"
-      );
+      const inst =
+        await Institution.findById(institutionId).select("institutionAdmin");
       if (inst?.institutionAdmin) {
         const adminId = String(inst.institutionAdmin);
         io.to(`institutionAdmin:${adminId}`).emit(updatedEvent, payload);
@@ -82,11 +80,11 @@ async function incrementMetricGeneric(req, res, next, cfg) {
             metricField === "courseViews"
               ? { totalViews: total }
               : metricField === "comparisons"
-              ? { totalComparisons: total }
-              : { totalLeads: total };
+                ? { totalComparisons: total }
+                : { totalLeads: total };
           io.to(`institutionAdmin:${adminId}`).emit(
             institutionAdminTotalEvent,
-            totalPayload
+            totalPayload,
           );
         }
       }
@@ -94,7 +92,7 @@ async function incrementMetricGeneric(req, res, next, cfg) {
   } catch (err) {
     console.error(
       "CourseController: socket emit/institutionAdmin total failed",
-      err?.message || err
+      err?.message || err,
     );
   }
 
@@ -233,7 +231,7 @@ async function institutionAdminRangeGeneric(userId, rollupField, range) {
 async function institutionAdminPreviousRangeGeneric(
   userId,
   rollupField,
-  range
+  range,
 ) {
   const institutions = await Institution.find({
     institutionAdmin: userId,
@@ -291,7 +289,7 @@ const checkOwnership = async (institutionId, userId) => {
   if (institution.institutionAdmin.toString() !== userId) {
     throw new AppError(
       "You are not authorized to perform this action for this institution",
-      403
+      403,
     );
   }
   return institution;
@@ -497,96 +495,59 @@ exports.createCourse = asyncHandler(async (req, res, next) => {
   });
 });
 
-
 exports.getAllCoursesForInstitution = asyncHandler(async (req, res, next) => {
   const userId = req.userId;
-
-  const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
-  const skip = (page - 1) * limit;
+  const cursor = req.query.cursor;
+
+  const matchQuery = {
+    institution: null,
+  };
+  if (cursor) {
+    matchQuery._id = { $lt: new mongoose.Types.ObjectId(cursor) };
+  }
 
   const pipeline = [
-    // 1️⃣ Match institute admin
     {
       $match: {
         _id: new mongoose.Types.ObjectId(userId),
         role: "INSTITUTE_ADMIN",
       },
     },
-
-    // 2️⃣ SINGLE lookup with facet
     {
       $lookup: {
         from: "courses",
-        let: { institutionId: "$institution" },
+        let: { instId: "$institution" },
         pipeline: [
-          {
-            $match: {
-              $expr: {
-                $eq: ["$institution", "$$institutionId"],
-              },
-            },
-          },
-
-          // Optional: only active courses
-          // { $match: { status: "Active" } },
-
-          {
-            $facet: {
-              data: [
-                { $sort: { createdAt: -1 } },
-                { $skip: skip },
-                { $limit: limit },
-              ],
-              totalCount: [
-                { $count: "count" },
-              ],
-            },
-          },
+          { $match: { $expr: { $eq: ["$institution", "$$instId"] } } },
+          ...(cursor
+            ? [
+                {
+                  $match: { _id: { $lt: new mongoose.Types.ObjectId(cursor) } },
+                },
+              ]
+            : []),
+          { $sort: { _id: -1 } },
+          { $limit: limit + 1 },
         ],
-        as: "coursesResult",
-      },
-    },
-
-    // 3️⃣ Flatten result
-    {
-      $project: {
-        courses: {
-          $ifNull: [
-            { $arrayElemAt: ["$coursesResult.data", 0] },
-            [],
-          ],
-        },
-        total: {
-          $ifNull: [
-            { $arrayElemAt: ["$coursesResult.totalCount.count", 0] },
-            0,
-          ],
-        },
+        as: "courses",
       },
     },
   ];
 
   const result = await InstituteAdminModel.aggregate(pipeline);
+  const courses = result[0]?.courses || [];
 
-  if (!result.length) {
-    return res.status(403).json({
-      success: false,
-      message: "Unauthorized or institute admin not found",
-    });
+  let nextCursor = null;
+  if (courses.length > limit) {
+    const nextItem = courses.pop();
+    nextCursor = nextItem._id;
   }
-
-  const { courses, total } = result[0];
 
   res.status(200).json({
     success: true,
-    count: courses.length,
-    pagination: {
-      total,
-      page,
-      pages: Math.ceil(total / limit),
-    },
     data: courses,
+    nextCursor,
   });
 });
 
@@ -608,7 +569,12 @@ exports.getCourseById = asyncHandler(async (req, res) => {
 
       // 🔥 UNIQUE VIEW TRACKING (Redis SET)
       if (userId && parsed.course?.institution) {
-        await RedisUtil.trackUniqueCourseViewOrImpression("viewCourse",courseId, parsed.course.institution, userId);
+        await RedisUtil.trackUniqueCourseViewOrImpression(
+          "viewCourse",
+          courseId,
+          parsed.course.institution,
+          userId,
+        );
       }
 
       return res.status(200).json({
@@ -670,7 +636,12 @@ exports.getCourseById = asyncHandler(async (req, res) => {
 
     // 4️⃣ UNIQUE VIEW TRACKING
     if (userId && raw.institution?._id) {
-      await RedisUtil.trackUniqueCourseViewOrImpression("viewCourse",courseId, raw.institution._id, userId);
+      await RedisUtil.trackUniqueCourseViewOrImpression(
+        "viewCourse",
+        courseId,
+        raw.institution._id,
+        userId,
+      );
     }
 
     console.log("✅ Returning fresh DB data");
@@ -678,7 +649,6 @@ exports.getCourseById = asyncHandler(async (req, res) => {
       success: true,
       data: finalResponse,
     });
-
   } catch (error) {
     console.error("❌ getCourseById Error:", error);
     return res.status(500).json({
@@ -698,8 +668,8 @@ exports.updateCourse = asyncHandler(async (req, res, next) => {
     return next(
       new AppError(
         "Course not found or does not belong to this institution",
-        404
-      )
+        404,
+      ),
     );
   }
 
@@ -713,7 +683,7 @@ exports.updateCourse = asyncHandler(async (req, res, next) => {
         uploadStream(req.files.image[0].buffer, {
           folder: `${folderPath}/images`,
           resource_type: "image",
-        }).then((result) => (updateData.image = result.secure_url))
+        }).then((result) => (updateData.image = result.secure_url)),
       );
     }
     if (req.files.brochure) {
@@ -721,7 +691,7 @@ exports.updateCourse = asyncHandler(async (req, res, next) => {
         uploadStream(req.files.brochure[0].buffer, {
           folder: `${folderPath}/brochures`,
           resource_type: "auto",
-        }).then((result) => (updateData.brochure = result.secure_url))
+        }).then((result) => (updateData.brochure = result.secure_url)),
       );
     }
     await Promise.all(uploadPromises);
@@ -748,8 +718,8 @@ exports.deleteCourse = asyncHandler(async (req, res, next) => {
     return next(
       new AppError(
         "Course not found or does not belong to this institution",
-        404
-      )
+        404,
+      ),
     );
   }
 
@@ -772,7 +742,7 @@ exports.incrementMetricUnified = asyncHandler(async (req, res, next) => {
 
   if (!isViews && !isComparisons && !isLeads) {
     return next(
-      new AppError("Invalid metric. Use metric=views|comparisons|leads", 400)
+      new AppError("Invalid metric. Use metric=views|comparisons|leads", 400),
     );
   }
 
@@ -784,18 +754,18 @@ exports.incrementMetricUnified = asyncHandler(async (req, res, next) => {
         institutionAdminTotalEvent: "institutionAdminTotalViews",
       }
     : isComparisons
-    ? {
-        metricField: "comparisons",
-        rollupField: "comparisonRollups",
-        updatedEvent: "comparisonsUpdated",
-        institutionAdminTotalEvent: "institutionAdminTotalComparisons",
-      }
-    : {
-        metricField: "leadsGenerated",
-        rollupField: "leadsRollups",
-        updatedEvent: "leadsUpdated",
-        institutionAdminTotalEvent: "institutionAdminTotalLeads",
-      };
+      ? {
+          metricField: "comparisons",
+          rollupField: "comparisonRollups",
+          updatedEvent: "comparisonsUpdated",
+          institutionAdminTotalEvent: "institutionAdminTotalComparisons",
+        }
+      : {
+          metricField: "leadsGenerated",
+          rollupField: "leadsRollups",
+          updatedEvent: "leadsUpdated",
+          institutionAdminTotalEvent: "institutionAdminTotalLeads",
+        };
 
   return incrementMetricGeneric(req, res, next, cfg);
 });
@@ -900,7 +870,7 @@ exports.getInstitutionAdminMetricSummaryUnified = asyncHandler(
 
     if (!isViews && !isComparisons && !isLeads)
       return next(
-        new AppError("Invalid metric. Use metric=views|comparisons|leads", 400)
+        new AppError("Invalid metric. Use metric=views|comparisons|leads", 400),
       );
 
     if (isLeads) {
@@ -933,7 +903,7 @@ exports.getInstitutionAdminMetricSummaryUnified = asyncHandler(
     return res
       .status(200)
       .json({ success: true, data: { totalComparisons: total } });
-  }
+  },
 );
 
 // ----- Unified institutionAdmin metric by range -----
@@ -948,7 +918,7 @@ exports.getInstitutionAdminMetricByRangeUnified = asyncHandler(
 
     if (!isViews && !isComparisons && !isLeads)
       return next(
-        new AppError("Invalid metric. Use metric=views|comparisons|leads", 400)
+        new AppError("Invalid metric. Use metric=views|comparisons|leads", 400),
       );
 
     if (isLeads) {
@@ -973,13 +943,13 @@ exports.getInstitutionAdminMetricByRangeUnified = asyncHandler(
       req.userId,
       rollupField,
       cs,
-      ce
+      ce,
     );
     const previous = await aggregateRollupsTotal(
       req.userId,
       rollupField,
       ps,
-      pe
+      pe,
     );
     const trend = previous > 0 ? ((current - previous) / previous) * 100 : 0;
     if (isViews)
@@ -997,7 +967,7 @@ exports.getInstitutionAdminMetricByRangeUnified = asyncHandler(
         trend: { value: Math.abs(trend), isPositive: trend >= 0 },
       },
     });
-  }
+  },
 );
 
 // ----- Series: monthly counts for a given year -----
@@ -1010,7 +980,7 @@ exports.getInstitutionAdminMetricSeriesUnified = asyncHandler(
     const isLeads = raw === "leads" || raw === "leadsgenerated";
     if (!isViews && !isComparisons && !isLeads) {
       return next(
-        new AppError("Invalid metric. Use metric=views|comparisons|leads", 400)
+        new AppError("Invalid metric. Use metric=views|comparisons|leads", 400),
       );
     }
 
@@ -1064,7 +1034,7 @@ exports.getInstitutionAdminMetricSeriesUnified = asyncHandler(
       series.push(agg[0]?.total || 0);
     }
     return res.status(200).json({ success: true, data: { series } });
-  }
+  },
 );
 
 exports.requestCallback = asyncHandler(async (req, res, next) => {
@@ -1072,7 +1042,7 @@ exports.requestCallback = asyncHandler(async (req, res, next) => {
   const userId = req.userId;
 
   console.log(
-    `📞 [requestCallback] Request from user ${userId} for institution ${institutionId}, course ${courseId}`
+    `📞 [requestCallback] Request from user ${userId} for institution ${institutionId}, course ${courseId}`,
   );
 
   try {
@@ -1092,7 +1062,7 @@ exports.requestCallback = asyncHandler(async (req, res, next) => {
 
       if (!isActive) {
         console.warn(
-          "⚠️ Cached subscription expired or invalid — fetching from DB"
+          "⚠️ Cached subscription expired or invalid — fetching from DB",
         );
         subscription = null;
       }
@@ -1126,7 +1096,7 @@ exports.requestCallback = asyncHandler(async (req, res, next) => {
 
     // 3️⃣ If reached here, subscription is valid — continue logic
     console.log(
-      "✅ Valid subscription confirmed — proceeding with callback flow"
+      "✅ Valid subscription confirmed — proceeding with callback flow",
     );
 
     // ⬇️ Continue your callback logic below (e.g., record callback request)
@@ -1258,7 +1228,7 @@ exports.searchCourses = asyncHandler(async (req, res) => {
         "leadImpression",
         course._id.toString(),
         course.institutionDetails._id.toString(),
-        userId
+        userId,
       );
     }
   }
@@ -1480,7 +1450,7 @@ async function runAggregation(courseCond, instCond, userId) {
 
 exports.filterCourses = async (req, res) => {
   const userId = req.userId;
-  
+
   try {
     let filters = {
       ...(req.body || {}),
@@ -1500,8 +1470,8 @@ exports.filterCourses = async (req, res) => {
           key === "priceRange"
             ? [value.trim()]
             : value.includes(",")
-            ? value.split(",").map((v) => v.trim())
-            : [value.trim()];
+              ? value.split(",").map((v) => v.trim())
+              : [value.trim()];
       }
 
       if (!Array.isArray(value)) value = [value];
@@ -1526,7 +1496,7 @@ exports.filterCourses = async (req, res) => {
           "leadImpression",
           course._id.toString(),
           course.institutionDetails._id.toString(),
-          userId
+          userId,
         );
       }
     }
@@ -1583,7 +1553,7 @@ exports.updateStatsAndCreateEnquiry = async (req, res) => {
         await UserStats.findOneAndUpdate(
           { userId },
           { $inc: { [statField]: 1 } },
-          { upsert: true, new: true, session }
+          { upsert: true, new: true, session },
         );
 
         // STEP 2 — Create enquiry
@@ -1605,7 +1575,7 @@ exports.updateStatsAndCreateEnquiry = async (req, res) => {
               ],
             },
           ],
-          { session }
+          { session },
         );
       });
 

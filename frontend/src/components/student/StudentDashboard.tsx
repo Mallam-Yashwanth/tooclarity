@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import HomeHeader from "./home/HomeHeader";
+import StudentNavbar from "./home/StudentNavbar";
+import CategoryRow from "./home/CategoryRow";
 import CourseCard from "./home/CourseCard";
 import FilterSidebar from "./home/FilterSidebar";
 import FooterNav from "./home/FooterNav";
@@ -39,6 +41,17 @@ interface Course {
   // Store original API data for detailed view
   apiData: DashboardCourse;
 }
+
+const CATEGORY_TO_INSTITUTE: Record<string, string> = {
+  Kindergarten: "Kindergarten",
+  School: "School's",
+  Intermediate: "Intermediate",
+  Graduation: "Graduation",
+  Upskilling: "Coaching",
+  "Exam Preparation": "Coaching",
+  "Tuition Center": "Tuition Center's",
+  "Study Abroad": "Study Abroad",
+};
 
 /**
  * Get price range category based on price
@@ -99,6 +112,7 @@ const StudentDashboard: React.FC = () => {
   const router = useRouter();
   const [courses, setCourses] = useState<Course[]>([]);
   const [filteredCourses, setFilteredCourses] = useState<Course[]>([]);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [, setSearchResults] = useState<Course[] | null>(null);
   const [displayedCourses, setDisplayedCourses] = useState<Course[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -324,6 +338,7 @@ const StudentDashboard: React.FC = () => {
     setDisplayedCourses([]);
     return;
   }
+  
 
   const transformed = results.map((course) =>
     transformApiCourse(course)
@@ -373,6 +388,22 @@ const StudentDashboard: React.FC = () => {
     }
     setActiveFilters(updatedFilters);
   };
+
+  const handleCategorySelect = async (categoryKey: string) => {
+    const instituteType = CATEGORY_TO_INSTITUTE[categoryKey];
+
+    setActiveCategory(categoryKey);
+
+    const updatedFilters = {
+      ...activeFilters,
+      instituteType,
+    };
+
+    setActiveFilters(updatedFilters);
+
+    await handleApplyFilters(updatedFilters);
+  };
+
 
 
   const handleWishlistToggle = (courseId: string) => {
@@ -493,8 +524,8 @@ const StudentDashboard: React.FC = () => {
 
     return (
     <div className="w-full min-h-screen flex flex-col bg-gradient-to-b from-[#dbe0ff] via-white to-white max-lg:pb-[80px]">
-      <HomeHeader
-        userName={user?.name || "Student"}
+      <StudentNavbar
+        userName={user?.name || 'Student'}
         userAvatar={user?.profilePicture}
         searchValue={searchQuery}
         onSearchChange={handleSearchChange}
@@ -502,7 +533,12 @@ const StudentDashboard: React.FC = () => {
         onFilterClick={handleFilterToggle}
         onNotificationClick={handleNotificationPaneToggle}
         onWishlistClick={handleWishlistPaneToggle}
-        onProfileClick={() => router.push("/student/profile")}
+        onProfileClick={() => router.push('/student/profile')}
+      />
+
+      <CategoryRow
+        activeCategory={activeCategory}
+        onCategorySelect={handleCategorySelect}
       />
 
 

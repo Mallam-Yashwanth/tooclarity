@@ -993,7 +993,6 @@ const CATEGORY_DOMAIN_MAPPING = {
   }
 };
 
-
 interface CoachingCourseFormProps {
   currentCourse: Course;
   handleCourseChange: (
@@ -1013,6 +1012,14 @@ interface CoachingCourseFormProps {
   isSubscriptionProgram?: boolean;
 }
 
+  const IconInput = ({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) => (
+    <div className="relative flex items-center">
+      <span className="absolute left-3 text-gray-400">{icon}</span>
+      {children}
+    </div>
+  );
+
+
 export default function CoachingCourseForm({
   currentCourse,
   handleCourseChange,
@@ -1031,12 +1038,6 @@ export default function CoachingCourseForm({
 }: CoachingCourseFormProps) {
   const yesNoOptions = ["Yes", "No"];
 
-  const IconInput = ({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) => (
-    <div className="relative flex items-center">
-      <span className="absolute left-3 text-gray-400">{icon}</span>
-      {children}
-    </div>
-  );
 
   // Get available domains based on selected category (pure in-memory)
   const availableDomains = useMemo(() => {
@@ -1283,15 +1284,18 @@ export default function CoachingCourseForm({
             <label className="font-medium text-[16px] dark:text-slate-200">Class timings <span className="text-red-500">*</span></label>
             <IconInput icon={<Clock size={18} />}>
               <input
-                name="classTimings"
+                name="classTiming"
                 value={currentCourse.classTiming || ""}
                 onChange={handleCourseChange}
                 required
                 placeholder="9:00 AM - 4:00 PM"
-                className={`w-full pl-10 pr-3 py-2 border rounded-lg bg-white dark:bg-slate-800 text-sm outline-none ${courseErrors.classTimings ? 'border-red-500' : 'border-gray-300 dark:border-slate-700'}`}
+                className={`w-full pl-10 pr-3 py-2 border rounded-lg bg-white dark:bg-slate-800 text-sm outline-none ${courseErrors.classTiming ? 'border-red-500' : 'border-gray-300 dark:border-slate-700'
+                  }`}
               />
             </IconInput>
-            {courseErrors.classTimings && <p className="text-xs text-red-500">{courseErrors.classTimings}</p>}
+            {courseErrors.classTiming && (
+              <p className="text-xs text-red-500">{courseErrors.classTiming}</p>
+            )}
           </div>
         ) : (
           <InputField
@@ -1501,7 +1505,6 @@ export default function CoachingCourseForm({
                           alt="Preview"
                           className="h-8 w-8 object-cover rounded"
                         />
-                        <span className="text-xs text-gray-600 truncate">Center Image Selected</span>
                       </div>
                     ) : (
                       <>

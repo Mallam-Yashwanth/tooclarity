@@ -101,12 +101,7 @@ exports.googleAuthCallback = async (req, res, next) => {
               status: "success",
               type: "login",
             });
-          } if (!isPaymentDone) {
-            return redirectViaFrontend("/payment", {
-              status: "success",
-              type: "login",
-            });
-          } else {
+          }else {
             return redirectViaFrontend("/dashboard", {
               status: "success",
               type: "login",

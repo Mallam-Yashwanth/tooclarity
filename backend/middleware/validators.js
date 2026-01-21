@@ -442,51 +442,67 @@ const l2StudyAbroadRules = [
 ];
 
 
-exports.validateL2Update = async (req, res, next) => {
-  console.log("1. Content-Type:", req.headers['content-type']);
-  console.log("2. Raw Body Keys:", Object.keys(req.body));
-  console.log("3. Is Courses Array present?:", !!req.body.courses);
 
-  const originalBody = JSON.parse(JSON.stringify(req.body));
+// Define this at the top of your validator file
+const BLUE_BOX_FIELDS = {
+  "Intermediate college(K12)": ["year", "classType", "specialization", "priceOfCourse"],
+  "School's": ["classType", "priceOfCourse"],
+  "Kindergarten/childcare center": ["categoriesType", "priceOfCourse"],
+  "Study Abroad": ["countriesOffered", "academicOfferings", "budget", "studentsSent"],
+  "Tution Center's": ["academicDetails", "facultyDetails"],
+  "Under Graduation/Post Graduation": ["graduationType", "streamType", "selectBranch", "branchDescription", "educationType", "priceOfCourse"]
+};
+
+exports.validateL2Update = async (req, res, next) => {
   try {
     const userId = req.userId;
-    
-    // Find the institution to determine which validation rules to apply
     const institution = await Institution.findOne({ institutionAdmin: userId });
 
-    if (!institution) {
-      logger.warn({ userId }, "L2 update attempted for non-existent institution.");
-      return res.status(404).json({
-        status: "fail",
-        message: "Institution not found for the logged-in user.",
+    if (!institution) return res.status(404).json({ message: "Institution not found" });
+
+    
+
+    if (req.body.courses && Array.isArray(req.body.courses)) {
+      req.body.courses.forEach((topLevelCourse) => {
+        // 1. Move fields from the top-level course object to root
+        Object.keys(topLevelCourse).forEach(key => {
+          if (key !== 'courses' && topLevelCourse[key] !== undefined) {
+            req.body[key] = topLevelCourse[key];
+          }
+        });
+
+        // 2. CRITICAL: Dig into the nested subarray (the "Blue Box" fields)
+        if (topLevelCourse.courses && Array.isArray(topLevelCourse.courses)) {
+          topLevelCourse.courses.forEach((subArrayItem) => {
+            Object.keys(subArrayItem).forEach(subKey => {
+              if (subArrayItem[subKey] !== undefined && subArrayItem[subKey] !== "") {
+                // Move classType, priceOfCourse, etc. to root
+                req.body[subKey] = subArrayItem[subKey];
+              }
+            });
+          });
+        }
       });
     }
-    const rootKeys = Object.keys(req.body);
-    const hasNestedData = req.body.courses && req.body.courses[0] && Object.keys(req.body.courses[0]).length > 0;
-
-    if (rootKeys.length <= 5 && hasNestedData) {
-        req.body = { ...req.body, ...req.body.courses[0] };
-    }
+    const type = institution.instituteType;
+    console.log("validation", type);
 
     let validationChain = [];
-    const type = institution.instituteType;
-
-    // Direct mapping to the specific rule sets we defined
     switch (type) {
-      case "Kindergarten/childcare center":
-        validationChain = l2KindergartenRules;
-        break;
       case "School's":
         validationChain = l2SchoolRules;
         break;
       case "Intermediate college(K12)":
         validationChain = l2IntermediateCollegeRules;
         break;
+      case "Coaching centers":
+        validationChain = l2CoachingCourseRules;
+        break;
       case "Under Graduation/Post Graduation":
         validationChain = l2UgPgCourseRules;
         break;
-      case "Coaching centers":
-        validationChain = l2CoachingCourseRules;
+      case "Kindergarten/childcare center":
+        validationChain = l2KindergartenRules;
         break;
       case "Tution Center's":
         validationChain = l2TuitionCourseRules;
@@ -498,26 +514,13 @@ exports.validateL2Update = async (req, res, next) => {
         validationChain = l2StudyAbroadRules;
         break;
       default:
-        logger.error({ userId, type }, "Unsupported institution type.");
-        return res.status(400).json({
-          status: "fail",
-          message: `Unsupported institution type: ${type}`,
-        });
+        return res.status(400).json({ message: `Unsupported type: ${type}` });
     }
 
-    await Promise.all(validationChain.map((validation) => validation.run(req)));
+    await Promise.all(validationChain.map((v) => v.run(req)));
 
-   // Ensure the Controller gets the flat object, regardless of form type
-    if (req.body.courses && req.body.courses[0]) {
-        Object.assign(req.body, req.body.courses[0]);
-        delete req.body.courses;
-    }
-
-    req.body = originalBody;
     handleValidationErrors(req, res, next);
-
   } catch (error) {
-    logger.error({ error: error.message }, "Error in validateL2Update middleware");
     next(error);
   }
 };

@@ -1284,6 +1284,14 @@ export default function L2DialogBox({
           return uniqueFields;
         });
 
+        // 1. Define a mapping for types that differ between UI and Backend
+const typeMapping: Record<string, string> = {
+  "Kindergarten/childcare center": "Kindergarten",
+  "School's": "School",
+  "Tution Center's": "Tuition Center",
+  "Intermediate college(K12)": "College"
+};
+
         // 3. Build the Normalized Payload
         // Common fields stay at the top, dynamic fields go inside "courses"
         const normalizedPayload = {
@@ -1292,7 +1300,7 @@ export default function L2DialogBox({
           branch: selectedBranchIdForProgram || null,
           branchName: resolveLocalBranchName(),
           type: "PROGRAM" as const,
-          courseType: institutionType,
+          courseType: firstCourse.courseType || typeMapping[institutionType || ""] || institutionType,
           courses: courseSubArray, // Only contains the bluebox variations
         };
 
@@ -1535,7 +1543,7 @@ export default function L2DialogBox({
       case isKindergarten:
         return [
           ...locationFields,
-          "graduationType", "courseName", "categoriesType", "priceOfCourse",
+           "courseName", "categoriesType", "priceOfCourse",
           "aboutCourse", "courseDuration", "mode", "classSize", "curriculumType",
           "ownershipType", "operationalDays", "openingTime", "closingTime",
           "extendedCare", "mealsProvided", "playground", "busService", "classSizeRatio"
@@ -1564,8 +1572,8 @@ export default function L2DialogBox({
       case isIntermediateCollege:
         return [
           ...locationFields,
-          "courseName", "mode", "courseDuration", "startDate", "language",
-          "ownershipType", "collegeType", "curriculumType", "year", "classType",
+          "courseName", "mode", "courseDuration", "startDate", "classlanguage",
+          "ownershipType", "collegeType", "curriculumType", "operationalDays","openingTime", "closingTime","year", "classType",
           "specialization", "priceOfCourse", "playground", "busService",
           "hostelFacility", "emioptions", "partlyPayment"
         ];
@@ -1594,7 +1602,7 @@ export default function L2DialogBox({
       case isCoachingCenter:
         return currentCourse.categoriesType === "Upskilling"
           ? [...locationFields, ...coachingCommon, "classTiming", "courselanguage", "certification", "placementDrives", "highestPackage", "averagePackage", "totalStudentsPlaced"]
-          : [...locationFields, ...coachingCommon, "classlanguage", "classSize", "mockTests", "libraryFacility", "studyMaterial"];
+          : [...locationFields, ...coachingCommon, "classlanguage", "classSize", "mockTests", "library", "studyMaterial"];
 
       case isTutionCenter:
         return [

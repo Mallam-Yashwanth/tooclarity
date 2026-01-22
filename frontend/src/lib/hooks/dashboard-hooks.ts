@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
-import { 
-  metricsAPI, 
-  enquiriesAPI, 
+import {
+  metricsAPI,
+  enquiriesAPI,
   getMyInstitution,
+  branchAPI,
   //ApiResponse 
 } from '../api';
 import { programsAPI } from '../api';
@@ -26,13 +27,13 @@ import {
 // Query keys
 export const QUERY_KEYS = {
   INSTITUTION: (id?: string) => ['institution', id],
-  DASHBOARD_STATS: (timeRange: string, institutionId?: string) => 
+  DASHBOARD_STATS: (timeRange: string, institutionId?: string) =>
     ['dashboard-stats', timeRange, institutionId],
   STUDENTS: (institutionId?: string) => ['students', institutionId],
-  CHART_DATA: (type: string, year: number, institutionId?: string) => 
+  CHART_DATA: (type: string, year: number, institutionId?: string) =>
     ['chart-data', type, year, institutionId],
   RECENT_ENQUIRIES: (institutionId?: string) => ['recent-enquiries', institutionId],
-  METRICS: (metric: string, range: string, institutionId?: string) => 
+  METRICS: (metric: string, range: string, institutionId?: string) =>
     ['metrics', metric, range, institutionId],
 } as const;
 
@@ -62,7 +63,7 @@ export function useInstitution() {
 
       // Save to cache
       await saveInstitution(institution);
-      
+
       return institution;
     },
     staleTime: CACHE_DURATION.INSTITUTION,
@@ -75,7 +76,7 @@ export function useInstitution() {
 // Dashboard stats hook
 export function useDashboardStats(timeRange: 'weekly' | 'monthly' | 'yearly' = 'monthly') {
   const { data: institution } = useInstitution();
-  
+
   return useQuery({
     queryKey: QUERY_KEYS.DASHBOARD_STATS(timeRange, institution?._id),
     queryFn: async (): Promise<DashboardStats> => {
@@ -98,8 +99,8 @@ export function useDashboardStats(timeRange: 'weekly' | 'monthly' | 'yearly' = '
         programsAPI.summaryViews(String(institution._id), timeRange)
       ]);
 
-      const programCmpSum = Array.isArray((programCmp as { data?: { programs?: unknown[] } })?.data?.programs) ? (programCmp as { data: { programs: Record<string, unknown>[] } }).data.programs.reduce((s:number, p:Record<string, unknown>)=> s + (Number(p.inRangeComparisons)||0), 0) : 0;
-      const programViewsSum = Array.isArray((programViews as { data?: { programs?: unknown[] } })?.data?.programs) ? (programViews as { data: { programs: Record<string, unknown>[] } }).data.programs.reduce((s:number, p:Record<string, unknown>)=> s + (Number(p.inRangeViews)||0), 0) : 0;
+      const programCmpSum = Array.isArray((programCmp as { data?: { programs?: unknown[] } })?.data?.programs) ? (programCmp as { data: { programs: Record<string, unknown>[] } }).data.programs.reduce((s: number, p: Record<string, unknown>) => s + (Number(p.inRangeComparisons) || 0), 0) : 0;
+      const programViewsSum = Array.isArray((programViews as { data?: { programs?: unknown[] } })?.data?.programs) ? (programViews as { data: { programs: Record<string, unknown>[] } }).data.programs.reduce((s: number, p: Record<string, unknown>) => s + (Number(p.inRangeViews) || 0), 0) : 0;
       const stats: DashboardStats = {
         courseViews: programViewsSum,
         courseComparisons: programCmpSum,
@@ -114,7 +115,7 @@ export function useDashboardStats(timeRange: 'weekly' | 'monthly' | 'yearly' = '
 
       // Save to cache
       await saveDashboardStats(stats);
-      
+
       return stats;
     },
     enabled: !!institution?._id,
@@ -126,7 +127,7 @@ export function useDashboardStats(timeRange: 'weekly' | 'monthly' | 'yearly' = '
 }
 
 // Program analytics hook with caching and realtime refresh triggers
-export function useProgramViews(range: 'weekly'|'monthly'|'yearly' = 'weekly') {
+export function useProgramViews(range: 'weekly' | 'monthly' | 'yearly' = 'weekly') {
   const { data: institution } = useInstitution();
   return useQuery({
     queryKey: ['program-views', institution?._id, range],
@@ -148,10 +149,10 @@ export function useProgramsList() {
     enabled: !!institution?._id,
     queryFn: async () => {
       const res = await programsAPI.list(String(institution?._id)) as { data?: { programs?: Array<Record<string, unknown>> } };
-      return (res?.data?.programs || []) as Array<{ 
-        _id: string; 
-        programName: string; 
-        startDate?: string; 
+      return (res?.data?.programs || []) as Array<{
+        _id: string;
+        programName: string;
+        startDate?: string;
         endDate?: string;
         courseName?: string;
         branch?: Record<string, unknown>;
@@ -181,7 +182,7 @@ export function useRecentEnquiriesAll() {
 // Recent students/enquiries hook
 export function useRecentStudents() {
   const { data: institution } = useInstitution();
-  
+
   return useQuery({
     queryKey: QUERY_KEYS.STUDENTS(institution?._id),
     queryFn: async (): Promise<StudentItem[]> => {
@@ -197,7 +198,7 @@ export function useRecentStudents() {
 
       // Fetch from API
       const response = await enquiriesAPI.getRecentEnquiries();
-      
+
       if (!(response as { success?: boolean; data?: { enquiries?: unknown[] } })?.success || !Array.isArray((response as { success?: boolean; data?: { enquiries?: unknown[] } }).data?.enquiries)) {
         return [];
       }
@@ -218,7 +219,7 @@ export function useRecentStudents() {
 
       // Save to cache
       await saveStudents(students);
-      
+
       return students.slice(0, 4);
     },
     enabled: !!institution?._id,
@@ -237,7 +238,7 @@ export function useChartData(
 ) {
   const { data: institution } = useInstitution();
   const currentYear = year || new Date().getFullYear();
-  
+
   return useQuery({
     queryKey: [...QUERY_KEYS.CHART_DATA(type, currentYear, institution?._id), options?.fallbackToCourseIfEmpty ? 'fallback' : 'nofallback'],
     queryFn: async (): Promise<number[]> => {
@@ -255,7 +256,7 @@ export function useChartData(
       const response = type === 'views'
         ? await programsAPI.viewsSeries(String(institution._id), currentYear)
         : await metricsAPI.getInstitutionAdminSeries(type, currentYear, institution._id);
-      
+
       if (!(response as { success?: boolean; data?: { series?: unknown[] } })?.success || !Array.isArray((response as { success?: boolean; data?: { series?: unknown[] } }).data?.series)) {
         return new Array(12).fill(0);
       }
@@ -285,7 +286,7 @@ export function useChartData(
         institutionId: institution._id,
         lastUpdated: Date.now()
       });
-      
+
       return chartSeries;
     },
     enabled: !!institution?._id,
@@ -293,6 +294,35 @@ export function useChartData(
     refetchInterval: 30 * 60 * 1000, // Refetch every 30 minutes when active
     refetchOnWindowFocus: false, // Prevent refetch on window focus
     refetchOnMount: false, // Prevent refetch on component mount if data exists
+  });
+}
+
+
+
+export function useInfiniteBranches(institutionId?: string, limit: number = 10) {
+  return useInfiniteQuery({
+    queryKey: ['branches-infinite', institutionId],
+    enabled: !!institutionId,
+    initialPageParam: null as string | null,
+    queryFn: async ({ pageParam }) => {
+      return await branchAPI.getBranchesWithCursor(institutionId!, pageParam, limit);
+    },
+    getNextPageParam: (lastPage: any) => lastPage?.nextCursor ?? undefined,
+  });
+}
+
+export function useInfinitePrograms(institutionId?: string, limit: number = 10) {
+  return useInfiniteQuery({
+    queryKey: ['programs-infinite', institutionId],
+    enabled: !!institutionId,
+    initialPageParam: null as string | null,
+    queryFn: async ({ pageParam }) => {
+      const res = await programsAPI.list(institutionId!, pageParam, limit);
+      return res;
+    },
+    getNextPageParam: (lastPage: any) => {
+      return lastPage?.nextCursor || undefined;
+    },
   });
 }
 
@@ -310,12 +340,12 @@ export function useInfiniteLeads(pageSize: number = 10) {
     queryFn: async ({ pageParam }): Promise<StudentItem[]> => {
       const pageIndex = pageParam as number;
       const offset = pageIndex * pageSize;
-      
+
       // Fetch enquiries list for the institution admin's institutions (use /recent for all pages including index 1)
       const response = await enquiriesAPI.getRecentEnquiriesWithOffset(offset, pageSize) as { data?: { enquiries?: Record<string, unknown>[] } };
       const list = (response?.data?.enquiries || []) as Record<string, unknown>[];
 
-      
+
 
 
       const mapped = list.map((enquiry: Record<string, unknown>, idx: number) => ({
@@ -331,7 +361,7 @@ export function useInfiniteLeads(pageSize: number = 10) {
         institutionId: institution?._id,
         lastUpdated: Date.now()
       }));
-      
+
       // Only cache the first page to avoid stale data issues
       if (pageIndex === 0) {
         try {
@@ -340,7 +370,7 @@ export function useInfiniteLeads(pageSize: number = 10) {
           console.warn('Failed to cache leads data:', error);
         }
       }
-      
+
       return mapped as StudentItem[];
     }
   });
@@ -353,7 +383,7 @@ export async function appendNewLeadToCache(newLead: StudentItem) {
 // Mutation for refreshing all data
 export function useRefreshDashboard() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async () => {
       // Invalidate all queries to force refresh

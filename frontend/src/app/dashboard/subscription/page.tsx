@@ -165,7 +165,7 @@ function ProgramsPage() {
           id,
           isInactive: isBackendInactive || statusInfo.status !== 'active',
           preferBackendStatus: isBackendInactive,
-          name: String(p?.programName || p?.CourseName || 'Untitled course'),
+          name: String(p?.programName || p?.CourseName || p?.selectBranch ||'Untitled course'),
           status: displayStatus,
           startDate: formatDate(String(p?.startDate || '')),
           endDate: formatDate(String(p?.endDate || '')),
@@ -417,7 +417,7 @@ function ProgramsPage() {
                               <th className="py-3 pr-4">Course Name</th>
                               <th className="py-3 pr-4">Status</th>
                               <th className="py-3 pr-4">Start Date</th>
-                              <th className="py-3 pr-4">End Date</th>
+                              {/* <th className="py-3 pr-4">End Date</th> */}
                             </tr>
                           </thead>
                           <tbody>
@@ -441,7 +441,7 @@ function ProgramsPage() {
                                   </span>
                                 </td>
                                 <td className="py-4 pr-4 text-sm">{course.startDate}</td>
-                                <td className="py-4 pr-4 text-sm">{course.endDate}</td>
+                                {/* <td className="py-4 pr-4 text-sm">{course.endDate}</td> */}
                               </tr>
                             ))}
                           </tbody>
@@ -488,8 +488,8 @@ function ProgramsPage() {
                   <th className="py-2 pr-4">Course Name</th>
                   <th className="py-2 pr-4">Status</th>
                   <th className="py-2 pr-4">Start Date</th>
-                  <th className="py-2 pr-4">End Date</th>
-                  <th className="py-2 pr-4">Leads Generated</th>
+                  {/* <th className="py-2 pr-4">End Date</th>
+                  <th className="py-2 pr-4">Leads Generated</th> */}
                   <th className="py-2 pr-4">Action</th>
                 </tr>
               </thead>
@@ -526,16 +526,16 @@ function ProgramsPage() {
                       })()}
                     </td>
                     <td className="py-4 pr-4 text-sm">{formatDate(String(p.startDate || ''))}</td>
-                    <td className="py-4 pr-4 text-sm">{formatDate(String(p.endDate || ''))}</td>
-                    <td className="py-4 pr-4 text-sm">{typeof p.leadsGenerated==='number' ? p.leadsGenerated : 0}</td>
+                    {/* <td className="py-4 pr-4 text-sm">{formatDate(String(p.endDate || ''))}</td> */}
+                    {/* <td className="py-4 pr-4 text-sm">{typeof p.leadsGenerated==='number' ? p.leadsGenerated : 0}</td> */}
                     <td className="py-4 pr-4 text-sm">
                       <div className="flex items-center gap-3 text-gray-500">
                         <button title="Delete" onClick={async()=>{ try{ await programsAPI.remove(String(p._id), String(institution?._id)); queryClient.invalidateQueries({ queryKey: ['programs-page-list-institution-admin', institution?._id] }); }catch{}} } className="h-10 w-10 rounded-full border border-gray-200 dark:border-gray-800 flex items-center justify-center">
                           <Image src="/Trash.png" alt="Delete" width={20} height={20} className="h-5 w-5 object-contain" />
                         </button>
-                        <button title="Edit" onClick={() => handleEditProgram(String(p._id))} className="h-10 w-10 rounded-full border border-gray-200 dark:border-gray-800 flex items-center justify-center">
+                        {/* <button title="Edit" onClick={() => handleEditProgram(String(p._id))} className="h-10 w-10 rounded-full border border-gray-200 dark:border-gray-800 flex items-center justify-center">
                           <Image src="/Edit.png" alt="Edit" width={20} height={20} className="h-5 w-5 object-contain" />
-                        </button>
+                        </button> */}
                       </div>
                     </td>
                   </tr>

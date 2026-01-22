@@ -1,6 +1,6 @@
 const express = require('express');
 const courseController = require('../controllers/course.controller');
-const { validateCourseCreation, validateCourseUpdate } = require('../middleware/validators');
+const { validateCourseCreation, validateCourseUpdate, validateL2Update} = require('../middleware/validators');
 const { uploadCourseFiles } = require('../middleware/fileUpload.middleware'); 
 
 const router = express.Router({ mergeParams: true });
@@ -8,7 +8,7 @@ const router = express.Router({ mergeParams: true });
 router.route('/')
     .post(
         uploadCourseFiles,
-        validateCourseCreation,
+        validateL2Update,
         courseController.createCourse
     )
     .get(courseController.getAllCoursesForInstitution);
@@ -35,7 +35,7 @@ router.route('/:courseId')
     .get(courseController.getCourseById)
     .put(
         uploadCourseFiles,
-        validateCourseUpdate,
+        // validateCourseUpdate,
         courseController.updateCourse
     )
     .delete(courseController.deleteCourse);

@@ -145,42 +145,366 @@ exports.validateL1Creation = [
   handleValidationErrors,
 ];
 
+// ✅ --- L2 BASE COURSE VALIDATOR ---
+// These rules now correctly match your frontend baseCourseSchema
+const l2BaseCourseRules = [
+  body("courseName").trim().notEmpty().withMessage("Course name is required."),
+
+  body("aboutCourse")
+    .trim()
+    .notEmpty()
+    .withMessage("About course is required."),
+
+  body("courseDuration")
+    .trim()
+    .notEmpty()
+    .withMessage("Course duration is required."),
+
+  body("startDate")
+    .notEmpty()
+    .withMessage("Course start date is required.")
+    .isISO8601()
+    .withMessage("Must be a valid date."),
+
+  // ✅ ADDED: Missing endDate validation
+  body("endDate")
+    .notEmpty()
+    .withMessage("Course end date is required.")
+    .isISO8601()
+    .withMessage("Must be a valid date."),
+
+  body("mode")
+    .isIn(["Offline", "Online", "Hybrid"])
+    .withMessage("A valid mode is required."),
+
+  body("priceOfCourse")
+    .trim()
+    .notEmpty()
+    .withMessage("Price is required.")
+    .withMessage("Price must be a number."),
+
+  body("locationURL")
+    .trim()
+    .notEmpty()
+    .withMessage("Location URL is required.")
+    .matches(/^https?:\/\/.+/)
+    .withMessage("Location URL must start with http:// or https://"),
+
+  body("state").notEmpty().withMessage("State is required"),
+  body("district").notEmpty().withMessage("District is required"),
+  body("town").notEmpty().withMessage("Town is required"),
+
+  body("createdBranch").optional({ checkFalsy: true }).trim(),
+
+  // Integrated Amenities
+  body("playground").optional().isIn(["Yes", "No"]).withMessage("A selection for Playground is required."),
+  body("busService").optional().isIn(["Yes", "No"]).withMessage("A selection for Bus Service is required."),
+  body("hostelFacility").optional().isIn(["Yes", "No"]).withMessage("A selection for Hostel Facility is required."),
+  body("emioptions").optional().isIn(["Yes", "No"]).withMessage("A selection for EMI Options is required."),
+  body("partlyPayment").optional().isIn(["Yes", "No"]).withMessage("A selection for Partly Payment is required."),
+];
+
+// --- UPDATED SCHOOL RULES ---
+const l2SchoolRules = [
+  body("courseName").trim().notEmpty().withMessage("School Name is required."),
+  body("mode").isIn(["Offline", "Online", "Hybrid"]).withMessage("Invalid mode specified."),
+  body("courseDuration").trim().notEmpty().withMessage("Course duration is required."),
+  body("startDate").notEmpty().withMessage("Course start date is required.").isISO8601().withMessage("Must be a valid date."),
+  body("classlanguage").optional().trim(),
+  body("ownershipType").isIn(["Private", "Government", "Trust"]).withMessage("Invalid ownership type."),
+  body("schoolType").isIn(["Co-Education", "Boys Only", "Girls Only"]).withMessage("Invalid school type selected."),
+  body("curriculumType").isIn(["State board", "CBSE", "ICSE", "IB", "IGCSE"]).withMessage("Invalid curriculum type selected."),
+  body("openingTime").notEmpty().withMessage("Opening time is required."),
+  body("closingTime").notEmpty().withMessage("Closing time is required."),
+  body("locationURL").trim().notEmpty().withMessage("Location URL is required."),
+  body("aboutBranch").trim().notEmpty().withMessage("Campus address is required."),
+  body("state").notEmpty().withMessage("State is required"),
+  body("district").notEmpty().withMessage("District is required"),
+  body("town").notEmpty().withMessage("Town is required"),
+  body("classType").notEmpty().withMessage("Class Type is required."),
+  body("priceOfCourse").notEmpty().withMessage("Price is required."),
+  body("playground").isIn(["Yes", "No"]).withMessage("A selection for Playground is required."),
+  body("busService").isIn(["Yes", "No"]).withMessage("A selection for Bus Service is required."),
+  body("hostelFacility").isIn(["Yes", "No"]).withMessage("A selection for Hostel Facility is required."),
+  body("emioptions").isIn(["Yes", "No"]).withMessage("A selection for EMI Options is required."),
+  body("partlyPayment").isIn(["Yes", "No"]).withMessage("A selection for Partly Payment is required."),
+  // --- File Validations ---
+  body("schoolImageUrl").trim().isURL().withMessage("School photos are required."),
+  body("imageUrl").trim().isURL().withMessage("Course image is required."),
+  body("brochureUrl").trim().isURL().withMessage("Brochure URL is required.")
+];
+
+// --- UPDATED INTERMEDIATE COLLEGE RULES ---
+const l2IntermediateCollegeRules = [
+  body("courseName").trim().notEmpty().withMessage("Intermediate Name is required."),
+  body("mode").isIn(["Offline", "Online", "Hybrid"]).withMessage("Invalid mode specified."),
+  body("courseDuration").trim().notEmpty().withMessage("Course duration is required."),
+  body("startDate").notEmpty().withMessage("Course start date is required.").isISO8601().withMessage("Must be a valid date."),
+  body("classlanguage").notEmpty().withMessage("Language of class is required."),
+  body("ownershipType").isIn(["Government", "Private", "Semi-Government", "Aided", "Unaided"]).withMessage("Invalid ownership type."),
+  body("collegeType").isIn(["Junior College", "Senior Secondary", "Higher Secondary", "Intermediate", "Pre-University"]).withMessage("Invalid college type selected."),
+  body("curriculumType").isIn(["State board", "CBSE", "ICSE", "IB", "Cambridge", "Other"]).withMessage("Invalid curriculum type selected."),
+  body("openingTime").notEmpty().withMessage("Opening time is required."),
+  body("closingTime").notEmpty().withMessage("Closing time is required."),
+  body("locationURL").trim().notEmpty().withMessage("Location URL is required."),
+  body("aboutBranch").trim().notEmpty().withMessage("Campus address is required."),
+  body("state").notEmpty().withMessage("State is required"),
+  body("district").notEmpty().withMessage("District is required"),
+  body("town").notEmpty().withMessage("Town is required"),
+  body("year").isIn(["1st Year", "2nd Year"]).withMessage("Please select the year."),
+  body("classType").isIn(["Regular", "Vocational", "Honours", "Other"]).withMessage("Select class type."),
+  body("specialization").isIn(["MPC", "BiPC", "CEC", "HEC", "MEC"]).withMessage("Select a valid specialization."),
+  body("priceOfCourse").notEmpty().withMessage("Price is required."),
+  body("playground").isIn(["Yes", "No"]).withMessage("A selection for Playground is required."),
+  body("busService").isIn(["Yes", "No"]).withMessage("A selection for Bus Service is required."),
+  body("hostelFacility").isIn(["Yes", "No"]).withMessage("A selection for Hostel Facility is required."),
+  body("emioptions").isIn(["Yes", "No"]).withMessage("A selection for EMI Options is required."),
+  body("partlyPayment").isIn(["Yes", "No"]).withMessage("A selection for Partly Payment is required."),
+  // --- File Validations ---
+  body("intermediateImageUrl").trim().isURL().withMessage("Campus photos are required."),
+  body("imageUrl").trim().isURL().withMessage("Course image is required."),
+  body("brochureUrl").trim().isURL().withMessage("Brochure URL is required.")
+];
+
+const l2KindergartenRules = [
+  body("courseType").equals("Kindergarten").withMessage("A valid Course type is required."),
+  body("courseName").trim().notEmpty().withMessage("Course name is required."),
+  body("categoriesType").isIn(["Nursery", "LKG", "UKG", "Playgroup"]).withMessage("Select Category Type"),
+  body("aboutCourse").trim().notEmpty().withMessage("About course is required."),
+  body("courseDuration").trim().notEmpty().withMessage("Course duration is required."),
+  body("mode").isIn(["Offline", "Online", "Hybrid"]).withMessage("Invalid mode specified."),
+  body("priceOfCourse").notEmpty().withMessage("Price is required."),
+  body("locationURL").trim().notEmpty().withMessage("Location URL is required."),
+  body("aboutBranch").trim().notEmpty().withMessage("Campus address is required."),
+  body("state").notEmpty().withMessage("State is required"),
+  body("district").notEmpty().withMessage("District is required"),
+  body("town").notEmpty().withMessage("Town is required"),
+  body("curriculumType").trim().notEmpty().withMessage("Curriculum type is required."),
+  body("classSizeRatio").notEmpty().withMessage("Teacher: Student Ratio is required"),
+  body("ownershipType").isIn(["Private", "Government", "Trust", "Other"]).withMessage("Invalid school type selected."),
+  body("extendedCare").isIn(["Yes", "No"]).withMessage("A selection for Extended Care is required."),
+  body("mealsProvided").isIn(["Yes", "No"]).withMessage("A selection for Meals Provided is required."),
+  body("playground").isIn(["Yes", "No"]).withMessage("A selection for Playground is required."),
+  body("busService").isIn(["Yes", "No"]).withMessage("A selection for Bus Service is required."),
+  body("installments").isIn(["Yes", "No"]).withMessage("A selection for Installments is required."),
+  body("emioptions").isIn(["Yes", "No"]).withMessage("A selection for EMI Options is required."),
+  // --- File Validations ---
+  body("kindergartenImageUrl").trim().isURL().withMessage("Center image is required."),
+  body("imageUrl").trim().isURL().withMessage("Course image is required."),
+  body("brochureUrl").trim().isURL().withMessage("Brochure PDF is required.")
+];
+// --- UPDATED UG/PG RULES ---
+// Pulls from UnderPostGraduateForm.tsx & your old l2UgPgCourseRules
+const l2UgPgCourseRules = [
+  body("graduationType").isIn(["Under Graduation", "Post Graduation"]).withMessage("Graduation type is required."),
+  body("streamType").notEmpty().withMessage("Stream type is required."),
+  body("selectBranch").notEmpty().withMessage("A branch must be selected."),
+  body("branchDescription").notEmpty().withMessage("Branch description is required."),
+  body("locationURL").trim().notEmpty().withMessage("Location URL is required."),
+  body("aboutBranch").trim().notEmpty().withMessage("Campus address is required."),
+  body("state").notEmpty().withMessage("State is required"),
+  body("district").notEmpty().withMessage("District is required"),
+  body("town").notEmpty().withMessage("Town is required"),
+  body("educationType").isIn(["Full time", "part time", "Distance"]).withMessage("A valid education type is required."),
+  body("mode").isIn(["Offline", "Online", "Hybrid"]).withMessage("Invalid mode specified."),
+  body("classSize").notEmpty().withMessage("Class size is required.").isNumeric().withMessage("Must be a number."),
+  body("eligibilityCriteria").trim().notEmpty().withMessage("Eligibility criteria is required."),
+  body("ownershipType").isIn(["Government", "Private", "Semi-Government", "Aided", "Unaided"]).withMessage("Invalid ownership type."),
+  body("collegeCategory").isIn(["Engineering", "Medical", "Arts & Science", "Commerce", "Management", "Law", "Other"]).withMessage("Invalid category."),
+  body("affiliationType").isIn(["University", "Autonomous", "Affiliated", "Deemed University", "Other"]).withMessage("Select affiliation."),
+  body("courseDuration").trim().notEmpty().withMessage("Course duration is required."),
+  body("library").isIn(["Yes", "No"]).withMessage("A selection for Library is required."),
+  body("hostelFacility").isIn(["Yes", "No"]).withMessage("A selection for Hostel Facility is required."),
+  body("entranceExam").isIn(["Yes", "No"]).withMessage("A selection for Entrance Exam is required."),
+  body("managementQuota").isIn(["Yes", "No"]).withMessage("A selection for Management Quota is required."),
+  body("playground").isIn(["Yes", "No"]).withMessage("A selection for Playground is required."),
+  body("busService").isIn(["Yes", "No"]).withMessage("A selection for Bus Service is required."),
+  body("placementDrives").isIn(["Yes", "No"]).withMessage("A selection for Placement Drives is required."),
+  body("totalNumberRequires").notEmpty().withMessage("This field is required."),
+  body("mockInterviews").isIn(["Yes", "No"]).withMessage("A selection for Mock Interviews is required."),
+  body("resumeBuilding").isIn(["Yes", "No"]).withMessage("A selection for Resume Building is required."),
+  body("linkedinOptimization").isIn(["Yes", "No"]).withMessage("A selection for LinkedIn Optimization is required."),
+  body("priceOfCourse").notEmpty().withMessage("Price is required."),
+  body("installments").isIn(["Yes", "No"]).withMessage("A selection for Installments is required."),
+  body("emioptions").isIn(["Yes", "No"]).withMessage("A selection for EMI Options is required."),
+  // --- File Validations ---
+  body("collegeImageUrl").trim().isURL().withMessage("College image is required."),
+  body("imageUrl").trim().isURL().withMessage("Course image is required."),
+  body("brochureUrl").trim().isURL().withMessage("Brochure URL is required.")
+];
+
+// --- UPDATED COACHING RULES ---
+// Pulls from CoachingCourseForm.tsx & your old l2CoachingCourseRules
+const l2CoachingCourseRules = [
+  body("categoriesType").isIn(["Exam Preparation", "Upskilling"]).withMessage("Please select a valid categories type."),
+  body("domainType").notEmpty().withMessage("Domain is required."),
+  body("subDomainType").notEmpty().withMessage("Sub-domain is required."),
+  body("courseName").trim().notEmpty().withMessage("Course name is required."),
+  body("mode").isIn(["Offline", "Online", "Hybrid"]).withMessage("Invalid mode specified."),
+  body("courseDuration").trim().notEmpty().withMessage("Course duration is required."),
+  body("startDate").notEmpty().isISO8601().withMessage("Valid start date required."),
+  body("locationURL").trim().notEmpty().withMessage("Location URL is required."),
+  body("aboutBranch").trim().notEmpty().withMessage("Campus address is required."),
+  body("state").notEmpty().withMessage("State is required"),
+  body("district").notEmpty().withMessage("District is required"),
+  body("town").notEmpty().withMessage("Town is required"),
+  body("certification").isIn(["Yes", "No"]).withMessage("A selection for Certification is required."),
+  body("installments").isIn(["Yes", "No"]).withMessage("A selection for Installments is required."),
+  body("emioptions").isIn(["Yes", "No"]).withMessage("A selection for EMI Options is required."),
+  body("priceOfCourse").notEmpty().withMessage("Price is required."),
+  // Conditional fields based on UI logic
+  body("classTimings").if(body("categoriesType").equals("Upskilling")).notEmpty().withMessage("Class timings are required."),
+  body("courselanguage").if(body("categoriesType").equals("Upskilling")).isIn(["English", "Hindi", "Telugu"]).withMessage("Select language."),
+  body("classlanguage").if(body("categoriesType").equals("Exam Preparation")).notEmpty().withMessage("Class language is required."),
+  body("classSize").if(body("categoriesType").equals("Exam Preparation")).notEmpty().withMessage("Class size is required."),
+  body("mockTests").if(body("categoriesType").equals("Exam Preparation")).isIn(["Yes", "No"]).withMessage("Selection required."),
+  // --- File Validations ---
+  body("centerImageUrl").trim().isURL().withMessage("Center images are required."),
+  body("imageUrl").trim().isURL().withMessage("Course image is required."),
+  body("brochureUrl").trim().isURL().withMessage("Brochure URL is required.")
+];
+
+// --- UPDATED TUITION CENTER RULES ---
+const l2TuitionCourseRules = [
+  body("courseName").trim().notEmpty().withMessage("Tuition centre name is required."),
+  body("mode").isIn(["Offline", "Online", "Hybrid"]).withMessage("Invalid mode specified."),
+  body("operationalDays").isArray({ min: 1 }).withMessage("At least one operational day required."),
+  body("openingTime").notEmpty().withMessage("Opening time is required."),
+  body("closingTime").notEmpty().withMessage("Closing time is required."),
+  body("subject").trim().notEmpty().withMessage("Subject is required."),
+  body("classSize").notEmpty().withMessage("Class size is required."),
+  body("locationURL").trim().notEmpty().withMessage("Location URL is required."),
+  body("aboutBranch").trim().notEmpty().withMessage("Campus address is required."),
+  body("state").notEmpty().withMessage("State is required"),
+  body("district").notEmpty().withMessage("District is required"),
+  body("town").notEmpty().withMessage("Town is required"),
+  body("partlyPayment").isIn(["Yes", "No"]).withMessage("A selection for Partly Payment is required."),
+  body("priceOfCourse").notEmpty().withMessage("Price is required."),
+  // Nested Arrays for "Add more" logic
+  body("academicDetails").isArray().withMessage("Academic details required."),
+  body("academicDetails.*.subject").notEmpty().withMessage("Academic subject required."),
+  body("academicDetails.*.monthlyFees").notEmpty().withMessage("Monthly fees required."),
+  body("facultyDetails").isArray().withMessage("Faculty details required."),
+  body("facultyDetails.*.name").notEmpty().withMessage("Faculty name required."),
+  // --- File Validations ---
+  body("tuitionImageUrl").trim().isURL().withMessage("Tuition center image is required."),
+  body("imageUrl").trim().isURL().withMessage("Course image is required."),
+  body("brochureUrl").trim().isURL().withMessage("Brochure PDF is required.")
+];
+
+// ✅ --- L2 STUDY HALL COURSE RULES ---
+const l2StudyHallRules = [
+  body("hallName").trim().notEmpty().withMessage("Hall name is required."),
+  body("seatingOption").isIn(["Individual Desk", "Shared Table", "Private Cabin", "Open Seating"]).withMessage("Select seating option."),
+  body("openingTime").notEmpty().withMessage("Opening time is required."),
+  body("closingTime").notEmpty().withMessage("Closing time is required."),
+  body("operationalDays").isArray({ min: 1 }).withMessage("Select operational days."),
+  body("startDate").notEmpty().isISO8601().withMessage("Valid start date required."),
+  body("endDate").notEmpty().isISO8601().withMessage("Valid end date required."),
+  body("totalSeats").notEmpty().withMessage("Total seats is required."),
+  body("availableSeats").notEmpty().withMessage("Available seats is required."),
+  body("pricePerSeat").notEmpty().withMessage("Price per seat is required."),
+  body("hasWifi").isIn(["Yes", "No"]).withMessage("A selection for Wi-Fi is required."),
+  body("hasChargingPoints").isIn(["Yes", "No"]).withMessage("A selection for Charging Points is required."),
+  body("hasAC").isIn(["Yes", "No"]).withMessage("A selection for Air Conditioner is required."),
+  body("hasPersonalLocker").isIn(["Yes", "No"]).withMessage("A selection for Personal Lockers is required."),
+  // --- File Validations ---
+  body("imageUrl").trim().isURL().withMessage("Hall image is required.")
+];
+
+// --- UPDATED STUDY ABROAD RULES ---
+// Pulls from StudyAbroadForm.tsx & merges old studyAbroadL3Rules
+const l2StudyAbroadRules = [
+ body("consultancyName").trim().notEmpty().withMessage("Consultancy name is required."),
+  body("studentAdmissions").notEmpty().withMessage("Student admissions count is required."),
+  body("locationURL").trim().notEmpty().withMessage("Location URL is required."),
+  body("aboutBranch").trim().notEmpty().withMessage("Campus address is required."),
+  body("state").notEmpty().withMessage("State is required"),
+  body("district").notEmpty().withMessage("District is required"),
+  body("town").notEmpty().withMessage("Town is required"),
+  body("countriesOffered").notEmpty().not().equals("Select Country").withMessage("Please select a valid country."),
+  body("academicOfferings").notEmpty().not().equals("Select Academic type").withMessage("Please select a valid academic type."),
+  body("budget").trim().notEmpty().withMessage("Budget info is required."),
+  body("studentsSent").notEmpty().withMessage("Students count is required."),
+  body("applicationAssistance").isIn(["Yes", "No"]).withMessage("A selection for Application Assistance is required."),
+  body("visaProcessingSupport").isIn(["Yes", "No"]).withMessage("A selection for Visa Processing Support is required."),
+  body("partTimeHelp").isIn(["Yes", "No"]).withMessage("A selection for Part-time help is required."),
+  body("preDepartureOrientation").isIn(["Yes", "No"]).withMessage("Selection required."),
+  body("accommodationAssistance").isIn(["Yes", "No"]).withMessage("Selection required."),
+  body("educationLoans").isIn(["Yes", "No"]).withMessage("Selection required."),
+  body("postArrivalSupport").isIn(["Yes", "No"]).withMessage("Selection required."),
+  // --- File Validations ---
+  body("consultancyImageUrl").trim().isURL().withMessage("Consultancy image is required."),
+  body("imageUrl").trim().isURL().withMessage("Program image is required."),
+  body("brochureUrl").trim().isURL().withMessage("Brochure URL is required."),
+  body("businessProofUrl").trim().isURL().withMessage("Business Proof document is required."),
+  body("panAadhaarUrl").trim().isURL().withMessage("PAN/Aadhaar document is required.")
+];
+
+
+
+// Define this at the top of your validator file
+const BLUE_BOX_FIELDS = {
+  "Intermediate college(K12)": ["year", "classType", "specialization", "priceOfCourse"],
+  "School's": ["classType", "priceOfCourse"],
+  "Kindergarten/childcare center": ["categoriesType", "priceOfCourse"],
+  "Study Abroad": ["countriesOffered", "academicOfferings", "budget", "studentsSent"],
+  "Tution Center's": ["academicDetails", "facultyDetails"],
+  "Under Graduation/Post Graduation": ["graduationType", "streamType", "selectBranch", "branchDescription", "educationType", "priceOfCourse"]
+};
+
 exports.validateL2Update = async (req, res, next) => {
   try {
-    console.log("in l2UpdateValidators");
     const userId = req.userId;
-    // const institution = await Institution.findById(req.user.institution);
     const institution = await Institution.findOne({ institutionAdmin: userId });
-    if (!institution) {
-      logger.warn(
-        { userId: req.userId },
-        "Attempted L2 update for a non-existent institution."
-      );
-      return res.status(404).json({
-        status: "fail",
-        message: "Institution not found for the logged-in user.",
+
+    if (!institution) return res.status(404).json({ message: "Institution not found" });
+
+    
+
+    if (req.body.courses && Array.isArray(req.body.courses)) {
+      req.body.courses.forEach((topLevelCourse) => {
+        // 1. Move fields from the top-level course object to root
+        Object.keys(topLevelCourse).forEach(key => {
+          if (key !== 'courses' && topLevelCourse[key] !== undefined) {
+            req.body[key] = topLevelCourse[key];
+          }
+        });
+
+        // 2. CRITICAL: Dig into the nested subarray (the "Blue Box" fields)
+        if (topLevelCourse.courses && Array.isArray(topLevelCourse.courses)) {
+          topLevelCourse.courses.forEach((subArrayItem) => {
+            Object.keys(subArrayItem).forEach(subKey => {
+              if (subArrayItem[subKey] !== undefined && subArrayItem[subKey] !== "") {
+                // Move classType, priceOfCourse, etc. to root
+                req.body[subKey] = subArrayItem[subKey];
+              }
+            });
+          });
+        }
       });
     }
+    const type = institution.instituteType;
+    console.log("validation", type);
 
     let validationChain = [];
-    console.log("for type of " + institution.instituteType);
-    switch (institution.instituteType) {
-      case "Kindergarten/childcare center":
-        validationChain = l2KindergartenRules;
-        break;
+    switch (type) {
       case "School's":
         validationChain = l2SchoolRules;
         break;
       case "Intermediate college(K12)":
         validationChain = l2IntermediateCollegeRules;
         break;
-      case "Under Graduation/Post Graduation":
-        validationChain = l2UgPgCourseRules;
-        break;
       case "Coaching centers":
         validationChain = l2CoachingCourseRules;
         break;
-      case "Tution Center's": // Note: Ensure spelling matches your L1Creation validator
+      case "Under Graduation/Post Graduation":
+        validationChain = l2UgPgCourseRules;
+        break;
+      case "Kindergarten/childcare center":
+        validationChain = l2KindergartenRules;
+        break;
+      case "Tution Center's":
         validationChain = l2TuitionCourseRules;
         break;
       case "Study Halls":
@@ -190,20 +514,11 @@ exports.validateL2Update = async (req, res, next) => {
         validationChain = l2StudyAbroadRules;
         break;
       default:
-        logger.error(
-          { userId: req.userId, instituteType: institution.instituteType },
-          "Unsupported institution type for L2 update."
-        );
-        return res.status(400).json({
-          status: "fail",
-          message: "Unsupported institution type for L2 update.",
-        });
+        return res.status(400).json({ message: `Unsupported type: ${type}` });
     }
 
-    // Run the selected validation chain
-    await Promise.all(validationChain.map((validation) => validation.run(req)));
+    await Promise.all(validationChain.map((v) => v.run(req)));
 
-    // Handle the results
     handleValidationErrors(req, res, next);
   } catch (error) {
     next(error);
@@ -488,612 +803,12 @@ const l2BranchRules = [
   // .withMessage("Must be a valid URL."),
 ];
 
-// ✅ --- L2 BASE COURSE VALIDATOR ---
-// These rules now correctly match your frontend baseCourseSchema
-const l2BaseCourseRules = [
-  body("courseName").trim().notEmpty().withMessage("Course name is required."),
-
-  body("aboutCourse")
-    .trim()
-    .notEmpty()
-    .withMessage("About course is required."),
-
-  body("courseDuration")
-    .trim()
-    .notEmpty()
-    .withMessage("Course duration is required."),
-
-  body("startDate")
-    .notEmpty()
-    .withMessage("Course start date is required.")
-    .isISO8601()
-    .withMessage("Must be a valid date."),
-
-  // ✅ ADDED: Missing endDate validation
-  body("endDate")
-    .notEmpty()
-    .withMessage("Course end date is required.")
-    .isISO8601()
-    .withMessage("Must be a valid date."),
-
-  body("mode")
-    .isIn(["Offline", "Online", "Hybrid"])
-    .withMessage("A valid mode is required."),
-
-  body("priceOfCourse")
-    .trim()
-    .notEmpty()
-    .withMessage("Price is required.")
-    .withMessage("Price must be a number."),
-
-  body("locationURL")
-    .trim()
-    .notEmpty()
-    .withMessage("Location URL is required.")
-    .matches(/^https?:\/\/.+/)
-    .withMessage("Location URL must start with http:// or https://"),
-
-  body("state").notEmpty().withMessage("State is required"),
-  body("district").notEmpty().withMessage("District is required"),
-  body("town").notEmpty().withMessage("Town is required"),
-
-  body("createdBranch").optional({ checkFalsy: true }).trim(),
-
-  // Integrated Amenities
-  body("playground").optional().isIn(["Yes", "No"]).withMessage("A selection for Playground is required."),
-  body("busService").optional().isIn(["Yes", "No"]).withMessage("A selection for Bus Service is required."),
-  body("hostelFacility").optional().isIn(["Yes", "No"]).withMessage("A selection for Hostel Facility is required."),
-  body("emioptions").optional().isIn(["Yes", "No"]).withMessage("A selection for EMI Options is required."),
-  body("partlyPayment").optional().isIn(["Yes", "No"]).withMessage("A selection for Partly Payment is required."),
-];
-
-// --- UPDATED SCHOOL RULES ---
-// Pulls from SchoolForm.tsx & your old schoolL3Rules
-const l2SchoolRules = [
-  ...l2BaseCourseRules,
-
-  body("schoolType")
-    .isIn(["Co-Education", "Boys Only", "Girls Only"]) // Updated to match SchoolForm.tsx
-    .withMessage("Invalid school type selected."),
-
-  body("schoolCategory")
-    .optional() // Made optional as it's not marked 'required' in your JSX
-    .isIn(["Public", "Private", "Charter", "International"])
-    .withMessage("Invalid school category selected."),
-
-  body("curriculumType")
-    .isIn(["State board", "CBSE", "ICSE", "IB", "IGCSE"]) // Updated 'board' to 'board'
-    .withMessage("Invalid curriculum type selected."),
-
-  body("classType")
-    .notEmpty()
-    .withMessage("Class Type is required.")
-    .trim(),
-
-  // Added missing field from SchoolForm.tsx
-  body("classlanguage")
-    .optional()
-    .trim(),
-
-  // --- Amenities (Kept old L3 messages, updated to "Yes/No" strings) ---
-  body("hostelFacility")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Hostel Facility is required."),
-
-  body("playground")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Playground is required."),
-
-  body("busService")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Bus Service is required."),
-
-  // --- Operational Days (From old L3) ---
-  body("operationalDays")
-    .optional()
-    .isArray({ min: 1 })
-    .withMessage("Select at least one operational day."),
-
-  body("operationalDays.*").isIn([
-    "Mon", "Tues", "Wed", "Thur", "Fri", "Sat", "Sun",
-  ]),
-];
-
-// --- UPDATED INTERMEDIATE COLLEGE RULES ---
-// Pulls from CollegeForm.tsx & your old intermediateCollegeL3Rules
-const l2IntermediateCollegeRules = [
-  ...l2BaseCourseRules, // Validates common fields like courseName, duration, location, etc.
-
-  body("collegeType")
-    .isIn([
-      "Junior College",
-      "Senior Secondary",
-      "Higher Secondary",
-      "Intermediate",
-      "Pre-University",
-    ])
-    .withMessage("Invalid college type selected."),
-
-  body("collegeCategory")
-    .isIn(["Government", "Private", "Semi-Government", "Aided", "Unaided"])
-    .withMessage("Invalid college category selected."),
-
-  body("curriculumType")
-    .isIn(["State board", "CBSE", "ICSE", "IB", "Cambridge", "Other"]) // Match lowercase 'board' from JSX
-    .withMessage("Invalid curriculum type selected."),
-
-  body("year")
-    .isIn(["1st Year", "2nd Year"])
-    .withMessage("Please select the year."),
-
-  body("specialization")
-    .isIn(["MPC", "BiPC", "CEC", "HEC", "MEC"])
-    .withMessage("Select a valid specialization."),
-
-  body("classlanguage")
-    .notEmpty()
-    .withMessage("Language of class is required.")
-    .trim(),
-
-  // --- Amenities (Updated to String check, kept old L3 messages) ---
-  body("hostelFacility")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Hostel Facility is required."),
-
-  body("playground")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Playground is required."),
-
-  body("busService")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Bus Service is required."),
-
-  // --- Operational Days (From old L3) ---
-  body("operationalDays")
-    .optional()
-    .isArray({ min: 1 })
-    .withMessage("Select at least one operational day."),
-
-  body("operationalDays.*").isIn([
-    "Mon", "Tues", "Wed", "Thur", "Fri", "Sat", "Sun",
-  ]),
-];
-
-// --- UPDATED KINDERGARTEN RULES ---
-// Merges old kindergartenL3Rules into L2
-const l2KindergartenRules = [
-  ...l2BaseCourseRules,
-
-  body("graduationType")
-    .isIn(["Kindergarten"])
-    .withMessage("A valid Course type is required."),
-
-  body("categoriesType")
-    .isIn(["Nursery", "LKG", "UKG", "Playgroup"])
-    .withMessage("Select Category Type"),
-
-  body("schoolType")
-    .isIn([
-      "Public",
-      "Private (For-profit)",
-      "Private (Non-profit)",
-      "International",
-      "Home - based",
-    ])
-    .withMessage("Invalid school type selected."),
-
-  body("curriculumType")
-    .trim()
-    .notEmpty()
-    .withMessage("Curriculum type is required.")
-    .isLength({ min: 3, max: 100 })
-    .withMessage("Curriculum type must be between 3 and 100 characters.")
-    .matches(/^[A-Za-z\s]+$/)
-    .withMessage("Curriculum type must only contain letters and spaces.")
-    .escape(),
-
-  body("classSizeRatio")
-    .notEmpty()
-    .withMessage("Teacher: Student Ratio is required")
-    .trim(),
-
-  body("ownershipType")
-    .isIn(["Private", "Government", "Trust", "Other"])
-    .withMessage("Invalid school type selected."),
-
-  // --- Amenities (Kept old L3 messages, updated to "Yes/No" strings) ---
-  body("extendedCare")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Extended Care is required."),
-
-  body("mealsProvided")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Meals Provided is required."),
-
-  body("outdoorPlayArea")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Outdoor Play Area is required."),
-    
-  // Added from your form as required fields
-  body("playground")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Playground is required."),
-    
-  body("busService")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Bus Service is required."),
-];
-
-// --- UPDATED UG/PG RULES ---
-// Pulls from UnderPostGraduateForm.tsx & your old l2UgPgCourseRules
-const l2UgPgCourseRules = [
-  ...l2BaseCourseRules,
-  body("graduationType").notEmpty().withMessage("Graduation type is required."),
-  body("streamType").notEmpty().withMessage("Stream type is required."),
-  body("selectBranch").notEmpty().withMessage("A branch must be selected for the course."),
-  body("aboutBranch")
-    .trim()
-    .isLength({ min: 3, max: 500 })
-    .withMessage("About branch must be between 3 and 500 characters."),
-  body("educationType")
-    .isIn(["Full time", "part time", "Distance"])
-    .withMessage("A valid education type is required."),
-  body("classSize")
-    .notEmpty()
-    .withMessage("Class size is required.")
-    .isNumeric()
-    .withMessage("Class size must be a number."),
-  body("eligibilityCriteria")
-    .trim()
-    .notEmpty()
-    .withMessage("Eligibility criteria is required."),
-
-  // --- NEW: Placement & Facility fields (Integrated from L3 / New Form) ---
-  body("placementDrives").isIn(["Yes", "No"]).withMessage("A selection for Placement Drives is required."),
-  body("entranceExam").isIn(["Yes", "No"]).withMessage("A selection for Entrance Exam is required."),
-  body("managementQuota").isIn(["Yes", "No"]).withMessage("A selection for Management Quota is required."),
-  body("library").isIn(["Yes", "No"]).withMessage("A selection for Library is required."),
-  
-  body("totalNumberRequires").optional().isNumeric().withMessage("Must be a number."),
-  body("highestPackage").optional().trim(),
-  body("averagePackage").optional().trim(),
-  body("totalStudentsPlaced").optional().isNumeric().withMessage("Must be a number."),
-  body("mockInterviews").optional().isIn(["Yes", "No"]),
-  body("resumeBuilding").optional().isIn(["Yes", "No"]),
-  body("linkedinOptimization").optional().isIn(["Yes", "No"]),
-];
-
-// --- UPDATED COACHING RULES ---
-// Pulls from CoachingCourseForm.tsx & your old l2CoachingCourseRules
-const l2CoachingCourseRules = [
-  ...l2BaseCourseRules,
-
-  body("categoriesType")
-    .isIn(["Exam Preparation", "Upskilling"])
-    .withMessage("Please select a valid categories type."),
-
-  body("domainType")
-    .notEmpty()
-    .withMessage("Please select a valid domain type."),
-
-  body("subDomainType")
-    .notEmpty()
-    .withMessage("Please select a valid sub-domain type."),
-
-  body("classSize")
-    .notEmpty()
-    .withMessage("Class size is required.")
-    .isNumeric()
-    .withMessage("Class size must be a number."),
-
-  // --- Upskilling Specific Fields ---
-  body("classTimings")
-    .trim()
-    .notEmpty()
-    .withMessage("Class timings are required."),
-
-  body("courselanguage")
-    .optional()
-    .isIn(["English", "Hindi", "Telugu"])
-    .withMessage("Select a valid course language."),
-
-  // --- Exam Prep Specific Fields ---
-  body("classlanguage")
-    .optional()
-    .trim()
-    .notEmpty()
-    .withMessage("Class language is required."),
-
-  // --- Placement & Amenities (Updated to String check, kept old L3 messages) ---
-  body("placementDrives")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Placement Drives is required."),
-
-  body("mockInterviews")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Mock Interviews is required."),
-
-  body("resumeBuilding")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Resume Building is required."),
-
-  body("linkedinOptimization")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for LinkedIn Optimization is required."),
-
-  body("certification")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Certification is required."),
-
-  body("mockTests")
-    .optional()
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Mock Tests is required."),
-
-  body("studyMaterial")
-    .optional()
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Study Material is required."),
-
-  body("library")
-    .optional()
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Library Facility is required."),
-
-  // Numeric placement stats from form
-  body("highestPackage").optional().trim(),
-  body("averagePackage").optional().trim(),
-  body("totalStudentsPlaced").optional().isNumeric().withMessage("Must be a number."),
-  body("totalNumberRequires").optional().isNumeric().withMessage("Must be a number.")
-];
-
-// --- UPDATED TUITION CENTER RULES ---
-// Merges your old l2TuitionCourseRules with the new academic/faculty arrays
-const l2TuitionCourseRules = [
-  ...l2BaseCourseRules,
-
-  body("tuitionType")
-    .isIn(["Home Tuition", "Center Tuition"])
-    .withMessage("A valid tuition type is required (Home Tuition or Center Tuition)."),
-
-  body("instructorProfile")
-    .trim()
-    .notEmpty()
-    .withMessage("Instructor profile is required."),
-
-  // Main subject field
-  body("subject")
-    .trim()
-    .notEmpty()
-    .withMessage("Subject is required.")
-    .matches(/^[A-Za-z\s,]+$/)
-    .withMessage("Subject can only contain letters, spaces, and commas."),
-
-  body("classSize")
-    .notEmpty()
-    .withMessage("Class Size is required.")
-    .trim(),
-
-  // Kept your seat logic exactly as it was
-  body("totalSeats")
-    .notEmpty()
-    .withMessage("Total seats is required.")
-    .isInt({ min: 0 })
-    .withMessage("Total seats must be a non-negative number."),
-
-  body("availableSeats")
-    .notEmpty()
-    .withMessage("Available seats is required.")
-    .isInt({ min: 0 })
-    .withMessage("Available seats must be a non-negative number.")
-    .custom((value, { req }) => {
-      if (parseInt(value, 10) > parseInt(req.body.totalSeats, 10)) {
-        throw new Error("Available seats cannot exceed total seats.");
-      }
-      return true;
-    }),
-
-  // Integrated Operational logic (Kept old messages/regex)
-  body("operationalDays")
-    .isArray({ min: 1 })
-    .withMessage("At least one operational day must be selected."),
-
-  body("openingTime")
-    .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
-    .withMessage("Opening time must be in a valid HH:MM format."),
-
-  body("closingTime")
-    .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
-    .withMessage("Closing time must be in a valid HH:MM format."),
-
-  // --- Nested Array Validation (Matches the "Add More" UI in your form) ---
-  body("academicDetails")
-    .optional()
-    .isArray()
-    .withMessage("Academic details must be an array."),
-    
-  body("academicDetails.*.subject")
-    .notEmpty()
-    .withMessage("Subject name is required in academic details."),
-    
-  body("academicDetails.*.monthlyFees")
-    .notEmpty()
-    .withMessage("Monthly Fees is required."),
-
-  body("facultyDetails")
-    .optional()
-    .isArray()
-    .withMessage("Faculty details must be an array."),
-    
-  body("facultyDetails.*.name")
-    .notEmpty()
-    .withMessage("Faculty name is required."),
-
-  // Added Partly Payment from Form
-  body("partlyPayment")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Partly Payment is required."),
-];
-
-// ✅ --- L2 STUDY HALL COURSE RULES ---
-// --- UPDATED STUDY HALL RULES ---
-// Pulls from StudyHallForm.tsx & your old l2StudyHallRules
-const l2StudyHallRules = [
-  ...l2BaseCourseRules, // Validates common fields + Location Trio + Dates
-
-  body("hallName")
-    .trim()
-    .notEmpty()
-    .withMessage("Hall name is required."),
-
-  body("seatingOption")
-    .isIn(["Individual Desk", "Shared Table", "Private Cabin", "Open Seating"])
-    .withMessage("Please select a valid seating option."),
-
-  body("openingTime")
-    .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
-    .withMessage("Opening time must be in a valid HH:MM format."),
-
-  body("closingTime")
-    .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
-    .withMessage("Closing time must be in a valid HH:MM format."),
-
-  body("operationalDays")
-    .isArray({ min: 1 })
-    .withMessage("At least one operational day must be selected."),
-
-  body("totalSeats")
-    .notEmpty()
-    .withMessage("Total seats is required.")
-    .isInt({ min: 0 })
-    .withMessage("Total seats must be a non-negative number."),
-
-  body("availableSeats")
-    .notEmpty()
-    .withMessage("Available seats is required.")
-    .isInt({ min: 0 })
-    .withMessage("Available seats must be a non-negative number.")
-    .custom((value, { req }) => {
-      if (parseInt(value, 10) > parseInt(req.body.totalSeats, 10)) {
-        throw new Error("Available seats cannot exceed total seats.");
-      }
-      return true;
-    }),
-
-  body("pricePerSeat")
-    .notEmpty()
-    .withMessage("Price per seat is required.")
-    .isFloat({ min: 0 })
-    .withMessage("Price must be a non-negative number."),
-
-  body("hasWifi")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Wi-Fi is required."),
-
-  body("hasChargingPoints")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Charging Points is required."),
-
-  body("hasAC")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Air Conditioner is required."),
-
-  body("hasPersonalLocker")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Personal Lockers is required."),
-];
-
-// --- UPDATED STUDY ABROAD RULES ---
-// Pulls from StudyAbroadForm.tsx & merges old studyAbroadL3Rules
-const l2StudyAbroadRules = [
-  ...l2BaseCourseRules,
-
-  body("consultancyName")
-    .trim()
-    .notEmpty()
-    .withMessage("Consultancy name is required."),
-
-  body("studentAdmissions")
-    .notEmpty()
-    .withMessage("Student admissions count is required.")
-    .isInt({ min: 0 })
-    .withMessage("Student admissions must be a non-negative number."),
-
-  body("countriesOffered")
-    .trim()
-    .notEmpty()
-    .withMessage("Country selection is required.")
-    .not()
-    .equals("Select Country")
-    .withMessage("Please select a valid country."),
-
-  body("academicOfferings")
-    .trim()
-    .notEmpty()
-    .withMessage("Academic offering is required.")
-    .not()
-    .equals("Select Academic type")
-    .withMessage("Please select a valid academic type."),
-
-  body("budget")
-    .trim()
-    .notEmpty()
-    .withMessage("Budget info is required."),
-
-  body("studentsSent")
-    .notEmpty()
-    .withMessage("Students count is required.")
-    .isInt({ min: 0 })
-    .withMessage("Students count must be a number."),
-
-  // --- Consultancy Services (Updated to String check, kept old L3 messages) ---
-  body("applicationAssistance")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Application Assistance is required."),
-
-  body("visaProcessingSupport")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Visa Processing Support is required."),
-
-  body("preDepartureOrientation")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Pre-departure orientation is required."),
-
-  body("accommodationAssistance")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Accommodation assistance is required."),
-
-  body("educationLoans")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Education loans/Financial aid guidance is required."),
-
-  body("postArrivalSupport")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Post-arrival support is required."),
-
-  // Updated from 'testOperation' to match the new 'partTimeHelp' field in the form
-  body("partTimeHelp")
-    .isIn(["Yes", "No"])
-    .withMessage("A selection for Part-time help is required."),
-
-  // --- Legal Verification URLs (New from Form) ---
-  body("businessProofUrl")
-    .optional({ checkFalsy: true })
-    .isURL()
-    .withMessage("Invalid Business Proof URL."),
-
-  body("panAadhaarUrl")
-    .optional({ checkFalsy: true })
-    .isURL()
-    .withMessage("Invalid Document URL."),
-];
 
 
 exports.validateUploadedFile = async (req, res, next) => {
-  console.log("\n--- 🚀 [START] Entered validateUploadedFile Middleware ---");
+  console.log("\n--- 🚀 [START] Bulk File Validation ---");
 
   if (!req.file) {
-    console.error("❌ ERROR: No file found on the request.");
     return res.status(400).json({ message: "No file was uploaded." });
   }
 
@@ -1102,39 +817,17 @@ exports.validateUploadedFile = async (req, res, next) => {
     const jsonData = JSON.parse(fileContent);
 
     if (!jsonData.institution || !jsonData.courses) {
-      console.error("❌ ERROR: Missing 'institution' or 'courses'.");
       return res.status(400).json({
         message: "File must contain 'institution' and 'courses' properties.",
       });
     }
 
     const { institution, courses } = jsonData;
+    const type = institution.instituteType;
 
-    // --- STEP 1: Run Branch Validation ---
-    // Note: 'courses' in your JSON is actually an array of branch groups
-    console.log("\n🕵️‍♂️ [Step 1] Running Branch Validation...");
-    req.body = courses;
-
-    await Promise.all(l2BranchRules.map((v) => v.run(req)));
-    let errors = validationResult(req);
-
-    if (!errors.isEmpty()) {
-      console.error("❌ FAILED: Branch Validation.", errors.array());
-      return res.status(422).json({
-        context: "Branch Data Error",
-        errors: errors.array(),
-      });
-    }
-    console.log("✅ PASSED: Branch Validation.");
-
-    // --- STEP 2: Run Merged L2 Course Validation ---
-    console.log(
-      `\n🕵️‍♂️ [Step 2] Running Merged L2 Validation for type: "${institution.instituteType}"...`
-    );
-
+    // 1. Determine the validation chain based on type
     let courseValidationChain = [];
-
-    switch (institution.instituteType) {
+    switch (type) {
       case "Kindergarten/childcare center":
         courseValidationChain = l2KindergartenRules;
         break;
@@ -1160,59 +853,59 @@ exports.validateUploadedFile = async (req, res, next) => {
         courseValidationChain = l2StudyAbroadRules;
         break;
       default:
-        courseValidationChain = l2BaseCourseRules;
+        return res.status(400).json({ message: `Unsupported type: ${type}` });
     }
 
-    if (courseValidationChain.length > 0) {
-      // Iterate through each branch group
-      for (const branchGroup of courses) {
-        // Iterate through each course within that branch
-        for (const course of branchGroup.courses || []) {
-          // Set the individual course as the body for the validator to inspect
-          req.body = course;
+    // 
 
-          await Promise.all(courseValidationChain.map((v) => v.run(req)));
-          errors = validationResult(req);
+    // 2. Loop through each branch and each course
+    for (const branchGroup of courses) {
+      // Validate the branch structure itself
+      req.body = branchGroup;
+      await Promise.all(l2BranchRules.map((v) => v.run(req)));
+      let branchErrors = validationResult(req);
+      
+      if (!branchErrors.isEmpty()) {
+        return res.status(422).json({
+          context: "Branch Data Error",
+          branch: branchGroup.branchName,
+          errors: branchErrors.array(),
+        });
+      }
 
-          if (!errors.isEmpty()) {
-            console.error(
-              `❌ FAILED: Validation for course "${course.courseName}" in branch "${branchGroup.branchName}".`,
-              errors.array()
-            );
-            return res.status(422).json({
-              context: "Course Data Error",
-              branch: branchGroup.branchName,
-              course: course.courseName || "Unnamed Course",
-              errors: errors.array(),
-            });
-          }
+      // 3. Validate every course within this branch
+      for (const course of branchGroup.courses || []) {
+        // We set req.body to the current course so express-validator can "see" it
+        req.body = course;
+
+        await Promise.all(courseValidationChain.map((v) => v.run(req)));
+        let courseErrors = validationResult(req);
+
+        if (!courseErrors.isEmpty()) {
+          // Dynamic name lookup for the error response
+          const cName = course.courseName || course.hallName || course.consultancyName || "Unnamed";
+          
+          console.error(`❌ FAILED: ${cName} in branch ${branchGroup.branchName}`);
+          return res.status(422).json({
+            context: "Course Data Error",
+            branch: branchGroup.branchName,
+            course: cName,
+            errors: courseErrors.array(),
+          });
         }
       }
     }
-    console.log("✅ PASSED: Merged Course Validation.");
 
-    // --- STEP 3: L3 VALIDATION REMOVED ---
-    // Logic: L3 fields are now inside the courseValidationChain above.
-    console.log("⏭️ [Step 3] Skipping L3 (Merged into L2).");
-
-    // --- FINAL: Success ---
-    console.log("\n👍 SUCCESS: All merged validations passed.");
+    console.log("✅ SUCCESS: All branches and courses passed validation.");
     req.institutionData = institution;
     req.coursesData = courses;
-
     next();
-  } catch (error) {
-    logger.error(
-      { error: error.message },
-      "Error during file upload validation."
-    );
-    console.error("🔥 CRITICAL ERROR:", error);
 
-    return res.status(400).json({
-      message: "Invalid JSON format or file structure.",
-    });
+  } catch (error) {
+    logger.error({ error: error.message }, "Critical File Validation Error");
+    return res.status(400).json({ message: "Invalid JSON format or structure." });
   }
-};  
+};
 
 // 1. Updated Whitelist (Fixed typos and added missing fields from L2)
 const allowedFilters = new Set([

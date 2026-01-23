@@ -1310,20 +1310,6 @@ const typeMapping: Record<string, string> = {
         });
 
         // 5. Send to API
-        // if (editMode && firstCourse._id) {
-        //   await programsAPI.update(firstCourse._id, normalizedPayload);
-        // } else {
-        //   await programsAPI.create(normalizedPayload);
-        // }
-
-        // await persistAdminProgramsToIndexedDb(uploadedCourses);
-        // if (editMode) {
-        //     onEditSuccess?.();
-        // } else {
-        //     router.push("/dashboard/subscription");
-        //     onSuccess?.();
-        // }
-        // return;
 
         const res =
         editMode && firstCourse._id

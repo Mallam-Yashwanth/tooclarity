@@ -19,6 +19,8 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
   const { data: monthly, isLoading: monthlyLoading } = useAllUnifiedAnalytics('monthly');
   const { data: yearly, isLoading: yearlyLoading } = useAllUnifiedAnalytics('yearly');
 
+  console.log('DEBUG: AnalyticsProvider yearly data:', yearly);
+
   const isLoading = weeklyLoading || monthlyLoading || yearlyLoading;
 
   return (

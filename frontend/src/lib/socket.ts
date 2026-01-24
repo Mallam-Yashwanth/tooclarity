@@ -50,10 +50,19 @@ export async function getSocket(origin?: string) {
 
   socketPromise = (async () => {
     const { io } = await import('socket.io-client');
-    const url =
-      origin ||
-      process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') ||
-      'http://localhost:3001';
+    let url = origin;
+    if (!url) {
+      const envUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (envUrl) {
+        try {
+          url = new URL(envUrl).origin;
+        } catch {
+          url = envUrl.replace(/\/api\/?$/, '');
+        }
+      } else {
+        url = 'http://localhost:3001';
+      }
+    }
 
     const s = io(url, {
       withCredentials: true,
@@ -82,7 +91,7 @@ export async function getSocket(origin?: string) {
   })();
 
   return socketPromise;
-} 
+}
 
 // ------- Production-grade Socket Manager -------
 
@@ -109,7 +118,7 @@ class SocketManager {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      this.origin = process.env.NEXT_PUBLIC_API_URL|| 'http://localhost:3001';
+      this.origin = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
       window.addEventListener('online', this.onOnline);
       window.addEventListener('offline', this.onOffline);
       document.addEventListener('visibilitychange', this.onVisibility);

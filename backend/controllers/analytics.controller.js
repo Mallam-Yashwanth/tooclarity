@@ -3,8 +3,8 @@ const InstitutionAdmin = require("../models/InstituteAdmin");
 const asyncHandler = require("express-async-handler");
 
 exports.getInstitutionAnalytics = asyncHandler(async (req, res) => {
-  const { 
-    type, 
+  const {
+    type,
     views = false,
     leads = false,
     callbackRequest = false,
@@ -24,7 +24,7 @@ exports.getInstitutionAnalytics = asyncHandler(async (req, res) => {
   // Date Range Logic
   // ---------------------------
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  today.setHours(23, 59, 59, 999);
 
   let groupFormat = "%Y-%m-%d";
   let rangeStart = new Date(today);
@@ -37,7 +37,7 @@ exports.getInstitutionAnalytics = asyncHandler(async (req, res) => {
   }
 
   if (type === "yearly") {
-    groupFormat = "%Y";
+    groupFormat = "%Y-%m";
     rangeStart.setFullYear(today.getFullYear() - 1);
   }
 
@@ -91,66 +91,66 @@ exports.getInstitutionAnalytics = asyncHandler(async (req, res) => {
 
         viewsTimeline: views
           ? [
-              { $unwind: "$analytics" },
-              {
-                $group: {
-                  _id: {
-                    label: { $dateToString: { format: groupFormat, date: "$analytics.day" } }
-                  },
-                  count: { $sum: "$analytics.views" }
-                }
-              },
-              { $project: { _id: 0, label: "$_id.label", count: 1 } },
-              { $sort: { label: 1 } }
-            ]
+            { $unwind: "$analytics" },
+            {
+              $group: {
+                _id: {
+                  label: { $dateToString: { format: groupFormat, date: "$analytics.day" } }
+                },
+                count: { $sum: "$analytics.views" }
+              }
+            },
+            { $project: { _id: 0, label: "$_id.label", count: 1 } },
+            { $sort: { label: 1 } }
+          ]
           : [],
 
         leadsTimeline: leads
           ? [
-              { $unwind: "$analytics" },
-              {
-                $group: {
-                  _id: {
-                    label: { $dateToString: { format: groupFormat, date: "$analytics.day" } }
-                  },
-                  count: { $sum: "$analytics.leads" }
-                }
-              },
-              { $project: { _id: 0, label: "$_id.label", count: 1 } },
-              { $sort: { label: 1 } }
-            ]
+            { $unwind: "$analytics" },
+            {
+              $group: {
+                _id: {
+                  label: { $dateToString: { format: groupFormat, date: "$analytics.day" } }
+                },
+                count: { $sum: "$analytics.leads" }
+              }
+            },
+            { $project: { _id: 0, label: "$_id.label", count: 1 } },
+            { $sort: { label: 1 } }
+          ]
           : [],
 
         callbackTimeline: callbackRequest
           ? [
-              { $unwind: "$analytics" },
-              {
-                $group: {
-                  _id: {
-                    label: { $dateToString: { format: groupFormat, date: "$analytics.day" } }
-                  },
-                  count: { $sum: "$analytics.callbackRequest" }
-                }
-              },
-              { $project: { _id: 0, label: "$_id.label", count: 1 } },
-              { $sort: { label: 1 } }
-            ]
+            { $unwind: "$analytics" },
+            {
+              $group: {
+                _id: {
+                  label: { $dateToString: { format: groupFormat, date: "$analytics.day" } }
+                },
+                count: { $sum: "$analytics.callbackRequest" }
+              }
+            },
+            { $project: { _id: 0, label: "$_id.label", count: 1 } },
+            { $sort: { label: 1 } }
+          ]
           : [],
 
         demoTimeline: bookDemoRequest
           ? [
-              { $unwind: "$analytics" },
-              {
-                $group: {
-                  _id: {
-                    label: { $dateToString: { format: groupFormat, date: "$analytics.day" } }
-                  },
-                  count: { $sum: "$analytics.bookDemoRequest" }
-                }
-              },
-              { $project: { _id: 0, label: "$_id.label", count: 1 } },
-              { $sort: { label: 1 } }
-            ]
+            { $unwind: "$analytics" },
+            {
+              $group: {
+                _id: {
+                  label: { $dateToString: { format: groupFormat, date: "$analytics.day" } }
+                },
+                count: { $sum: "$analytics.bookDemoRequest" }
+              }
+            },
+            { $project: { _id: 0, label: "$_id.label", count: 1 } },
+            { $sort: { label: 1 } }
+          ]
           : []
       }
     }

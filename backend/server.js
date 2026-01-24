@@ -3,7 +3,6 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const path = require('path');
 const { Institution } = require('./models/Institution');
-const { initializeElasticsearch } = require('./config/esSync');
 
 // ✅ Load correct environment file
 const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development';
@@ -12,6 +11,7 @@ dotenv.config({ path: envFile });
 console.log(`Environment loaded: ${process.env.NODE_ENV}`);
 console.log(`Using file: ${envFile}`);
 
+const { initializeElasticsearch } = require('./config/esSync');
 const app = require('./app');
 
 const DB = process.env.MONGO_URI;
@@ -49,7 +49,7 @@ app.set('io', io);
 // Socket singleton for workers
 try {
   require('./utils/socket').setIO(io);
-} catch {}
+} catch { }
 
 io.on('connection', (socket) => {
   socket.on('joinInstitution', (institutionId) => institutionId && socket.join(`institution:${institutionId}`));

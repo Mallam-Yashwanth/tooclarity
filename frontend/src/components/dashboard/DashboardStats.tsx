@@ -72,7 +72,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({
       className="h-full"
     >
       {/* Header with Time Range Toggle */}
-      <motion.div 
+      <motion.div
         className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-2 mb-4 sm:mb-6 m-3 sm:m-5"
         variants={headerVariants}
       >
@@ -86,7 +86,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({
       </motion.div>
 
       {/* Stats Cards */}
-      <motion.div 
+      <motion.div
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 px-3 sm:px-0"
         variants={statsVariants}
       >
@@ -114,10 +114,10 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({
             title={
               <div className="text-left">
                 <div className="hidden sm:block">
-                  <div>Comparison</div>
-                  <div>Appearances</div>
+                  <div>Callback</div>
+                  <div>Leads</div>
                 </div>
-                <div className="block sm:hidden">Comparison Appearances</div>
+                <div className="block sm:hidden">Callback Leads</div>
               </div>
             }
             value={stats.courseComparisons}

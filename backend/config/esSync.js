@@ -1,4 +1,3 @@
-require('dotenv').config({ path: './.env.production' });
 const { Client } = require('@elastic/elasticsearch');
 const Course = require('../models/Course');
 const ELASTICSEARCH_NODE = process.env.ELASTICSEARCH_NODE;
@@ -9,7 +8,7 @@ const esClient = new Client({
   auth: {
     apiKey: process.env.ELASTICSEARCH_API_KEY,
   },
-   ssl: {
+  ssl: {
     rejectUnauthorized: false,
   },
 });

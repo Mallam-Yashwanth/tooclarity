@@ -19,15 +19,41 @@ import { getProgramStatus } from "@/lib/utility";
 import { useRouter } from "next/navigation";
 
 function AnalyticsPage() {
-	const [analyticsRange, setAnalyticsRange] = useState<"Weekly"|"Monthly"|"Yearly">("Weekly");
+	// Helper function to calculate appropriate Y-axis ticks based on data
+	const calculateYAxisTicks = (values: number[], leadsValues: number[]): number[] => {
+		const allValues = [...values, ...leadsValues];
+		const maxValue = Math.max(...allValues, 1);
+
+		let upperBound: number;
+		if (maxValue <= 10) {
+			upperBound = 10;
+		} else if (maxValue <= 50) {
+			upperBound = 50;
+		} else if (maxValue <= 100) {
+			upperBound = 100;
+		} else if (maxValue <= 500) {
+			upperBound = Math.ceil(maxValue / 100) * 100;
+		} else if (maxValue <= 1000) {
+			upperBound = Math.ceil(maxValue / 200) * 200;
+		} else if (maxValue <= 5000) {
+			upperBound = Math.ceil(maxValue / 1000) * 1000;
+		} else {
+			upperBound = Math.ceil(maxValue / 5000) * 5000;
+		}
+
+		const step = upperBound / 5;
+		return [0, step, step * 2, step * 3, step * 4, upperBound];
+	};
+
+	const [analyticsRange, setAnalyticsRange] = useState<"Weekly" | "Monthly" | "Yearly">("Weekly");
 	const [coursePerformance, setCoursePerformance] = useState<CoursePerformanceRow[]>([]);
 	const [, setKpiCourseViews] = useState<number>(0);
 	const [kpiLeads, setKpiLeads] = useState<number>(0);
-	const [, setKpiViewsDelta] = useState<{value:number; isPositive:boolean}>({ value: 0, isPositive: true });
+	const [, setKpiViewsDelta] = useState<{ value: number; isPositive: boolean }>({ value: 0, isPositive: true });
 	const [kpiCallbacks, setKpiCallbacks] = useState<number>(0);
-	const [kpiLeadsDelta, setKpiLeadsDelta] = useState<{value:number; isPositive:boolean}>({ value: 0, isPositive: true });
+	const [kpiLeadsDelta, setKpiLeadsDelta] = useState<{ value: number; isPositive: boolean }>({ value: 0, isPositive: true });
 	const [isKpiLoading, setIsKpiLoading] = useState<boolean>(false);
-	const [viewLeadTrends, setViewLeadTrends] = useState<{ views: number[]; leads: number[] } | null>(null);
+	const [viewLeadTrends, setViewLeadTrends] = useState<{ views: number[]; leads: number[]; labels?: string[]; yTicks?: number[] } | null>(null);
 	const [leadTypes, setLeadTypes] = useState<LeadTypeData | null>(null);
 	const [isPerfLoading, setIsPerfLoading] = useState<boolean>(false);
 	const [isTrendLoading, setIsTrendLoading] = useState<boolean>(false);
@@ -39,10 +65,10 @@ function AnalyticsPage() {
 
 	// Use shared analytics context (fetched once at layout level)
 	const { weekly, monthly, yearly, isLoading: analyticsLoading } = useAnalyticsContext();
-	const analyticsRangeLower = analyticsRange.toLowerCase() as 'weekly'|'monthly'|'yearly';
+	const analyticsRangeLower = analyticsRange.toLowerCase() as 'weekly' | 'monthly' | 'yearly';
 	const allAnalytics = analyticsRangeLower === 'weekly' ? weekly : analyticsRangeLower === 'monthly' ? monthly : yearly;
 	const yearlyAnalytics = yearly;
-	
+
 	// Program views KPI via unified analytics (views) only (context)
 	const kpiProgramViews = allAnalytics?.views ? allAnalytics.views.totalCount : 0;
 
@@ -54,7 +80,7 @@ function AnalyticsPage() {
 	// Effect 1: Update KPIs from unified analytics (views/leads/callbacks/demos)
 	useEffect(() => {
 		setIsKpiLoading(analyticsLoading);
-		
+
 		if (allAnalytics) {
 			setKpiLeads(allAnalytics.leads.totalCount);
 			// Calculate trend (can be enhanced later with previous period comparison)
@@ -66,68 +92,131 @@ function AnalyticsPage() {
 		}
 	}, [analyticsLoading, allAnalytics]);
 
-    // Effect 2: Trends derived purely from unified analytics yearly data (context)
-    useEffect(() => {
-        if (!yearlyAnalytics) {
-            setIsTrendLoading(true);
-            return;
-        }
-        
-        try {
-            setIsTrendLoading(true);
-            const viewsArr = new Array(12).fill(0);
-            const leadsArr = new Array(12).fill(0);
-            
-            // Extract monthly Views from yearly analytics context
-            if (yearlyAnalytics?.views?.analytics) {
-                yearlyAnalytics.views.analytics.forEach((item: { label: string; count: number }) => {
-                    const monthMatch =
-                        item.label.match(/(\d{4})-(\d{2})/) ||
-                        item.label.match(/Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/i);
-                    if (!monthMatch) return;
+	// Effect 2: Trends derived purely from unified analytics (context)
+	useEffect(() => {
+		if (!allAnalytics) {
+			setIsTrendLoading(true);
+			return;
+		}
 
-                    let monthIndex = -1;
-                    if (monthMatch[2]) {
-                        monthIndex = parseInt(monthMatch[2], 10) - 1; // 0-11
-                    } else if (monthMatch[0]) {
-                        const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-                        monthIndex = monthNames.findIndex(m => monthMatch[0].toLowerCase().startsWith(m));
-                    }
-                    if (monthIndex >= 0 && monthIndex < 12) {
-                        viewsArr[monthIndex] = item.count || 0;
-                    }
-                });
-            }
-            
-            // Extract monthly Leads from yearly analytics context
-            if (yearlyAnalytics?.leads?.analytics) {
-                yearlyAnalytics.leads.analytics.forEach((item: { label: string; count: number }) => {
-                    const monthMatch =
-                        item.label.match(/(\d{4})-(\d{2})/) ||
-                        item.label.match(/Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/i);
-                    if (!monthMatch) return;
+		try {
+			setIsTrendLoading(true);
+			let viewsArr: number[] = [];
+			let leadsArr: number[] = [];
+			let labels: string[] = [];
 
-                    let monthIndex = -1;
-                    if (monthMatch[2]) {
-                        monthIndex = parseInt(monthMatch[2], 10) - 1;
-                    } else if (monthMatch[0]) {
-                        const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-                        monthIndex = monthNames.findIndex(m => monthMatch[0].toLowerCase().startsWith(m));
-                    }
-                    if (monthIndex >= 0 && monthIndex < 12) {
-                        leadsArr[monthIndex] = item.count || 0;
-                    }
-                });
-            }
+			const range = analyticsRangeLower;
 
-            // Use context-only data for the trends component
-            setViewLeadTrends({ views: viewsArr, leads: leadsArr });
-        } catch {
-            console.error('Analytics: trends processing failed');
-        } finally {
-            setIsTrendLoading(false);
-        }
-    }, [yearlyAnalytics]);
+			if (range === 'weekly') {
+				viewsArr = new Array(7).fill(0);
+				leadsArr = new Array(7).fill(0);
+				const today = new Date();
+				const buckets: string[] = [];
+
+				for (let i = 6; i >= 0; i--) {
+					const d = new Date();
+					d.setDate(today.getDate() - i);
+					labels.push(d.toLocaleDateString('en-US', { weekday: 'short' }));
+					buckets.push(d.toISOString().split('T')[0]);
+				}
+
+				// Helper to fill array with timezone tolerance
+				const fillArr = (source: { label: string; count: number }[], target: number[]) => {
+					if (!source) return;
+					source.forEach(item => {
+						let idx = buckets.indexOf(item.label);
+						// Try +1 day shift correction
+						if (idx === -1) {
+							try {
+								const d = new Date(item.label);
+								d.setDate(d.getDate() + 1);
+								const nextDay = d.toISOString().split('T')[0];
+								idx = buckets.indexOf(nextDay);
+							} catch { /* ignore */ }
+						}
+
+						if (idx >= 0) target[idx] = (target[idx] || 0) + item.count;
+						else {
+							const bucketIdx = labels.findIndex(l => item.label.includes(l));
+							if (bucketIdx >= 0) target[bucketIdx] = (target[bucketIdx] || 0) + item.count;
+						}
+					});
+				};
+
+				fillArr(allAnalytics.views?.analytics || [], viewsArr);
+				fillArr(allAnalytics.leads?.analytics || [], leadsArr);
+
+			} else if (range === 'monthly') {
+				const days = 30;
+				viewsArr = new Array(days).fill(0);
+				leadsArr = new Array(days).fill(0);
+				const today = new Date();
+				const buckets: string[] = [];
+
+				for (let i = days - 1; i >= 0; i--) {
+					const d = new Date();
+					d.setDate(today.getDate() - i);
+					labels.push(d.getDate().toString());
+					buckets.push(d.toISOString().split('T')[0]);
+				}
+
+				const fillArr = (source: { label: string; count: number }[], target: number[]) => {
+					if (!source) return;
+					source.forEach(item => {
+						let idx = buckets.indexOf(item.label);
+						// Try +1 day shift correction
+						if (idx === -1) {
+							try {
+								const d = new Date(item.label);
+								d.setDate(d.getDate() + 1);
+								const nextDay = d.toISOString().split('T')[0];
+								idx = buckets.indexOf(nextDay);
+							} catch { /* ignore */ }
+						}
+						if (idx >= 0) target[idx] = (target[idx] || 0) + item.count;
+					});
+				};
+
+				fillArr(allAnalytics.views?.analytics || [], viewsArr);
+				fillArr(allAnalytics.leads?.analytics || [], leadsArr);
+
+				labels = labels.map((l, i) => i % 5 === 0 ? l : '');
+
+			} else {
+				viewsArr = new Array(12).fill(0);
+				leadsArr = new Array(12).fill(0);
+				labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+				const fillYearly = (source: { label: string; count: number }[], target: number[]) => {
+					if (!source) return;
+					source.forEach(item => {
+						const monthMatch = item.label.match(/(\d{4})-(\d{2})/) || item.label.match(/Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/i);
+						if (!monthMatch) return;
+						let monthIndex = -1;
+						if (monthMatch[2]) monthIndex = parseInt(monthMatch[2], 10) - 1;
+						else if (monthMatch[0]) {
+							const mNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+							monthIndex = mNames.findIndex(m => monthMatch[0].toLowerCase().startsWith(m));
+						}
+						if (monthIndex >= 0 && monthIndex < 12) target[monthIndex] = item.count || 0;
+					});
+				};
+
+				fillYearly(allAnalytics.views?.analytics || [], viewsArr);
+				fillYearly(allAnalytics.leads?.analytics || [], leadsArr);
+			}
+
+			// Calculate appropriate Y-axis ticks based on actual data
+			const yTicks = calculateYAxisTicks(viewsArr, leadsArr);
+
+			console.log('DEBUG: viewLeadTrends data:', { views: viewsArr, leads: leadsArr, labels, yTicks });
+			setViewLeadTrends({ views: viewsArr, leads: leadsArr, labels, yTicks });
+		} catch (err) {
+			console.error('Analytics: trends processing failed', err);
+		} finally {
+			setIsTrendLoading(false);
+		}
+	}, [allAnalytics, analyticsRangeLower]);
 
 	// Effect 2.5: Derive identifiers for socket rooms from context/hooks (no extra profile API)
 	useEffect(() => {
@@ -160,7 +249,7 @@ function AnalyticsPage() {
 				const name = pg.programName;
 				const views = viewsMap.get(name) || 0;
 				const lead = leadCounts.get(name) || { leads: 0, lastTs: null };
-				
+
 				// Normalize to simple "Active"/"Inactive" status like subscription page
 				const programStatus = getProgramStatus(pg.startDate || '', pg.endDate || '');
 				let status: 'Active' | 'Inactive' = 'Inactive';
@@ -178,7 +267,7 @@ function AnalyticsPage() {
 						status = 'Active';
 					}
 				}
-				
+
 				return {
 					sno: (idx + 1).toString().padStart(2, '0'),
 					name,
@@ -229,7 +318,7 @@ function AnalyticsPage() {
 		(async () => {
 			try {
 				const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
-				let origin = apiBase.replace('/api','');
+				let origin = apiBase.replace('/api', '');
 				if (!origin) origin = typeof window !== 'undefined' ? window.location.origin : '';
 				s = await getSocket(origin);
 				if (s) {
@@ -240,49 +329,51 @@ function AnalyticsPage() {
 
 					// When views change, invalidate unified analytics cache
 					s.on('courseViewsUpdated', async () => {
-					try {
-						// Invalidate all time ranges since they're all fetched at once
-						queryClient.invalidateQueries({ queryKey: ['all-unified-analytics'], exact: false });
-						queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CHART_DATA('views', new Date().getFullYear(), institutionId || undefined) });
-					} catch (err) { console.error('Analytics: realtime courseViews update failed', err); }
-				});
+						try {
+							// Invalidate all time ranges since they're all fetched at once
+							queryClient.invalidateQueries({ queryKey: ['all-unified-analytics'], exact: false });
+							queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CHART_DATA('views', new Date().getFullYear(), institutionId || undefined) });
+						} catch (err) { console.error('Analytics: realtime courseViews update failed', err); }
+					});
 
-				// When an enquiry is created, invalidate caches: leads KPI, series, and recent enquiries used for program table
-				s.on('enquiryCreated', async () => {
-					try {
-						// Invalidate all time ranges since they're all fetched at once
-						queryClient.invalidateQueries({ queryKey: ['all-unified-analytics'], exact: false });
-						queryClient.invalidateQueries({ queryKey: ['chart-data', 'leads', new Date().getFullYear(), institutionId] });
-						queryClient.invalidateQueries({ queryKey: ['recent-enquiries-all', institutionId] });
-						queryClient.invalidateQueries({ queryKey: ['recent-enquiries', institutionId] });
-					} catch (err) { console.error('Analytics: realtime enquiryCreated invalidation failed', err); }
-				});
+					// When an enquiry is created, invalidate caches: leads KPI, series, and recent enquiries used for program table
+					s.on('enquiryCreated', async () => {
+						try {
+							// Invalidate all time ranges since they're all fetched at once
+							queryClient.invalidateQueries({ queryKey: ['all-unified-analytics'], exact: false });
+							queryClient.invalidateQueries({ queryKey: ['chart-data', 'leads', new Date().getFullYear(), institutionId] });
+							queryClient.invalidateQueries({ queryKey: ['recent-enquiries-all', institutionId] });
+							queryClient.invalidateQueries({ queryKey: ['recent-enquiries', institutionId] });
+						} catch (err) { console.error('Analytics: realtime enquiryCreated invalidation failed', err); }
+					});
 
-				// When program views change, invalidate program-views query to refetch lazily
-				s.on('programViewsUpdated', async () => {
-					try {
-						queryClient.invalidateQueries({ queryKey: ['program-views', institutionId], exact: false });
-						queryClient.invalidateQueries({ queryKey: ['programs-list', institutionId] });
-					} catch (err) { console.error('Analytics: programViews invalidate failed', err); }
-				});
+					// When program views change, invalidate program-views query to refetch lazily
+					s.on('programViewsUpdated', async () => {
+						try {
+							queryClient.invalidateQueries({ queryKey: ['program-views', institutionId], exact: false });
+							queryClient.invalidateQueries({ queryKey: ['programs-list', institutionId] });
+						} catch (err) { console.error('Analytics: programViews invalidate failed', err); }
+					});
 
-				// When comparisons change, invalidate unified analytics cache
-				s.on('comparisonsUpdated', async () => {
-					try {
-						// Invalidate all time ranges since they're all fetched at once
-						queryClient.invalidateQueries({ queryKey: ['all-unified-analytics'], exact: false });
-					} catch {
-						console.error('Analytics: realtime comparisons update failed');
-					}
-				});
+					// When comparisons change, invalidate unified analytics cache
+					s.on('comparisonsUpdated', async () => {
+						try {
+							// Invalidate all time ranges since they're all fetched at once
+							queryClient.invalidateQueries({ queryKey: ['all-unified-analytics'], exact: false });
+						} catch {
+							console.error('Analytics: realtime comparisons update failed');
+						}
+					});
 				}
 			} catch {
 				console.error('Analytics: socket setup failed');
 			}
 		})();
-		return () => { try { if (s) { s.off('courseViewsUpdated', () => {}); s.off('enquiryCreated', () => {}); s.off('comparisonsUpdated', () => {}); s.off('programViewsUpdated', () => {}); } } catch {
-			console.error('Analytics: socket cleanup failed');
-		} };
+		return () => {
+			try { if (s) { s.off('courseViewsUpdated', () => { }); s.off('enquiryCreated', () => { }); s.off('comparisonsUpdated', () => { }); s.off('programViewsUpdated', () => { }); } } catch {
+				console.error('Analytics: socket cleanup failed');
+			}
+		};
 	}, [institutionId, institutionAdminId, analyticsRangeLower, queryClient]);
 
 
@@ -304,23 +395,23 @@ function AnalyticsPage() {
 					</div>
 
 					{/* KPI cards with same animation/loading as dashboard */}
-					<motion.div 
+					<motion.div
 						className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4"
 						initial={{ opacity: 0, y: 20 }}
 						animate={{ opacity: 1, y: 0 }}
 						transition={{ duration: 0.5 }}
 					>
 						<AnimatePresence mode="wait">
-					<StatCard 
-						title="Total Program Views"
-						value={kpiProgramViews}
-						trend={{ value: 0, isPositive: true }}
-						isLoading={isKpiLoading}
-						showFilters={false}
-					/>
+							<StatCard
+								title="Total Program Views"
+								value={kpiProgramViews}
+								trend={{ value: 0, isPositive: true }}
+								isLoading={isKpiLoading}
+								showFilters={false}
+							/>
 						</AnimatePresence>
 						<AnimatePresence mode="wait">
-							<StatCard 
+							<StatCard
 								//title="Course Views"
 								//value={kpiCourseViews}
 								//trend={kpiViewsDelta}
@@ -328,13 +419,13 @@ function AnalyticsPage() {
 								//showFilters={false}
 								title="Callback Leads"
 								value={kpiCallbacks}
-								trend={{value: 0, isPositive: true}}
+								trend={{ value: 0, isPositive: true }}
 								isLoading={isKpiLoading}
 								showFilters={false}
 							/>
 						</AnimatePresence>
 						<AnimatePresence mode="wait">
-							<StatCard 
+							<StatCard
 								title="Leads Generated"
 								value={kpiLeads}
 								trend={kpiLeadsDelta}
@@ -364,13 +455,14 @@ function AnalyticsPage() {
 					</div>
 				) : null}
 				{viewLeadTrends && (
-					<CourseReachChart 
+					<CourseReachChart
 						title="View & Lead Trends"
 						values={viewLeadTrends.views}
 						leadsValues={viewLeadTrends.leads}
 						showLegend={true}
 						timeRange={analyticsRange}
-						yTicksOverride={[0,1000,5000,10000,15000,20000]}
+						xLabels={viewLeadTrends.labels}
+						yTicksOverride={viewLeadTrends.yTicks}
 					/>
 				)}
 			</div>
@@ -378,6 +470,9 @@ function AnalyticsPage() {
 			{leadTypes && (
 				<LeadTypeAnalytics data={leadTypes} title="Inquiry Type Analysis" />
 			)}
+			<div className="mt-4 p-2 bg-gray-100 dark:bg-gray-800 rounded text-xs overflow-auto max-h-40">
+				DEBUG: leads: {JSON.stringify(viewLeadTrends?.leads)}
+			</div>
 		</div>
 	);
 }

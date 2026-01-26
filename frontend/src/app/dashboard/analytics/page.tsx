@@ -471,9 +471,6 @@ function AnalyticsPage() {
 			{leadTypes && (
 				<LeadTypeAnalytics data={leadTypes} title="Inquiry Type Analysis" />
 			)}
-			<div className="mt-4 p-2 bg-gray-100 dark:bg-gray-800 rounded text-xs overflow-auto max-h-40">
-				DEBUG: leads: {JSON.stringify(viewLeadTrends?.leads)}
-			</div>
 		</div>
 	);
 }

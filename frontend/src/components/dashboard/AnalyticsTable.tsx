@@ -35,7 +35,7 @@ const StatusPill: React.FC<{ status: CoursePerformanceRow["status"] }> = ({ stat
   const color = colorMap[status] || colorMap.Inactive;
   return (
     <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm ${color}`}>
-      <span className={`h-2 w-2 rounded-full ${status === 'Active' ? 'bg-emerald-500 animate-pulse' : 'bg-current'}`}></span>
+      <span className={`h-2 w-2 rounded-full ${status==='Active' ? 'bg-emerald-500 animate-pulse' : 'bg-current'}`}></span>
       {status}
     </span>
   );
@@ -80,12 +80,13 @@ const AnalyticsTable = <T,>({
                   <td className="p-4 align-middle">
                     <div className="text-gray-900 dark:text-gray-100 font-medium">{r.name}</div>
                   </td>
-                  <td className="p-4 align-middle"><StatusPill status={r.status} /></td>
-                  <td className="p-4 text-gray-900 dark:text-gray-100 align-middle">{r.views.toLocaleString()}</td>
-                  <td className="p-4 text-gray-900 dark:text-gray-100 align-middle">{r.leads}</td>
-                  <td className="p-4 align-middle">
-                    <Button onClick={onAddCourse} variant="ghost" size="sm" className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 h-8 w-8 p-0 flex items-center justify-center">
-                      <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="mr-0 h-3.5 w-3.5" />
+                  <td className="p-4"><StatusPill status={r.status} /></td>
+                  <td className="p-4 text-gray-900 dark:text-gray-100">{r.views.toLocaleString()}</td>
+                  <td className="p-4 text-gray-900 dark:text-gray-100">{r.leads}</td>
+                  <td className="p-4 text-gray-900 dark:text-gray-100">{r.engagementRate}</td>
+                  <td className="p-4">
+                    <Button onClick={onAddCourse} variant="ghost" size="sm" className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
+                      <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="mr-0"/>
                     </Button>
                   </td>
                 </tr>

@@ -255,29 +255,20 @@ function AnalyticsPage() {
 				const lead = leadCounts.get(name) || { leads: 0, lastTs: null };
 
 				// Normalize to simple "Active"/"Inactive" status like subscription page
-				// Fix: Prioritize explicit backend status if available
 				const programStatus = getProgramStatus(pg.startDate || '', pg.endDate || '');
 				let status: 'Active' | 'Inactive' = 'Inactive';
 
-				const backendStatus = (pg.status || '').toLowerCase();
-				if (backendStatus === 'active') {
+				if (programStatus.status === 'active') {
 					status = 'Active';
-				} else if (backendStatus === 'inactive') {
+				} else if (programStatus.status === 'upcoming') {
+					// Upcoming programs are treated as Inactive until they start
+					status = 'Inactive';
+				} else if (programStatus.status === 'expired') {
 					status = 'Inactive';
 				} else {
-					// Fallback to date-based logic if backend status is missing or ambiguous
-					if (programStatus.status === 'active') {
+					// Fallback for programs without dates: recent leads -> Active
+					if (lead.leads > 0 && (lead.lastTs || 0) >= (NOW - WINDOW_MS)) {
 						status = 'Active';
-					} else if (programStatus.status === 'upcoming') {
-						// Upcoming programs are treated as Inactive until they start
-						status = 'Inactive';
-					} else if (programStatus.status === 'expired') {
-						status = 'Inactive';
-					} else {
-						// Fallback for programs without dates: recent leads -> Active
-						if (lead.leads > 0 && (lead.lastTs || 0) >= (NOW - WINDOW_MS)) {
-							status = 'Active';
-						}
 					}
 				}
 

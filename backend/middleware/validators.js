@@ -48,8 +48,7 @@ exports.validateRegistration = [
   // Password → required for both student & institution
   body("password")
     .if(
-      (value, { req }) =>
-        req.body.type === "student" || req.body.type === "institution"
+      (value, { req }) =>req.body.type === "institution"
     )
     .isStrongPassword(strongPasswordOptions)
     .withMessage(

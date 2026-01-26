@@ -3,7 +3,7 @@
 import React from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBell } from "@fortawesome/free-regular-svg-icons";
-import { faCheckDouble, faTrash, faInbox, faEnvelopeOpenText, faFilter, faArrowLeft } from "@fortawesome/free-solid-svg-icons";
+import { faInbox, faEnvelopeOpenText, faFilter, faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 import { useRouter } from "next/navigation";
 import { useNotifications, useNotificationActions } from "@/lib/hooks/notifications-hooks";
 
@@ -19,12 +19,12 @@ function timeAgo(ts: number): string {
   const date = new Date(ts);
   return date.toLocaleDateString();
 }
-
+ 
 export default function NotificationsPage() {
   const router = useRouter();
   const [filter, setFilter] = React.useState<"all" | "unread">("all");
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
-  const [query, setQuery] = React.useState("");
+
 
   const { data: items = [], isLoading } = useNotifications();
   const { markRead, remove } = useNotificationActions();
@@ -34,12 +34,8 @@ export default function NotificationsPage() {
   const filtered = React.useMemo(() => {
     let list = items;
     if (filter === "unread") list = list.filter(i => !i.read);
-    if (query.trim()) {
-      const q = query.toLowerCase();
-      list = list.filter(i => i.title.toLowerCase().includes(q) || (i.description || "").toLowerCase().includes(q));
-    }
     return list;
-  }, [items, filter, query]);
+  }, [items, filter]);
 
   const isAllSelected = filtered.length > 0 && filtered.every(i => selectedIds.has(i.id));
   const toggleSelectAll = () => {
@@ -58,10 +54,7 @@ export default function NotificationsPage() {
     setSelectedIds(next);
   };
 
-  const markAllRead = async () => {
-    const ids = items.filter(i => !i.read).map(i => i.id);
-    await markRead.mutateAsync(ids);
-  };
+
 
   const markReadOne = async (id: string) => {
     await markRead.mutateAsync([id]);
@@ -75,9 +68,7 @@ export default function NotificationsPage() {
     setSelectedIds(sel);
   };
 
-  const clearAll = async () => {
-    await removeIds(items.map(i => i.id));
-  };
+
 
   const onItemClick = async (id: string) => {
     await markReadOne(id);
@@ -132,35 +123,7 @@ export default function NotificationsPage() {
           >
             Unread
           </button>
-        </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:flex-initial">
-            <FontAwesomeIcon icon={faFilter} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Search notifications"
-              className="pl-9 pr-3 py-2 w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-sm text-gray-800 dark:text-gray-200"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={markAllRead}
-              className="px-3 py-2 rounded-xl text-sm bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2"
-              title="Mark all as read"
-            >
-              <FontAwesomeIcon icon={faCheckDouble} />
-              <span className="hidden xs:inline">Mark all read</span>
-            </button>
-            <button
-              onClick={clearAll}
-              className="px-3 py-2 rounded-xl text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 flex items-center gap-2"
-              title="Clear all"
-            >
-              <FontAwesomeIcon icon={faTrash} />
-              <span className="hidden xs:inline">Clear all</span>
-            </button>
-          </div>
+
         </div>
       </div>
 

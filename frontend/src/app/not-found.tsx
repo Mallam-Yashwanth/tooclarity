@@ -1,14 +1,5 @@
-import React from 'react';
-import Error404 from '@/components/Error404';
+import Error404 from "@/components/Error404";
 
-
-const not_found = () => {
-  return (
-    <div>
-        <Error404 />
-      
-    </div>
-  )
+export default function NotFound() {
+  return <Error404 />;
 }
-
-export default not_found;

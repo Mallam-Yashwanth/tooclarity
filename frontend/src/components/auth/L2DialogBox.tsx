@@ -1310,20 +1310,30 @@ const typeMapping: Record<string, string> = {
         });
 
         // 5. Send to API
-        if (editMode && firstCourse._id) {
-          await programsAPI.update(firstCourse._id, normalizedPayload);
-        } else {
-          await programsAPI.create(normalizedPayload);
-        }
 
-        await persistAdminProgramsToIndexedDb(uploadedCourses);
-        if (editMode) {
-            onEditSuccess?.();
-        } else {
-            router.push("/dashboard/subscription");
-            onSuccess?.();
-        }
-        return;
+        const res =
+        editMode && firstCourse._id
+          ? await programsAPI.update(firstCourse._id, normalizedPayload)
+          : await programsAPI.create(normalizedPayload);
+
+      if (!res?.success) {
+        throw new Error(res?.message || "Program save failed");
+      }
+
+      toast.success(
+        editMode ? "Program updated successfully" : "Program created successfully"
+      );
+
+      await persistAdminProgramsToIndexedDb(uploadedCourses);
+
+      if (editMode) {
+        onEditSuccess?.();
+      } else {
+        router.push("/dashboard/subscription?tab=details");
+        onSuccess?.();
+      }
+
+      return;
       }
 
       // --- STEP 5: LOCAL DB & REDIRECT (Non-Subscription) ---

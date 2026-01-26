@@ -6,7 +6,7 @@ import { _Card, _CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth-context";
-import { useInstitution, useProgramsList } from "@/lib/hooks/dashboard-hooks";
+import { useInfiniteBranches, useInfinitePrograms, useInstitution, useProgramsList } from "@/lib/hooks/dashboard-hooks";
 import { programsAPI, getMyInstitution, branchAPI } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -14,14 +14,20 @@ import { faPlus, faPhone, faMapMarkerAlt, faLink, faLocationArrow, faTrashAlt, f
 import L2DialogBox from "@/components/auth/L2DialogBox";
 import { toast } from "react-toastify";
 
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-} from "@/components/ui/pagination";
 
-// --- 1. Define specific interfaces for your Blue Box variations ---
+
+interface BranchDetail {
+  _id: string;
+  branchName: string;
+  branchAddress: string;
+  contactInfo: string;
+  locationUrl: string;
+}
+
+interface InfinitePage<T> {
+  data: T[];
+  nextCursor: string | null;
+}
 
 interface KindergartenSubItem {
   courseName?: string;
@@ -57,17 +63,15 @@ interface TuitionSubItem {
   subject: string;
   classSize: string;
   academicDetails: any[];
-  facultyDetails: any[];  
+  facultyDetails: any[];
   priceOfCourse: string | number;
 }
 
-// --- 2. Create the Union and update the Parent Interface ---
-
-type CourseSubItem = 
-  | KindergartenSubItem 
-  | IntermediateSubItem 
-  | SchoolSubItem 
-  | StudyAbroadSubItem 
+type CourseSubItem =
+  | KindergartenSubItem
+  | IntermediateSubItem
+  | SchoolSubItem
+  | StudyAbroadSubItem
   | TuitionSubItem;
 
 interface ExtendedProgram {
@@ -79,23 +83,14 @@ interface ExtendedProgram {
   categoriesType?: string;
   mode?: string;
   courseDuration?: string;
-  courses?: CourseSubItem[]; 
-  // Add these root-level fields found in your UG/PG data
+  courses?: CourseSubItem[];
   selectBranch?: string;
   streamType?: string;
   specialization?: string;
   countriesOffered?: string;
 }
 
-interface BranchDetail {
-  _id: string;
-  branchName: string;
-  branchAddress: string;
-  contactInfo: string;
-  locationUrl: string;
-}
-
-type ViewModalState = 
+type ViewModalState =
   | { type: 'branch'; data: BranchDetail }
   | { type: 'course'; data: ExtendedProgram }
   | null;
@@ -116,77 +111,42 @@ const DetailRow = ({ label, value, isLink }: { label: string; value: string; isL
 export function Listings() {
   const { user, loading } = useAuth();
   const { data: inst } = useInstitution();
-  const { data: programs, isLoading: isProgramsLoading } = useProgramsList();
   const queryClient = useQueryClient();
-  
+
+  const {
+    data: branchPages,
+    fetchNextPage: fetchNextBranches,
+    hasNextPage: hasMoreBranches,
+    isLoading: isBranchesLoading
+  } = useInfiniteBranches(inst?._id);
+
+  const {
+    data: programPages,
+    fetchNextPage: fetchNextPrograms,
+    hasNextPage: hasMorePrograms,
+    isLoading: isProgramsLoading
+  } = useInfinitePrograms(inst?._id);
+
+  console.log("Branch Pages Raw:", branchPages);
+  console.log("Program Pages Raw:", programPages);
+
+  const allBranches = branchPages?.pages.flatMap((page: any) =>
+    Array.isArray(page?.data) ? page.data : []
+  ) || [];
+
+  const allProgramsRaw = programPages?.pages.flatMap((page: any) => {
+    return Array.isArray(page?.data) ? page.data : [];
+  }) || [];
+
   const [addInlineMode, setAddInlineMode] = useState<'none' | 'course' | 'branch'>('none');
   const [viewToggle, setViewToggle] = useState<'branch' | 'course'>('branch');
   const [viewModal, setViewModal] = useState<ViewModalState>(null);
-
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<BranchDetail | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Pagination
-  const [branchPage, setBranchPage] = useState(1);
-  const [coursePage, setCoursePage] = useState(1);
-  const itemsPerPage = 10;
- const normalizedPrograms: ExtendedProgram[] = (programs as ExtendedProgram[] || []).map((p: ExtendedProgram) => {
-  const normalized: ExtendedProgram = { ...p };
-
-  // Safety check for sub-items
-  const hasSubItems = p.courses && p.courses.length > 0;
-  const firstSub = hasSubItems ? p.courses![0] : null;
-
-  /**
-   * 1. RESOLVE TITLE (Course Name)
-   * Priority: Root selectBranch (UGPG) -> Root courseName -> Nested courseName (Kindergarten)
-   */
-  let resolvedTitle: string = "";
-
-  if (p.selectBranch) {
-    resolvedTitle = String(p.selectBranch);
-  } else if (p.courseName) {
-    resolvedTitle = String(p.courseName);
-  } else if (firstSub && "courseName" in firstSub && firstSub.courseName) {
-    resolvedTitle = String(firstSub.courseName);
-  } else {
-    resolvedTitle = String(p.programName || "Unnamed Listing");
-  }
-
-  /**
-   * 2. RESOLVE CATEGORY TYPE (The Badge)
-   * Priority: Root streamType (UGPG) -> Root categoriesType -> Nested categoriesType (Kindergarten)
-   */
-  let resolvedCategory: string = "Standard";
-
-  if (p.streamType) {
-    resolvedCategory = String(p.streamType);
-  } else if (p.categoriesType) {
-    resolvedCategory = String(p.categoriesType);
-  } else if (firstSub && "categoriesType" in firstSub && firstSub.categoriesType) {
-    resolvedCategory = String(firstSub.categoriesType);
-  }
-
-  // Update properties for the Card UI
-  normalized.courseName = resolvedTitle;
-  normalized.categoriesType = resolvedCategory;
-  normalized.programName = resolvedTitle;
-
-  return normalized;
-});
-
-  const { data: branchList, isLoading: isBranchesLoading } = useQuery({
-    queryKey: ['programs-page-branches', inst?._id],
-    enabled: !!inst?._id,
-    queryFn: async () => {
-      const res = await programsAPI.listBranchesForInstitutionAdmin(String(inst?._id));
-      const payload = res as any;
-      return payload?.data?.branches || [];
-    },
-  });
-
+  // 3. Header Query
   const { data: rawInst, isLoading: isInstLoading } = useQuery({
     queryKey: ['raw-institution-header'],
     queryFn: async () => {
@@ -195,25 +155,55 @@ export function Listings() {
     },
   });
 
+  const normalizedPrograms = allProgramsRaw.map(p => {
+    if (!p || (!p._id && !p.id)) return null;
+
+    const normalized: ExtendedProgram = { ...p };
+
+    // Safety check for the 'courses' array in your JSON
+    const hasSubItems = Array.isArray(p.courses) && p.courses.length > 0;
+    const firstSub = hasSubItems ? p.courses[0] : null;
+
+    let resolvedTitle: string = "";
+    if (p.selectBranch) {
+      resolvedTitle = String(p.selectBranch);
+    } else if (p.courseName) {
+      resolvedTitle = String(p.courseName);
+    } else if (firstSub && "courseName" in firstSub && firstSub.courseName) {
+      resolvedTitle = String(firstSub.courseName);
+    } else {
+      resolvedTitle = String(p.programName || "Unnamed Listing");
+    }
+
+    let resolvedCategory: string = "Standard";
+    if (p.streamType) {
+      resolvedCategory = String(p.streamType);
+    } else if (p.categoriesType) {
+      resolvedCategory = String(p.categoriesType);
+    } else if (firstSub && "categoriesType" in firstSub && firstSub.categoriesType) {
+      resolvedCategory = String(firstSub.categoriesType);
+    }
+
+    normalized.courseName = resolvedTitle;
+    normalized.categoriesType = resolvedCategory;
+    normalized.programName = resolvedTitle;
+
+    return normalized;
+  }).filter((p): p is ExtendedProgram => p !== null);
+
+  console.log("Final Branch Count:", allBranches.length);
+  console.log("Final Course Count:", normalizedPrograms.length);
+
   if (loading || !user) return null;
 
-  const currentBranches = (branchList || []).slice((branchPage - 1) * itemsPerPage, branchPage * itemsPerPage);
- const currentCourses = normalizedPrograms.slice(
-  (coursePage - 1) * itemsPerPage, 
-  coursePage * itemsPerPage
-);
-
-  const totalBranchPages = Math.ceil((branchList?.length || 0) / itemsPerPage);
- const totalCoursePages = Math.ceil((normalizedPrograms.length || 0) / itemsPerPage);
-
-  // --- Handlers ---
+  // --- Handlers (Updated to invalidate the correct infinite keys) ---
   const handleDeleteBranch = async (id: string) => {
     if (!inst?._id || !window.confirm("Delete this branch?")) return;
     setIsDeleting(true);
     try {
       const res = await branchAPI.deleteBranch(id as any, inst._id);
       if (res.success) {
-        queryClient.invalidateQueries({ queryKey: ['programs-page-branches'] });
+        queryClient.invalidateQueries({ queryKey: ['branches-infinite'] });
         setViewModal(null);
         toast.success("Branch removed");
       }
@@ -223,22 +213,19 @@ export function Listings() {
   };
 
   const handleDeleteCourse = async (id: string) => {
-  // Ensure we are passing the root level _id, which normalizedPrograms preserves
-  if (!inst?._id || !window.confirm("Delete this listing and all associated programs?")) return;
-  
-  setIsDeleting(true);
-  try {
-    const res = await programsAPI.remove(id, inst._id);
-    if (res.success) {
-      // Invalidate both lists to ensure the UI stays in sync
-      queryClient.invalidateQueries({ queryKey: ['programs-list'] });
-      setViewModal(null);
-      toast.success("Listing removed");
+    if (!inst?._id || !window.confirm("Delete this listing?")) return;
+    setIsDeleting(true);
+    try {
+      const res = await programsAPI.remove(id, inst._id);
+      if (res.success) {
+        queryClient.invalidateQueries({ queryKey: ['programs-infinite'] });
+        setViewModal(null);
+        toast.success("Listing removed");
+      }
+    } finally {
+      setIsDeleting(false);
     }
-  } finally {
-    setIsDeleting(false);
-  }
-};
+  };
 
   const handleUpdateBranch = async () => {
     if (!editData || !inst?._id) return;
@@ -246,7 +233,7 @@ export function Listings() {
     try {
       const res = await branchAPI.updateBranch(editData._id as any, editData, inst._id);
       if (res.success) {
-        queryClient.invalidateQueries({ queryKey: ['programs-page-branches'] });
+        queryClient.invalidateQueries({ queryKey: ['branches-infinite'] });
         setIsEditing(false);
         setViewModal(null);
         toast.success("Branch updated");
@@ -258,20 +245,20 @@ export function Listings() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="w-full space-y-6 p-4 sm:p-6 bg-background">
-      
+
       {/* 1. Header */}
-     <_Card className="border-none shadow-sm rounded-3xl bg-gray-50 dark:bg-gray-900/50 min-h-[140px] flex items-center justify-center">
-  <_CardContent className="w-full px-4 sm:px-10">
-    <div className="relative flex items-center justify-center">
-      <h1 className="text-xl sm:text-3xl font-bold text-gray-800 dark:text-gray-100 text-center">
-        {isInstLoading ? "..." : (rawInst?.instituteName || "Institution")}
-      </h1>
-      <div className="absolute right-0 bg-[#0222D7] text-white rounded-xl px-4 py-2 text-xs font-medium whitespace-nowrap">
-        {rawInst?.instituteType || "Education"}
-      </div>
-    </div>
-  </_CardContent>
-</_Card>
+      <_Card className="border-none shadow-sm rounded-3xl bg-gray-50 dark:bg-gray-900/50 min-h-[140px] flex items-center justify-center">
+        <_CardContent className="w-full px-4 sm:px-10">
+          <div className="relative flex items-center justify-center">
+            <h1 className="text-xl sm:text-3xl font-bold text-gray-800 dark:text-gray-100 text-center">
+              {isInstLoading ? "..." : (rawInst?.instituteName || "Institution")}
+            </h1>
+            <div className="absolute right-0 bg-[#0222D7] text-white rounded-xl px-4 py-2 text-xs font-medium whitespace-nowrap">
+              {rawInst?.instituteType || "Education"}
+            </div>
+          </div>
+        </_CardContent>
+      </_Card>
 
       {/* 2. Listing Buttons */}
       <_Card className="border-none shadow-sm rounded-3xl bg-gray-50 dark:bg-gray-900/50 p-8">
@@ -316,40 +303,56 @@ export function Listings() {
       {/* 4. Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {viewToggle === 'branch' ? (
-          currentBranches.map((branch: BranchDetail, idx: number) => (
-            <_Card key={branch._id} className="border-none shadow-sm rounded-[32px] bg-white dark:bg-gray-900 p-8">
-               <div className="flex justify-between items-start mb-6">
+          allBranches.map((branch) => {
+            // 🛡️ Guard Clause: Skip if branch data is missing
+            if (!branch || !branch._id) return null;
+
+            return (
+              <_Card key={branch._id} className="border-none shadow-sm rounded-[32px] bg-white dark:bg-gray-900 p-8">
+                <div className="flex justify-between items-start mb-6">
                   <div>
-                    <h3 className="font-bold text-lg">{branch.branchName}</h3>
-                    <p className="text-xs text-gray-400">Branch ID: {branch._id.slice(-6)}</p>
+                    {/* 🛡️ Optional Chaining (?.) for extra safety */}
+                    <h3 className="font-bold text-lg">{branch?.branchName || "Unnamed Branch"}</h3>
+                    <p className="text-xs text-gray-400">Branch ID: {branch?._id?.slice(-6)}</p>
                   </div>
-                  <Button variant="link" onClick={() => { setViewModal({ type: 'branch', data: branch }); setIsEditing(false); }} className="text-blue-600 font-bold p-0">View Details</Button>
-               </div>
-               <div className="space-y-3">
-                 <div className="flex items-center gap-3 text-sm text-gray-600"><FontAwesomeIcon icon={faPhone} className="w-3" /> {branch.contactInfo}</div>
-                 <div className="flex items-center gap-3 text-sm text-gray-600"><FontAwesomeIcon icon={faMapMarkerAlt} className="w-3" /> {branch.branchAddress}</div>
-               </div>
-            </_Card>
-          ))
+                  <Button
+                    variant="link"
+                    onClick={() => { setViewModal({ type: 'branch', data: branch }); setIsEditing(false); }}
+                    className="text-blue-600 font-bold p-0"
+                  >
+                    View Details
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 text-sm text-gray-600">
+                    <FontAwesomeIcon icon={faPhone} className="w-3" /> {branch?.contactInfo || "N/A"}
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-gray-600">
+                    <FontAwesomeIcon icon={faMapMarkerAlt} className="w-3" /> {branch?.branchAddress || "N/A"}
+                  </div>
+                </div>
+              </_Card>
+            );
+          })
         ) : (
-          currentCourses.map((p, idx) => (
+          normalizedPrograms.map((p) => (
             <_Card key={p._id} className="border-none shadow-sm rounded-[32px] bg-white dark:bg-gray-900 p-8">
-               <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <h3 className="font-bold text-lg">{ p.programName ||p.courseName}</h3>
-                    <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded font-bold uppercase">{p.categoriesType || "Standard"}</span>
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h3 className="font-bold text-lg">{p.programName || p.courseName}</h3>
+                  <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded font-bold uppercase">{p.categoriesType || "Standard"}</span>
                   {p.courses && p.courses.length > 1 && (
                     <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded font-bold uppercase">
                       + {p.courses.length - 1} More
                     </span>
                   )}
-                  </div>
-                  <Button variant="link" onClick={() => {setViewModal({ type: 'course', data: p }); setIsEditing(true); }} className="text-blue-600 font-bold p-0">Edit Listing</Button>
-               </div>
-               <div className="grid grid-cols-2 gap-4 text-sm pt-4 border-t border-gray-50">
-                  <div><p className="text-[10px] text-gray-400 font-bold uppercase">Mode</p><p>{p.mode || "Offline"}</p></div>
-                  <div><p className="text-[10px] text-gray-400 font-bold uppercase">Duration</p><p>{p.courseDuration || "N/A"}</p></div>
-               </div>
+                </div>
+                <Button variant="link" onClick={() => { setViewModal({ type: 'course', data: p }); setIsEditing(true); }} className="text-blue-600 font-bold p-0">Edit Listing</Button>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm pt-4 border-t border-gray-50">
+                <div><p className="text-[10px] text-gray-400 font-bold uppercase">Mode</p><p>{p.mode || "Offline"}</p></div>
+                <div><p className="text-[10px] text-gray-400 font-bold uppercase">Duration</p><p>{p.courseDuration || "N/A"}</p></div>
+              </div>
             </_Card>
           ))
         )}
@@ -371,44 +374,44 @@ export function Listings() {
               <div className="max-h-[60vh] overflow-y-auto pr-4 custom-scrollbar">
                 {viewModal.type === 'branch' ? (
                   isEditing ? (
-                                      <div className="grid md:grid-cols-2 gap-6">
-                                          <div className="space-y-2">
-                                              <label className="text-xs font-bold uppercase text-gray-400">Branch Name</label>
-                                              <Input
-                                                  value={editData?.branchName || ""}
-                                                  onChange={e => setEditData({ ...editData!, branchName: e.target.value })}
-                                                  className="rounded-xl h-12 border-gray-200"
-                                              />
-                                          </div>
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase text-gray-400">Branch Name</label>
+                        <Input
+                          value={editData?.branchName || ""}
+                          onChange={e => setEditData({ ...editData!, branchName: e.target.value })}
+                          className="rounded-xl h-12 border-gray-200"
+                        />
+                      </div>
 
-                                          <div className="space-y-2">
-                                              <label className="text-xs font-bold uppercase text-gray-400">Contact Number</label>
-                                              <Input
-                                                  value={editData?.contactInfo || ""}
-                                                  onChange={e => setEditData({ ...editData!, contactInfo: e.target.value })}
-                                                  className="rounded-xl h-12 border-gray-200"
-                                              />
-                                          </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase text-gray-400">Contact Number</label>
+                        <Input
+                          value={editData?.contactInfo || ""}
+                          onChange={e => setEditData({ ...editData!, contactInfo: e.target.value })}
+                          className="rounded-xl h-12 border-gray-200"
+                        />
+                      </div>
 
-                                          <div className="space-y-2">
-                                              <label className="text-xs font-bold uppercase text-gray-400">Branch Address</label>
-                                              <Input
-                                                  value={editData?.branchAddress || ""}
-                                                  onChange={e => setEditData({ ...editData!, branchAddress: e.target.value })}
-                                                  className="rounded-xl h-12 border-gray-200"
-                                              />
-                                          </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase text-gray-400">Branch Address</label>
+                        <Input
+                          value={editData?.branchAddress || ""}
+                          onChange={e => setEditData({ ...editData!, branchAddress: e.target.value })}
+                          className="rounded-xl h-12 border-gray-200"
+                        />
+                      </div>
 
-                                          <div className="space-y-2">
-                                              <label className="text-xs font-bold uppercase text-gray-400">Google Maps URL</label>
-                                              <Input
-                                                  value={editData?.locationUrl || ""}
-                                                  onChange={e => setEditData({ ...editData!, locationUrl: e.target.value })}
-                                                  className="rounded-xl h-12 border-gray-200"
-                                                  placeholder="https://goo.gl/maps/..."
-                                              />
-                                          </div>
-                                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase text-gray-400">Google Maps URL</label>
+                        <Input
+                          value={editData?.locationUrl || ""}
+                          onChange={e => setEditData({ ...editData!, locationUrl: e.target.value })}
+                          className="rounded-xl h-12 border-gray-200"
+                          placeholder="https://goo.gl/maps/..."
+                        />
+                      </div>
+                    </div>
                   ) : (
                     <div className="grid md:grid-cols-2 gap-x-10">
                       <DetailRow label="Branch Name" value={viewModal.data.branchName} />
@@ -443,7 +446,7 @@ export function Listings() {
                 {viewModal.type === 'branch' && !isEditing && (
                   <Button onClick={() => { setEditData({ ...viewModal.data }); setIsEditing(true); }} className="w-full sm:w-[200px] h-[48px] bg-blue-600 rounded-xl">Edit Branch</Button>
                 )}
-                
+
                 {isEditing && viewModal.type === 'branch' && (
                   <Button onClick={handleUpdateBranch} disabled={isUpdating} className="w-full sm:w-[200px] h-[48px] bg-green-600 rounded-xl">Save Changes</Button>
                 )}
@@ -456,22 +459,25 @@ export function Listings() {
       )}
 
       {/* 6. Pagination UI (Optional but recommended) */}
-      <div className="pt-8">
-        <Pagination>
-          <PaginationContent>
-            {Array.from({ length: viewToggle === 'branch' ? totalBranchPages : totalCoursePages }).map((_, i) => (
-              <PaginationItem key={i}>
-                <PaginationLink 
-                  isActive={(viewToggle === 'branch' ? branchPage : coursePage) === i + 1}
-                  onClick={() => viewToggle === 'branch' ? setBranchPage(i + 1) : setCoursePage(i + 1)}
-                  className="cursor-pointer"
-                >
-                  {i + 1}
-                </PaginationLink>
-              </PaginationItem>
-            ))}
-          </PaginationContent>
-        </Pagination>
+      <div className="flex justify-center pt-8">
+        {viewToggle === 'branch' && hasMoreBranches && (
+          <Button
+            onClick={() => fetchNextBranches()}
+            variant="outline"
+            className="rounded-xl px-10"
+          >
+            Load More Branches
+          </Button>
+        )}
+        {viewToggle === 'course' && hasMorePrograms && (
+          <Button
+            onClick={() => fetchNextPrograms()}
+            variant="outline"
+            className="rounded-xl px-10"
+          >
+            Load More Courses
+          </Button>
+        )}
       </div>
     </motion.div>
   );

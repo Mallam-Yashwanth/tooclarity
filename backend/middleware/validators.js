@@ -86,9 +86,9 @@ exports.validateRegistration = [
 ];
 
 const passwordRule = body("password")
-  .if((value, { req }) => req.body.type === "institution")
+  .if(body("type").equals("institution"))
   .notEmpty()
-  .withMessage("Password is required");
+  .withMessage("Password is required for institutions.");
 
 exports.validateLogin = [
   // ✅ Email → required only for institutions

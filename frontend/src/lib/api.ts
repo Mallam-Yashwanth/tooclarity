@@ -797,6 +797,16 @@ export const branchAPI = {
     });
   },
 
+  getBranchesWithCursor: async (institutionId: string, cursor?: string | null, limit: number = 10) => {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      ...(cursor && { cursor }),
+    });
+    return apiRequest(`/v1/institutions/${institutionId}/branches?${params.toString()}`, {
+      method: "GET",
+    });
+  },
+
   // Delete branch
   deleteBranch: async (
     branchId: number,
@@ -1109,19 +1119,15 @@ export const programsAPI = {
     const wrapper = { totalCourses: 1, courses: [normalized] };
     return apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses`, { method: 'POST', body: JSON.stringify(wrapper) });
   },
-  list: async (institutionId: string): Promise<ApiResponse> => {
-    const cacheKey = `programs_${institutionId}`;
-    const cached = programsCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < PROGRAMS_CACHE_DURATION) return cached.data as ApiResponse<unknown>;
-    const res = await apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses?limit=1000`, { method: 'GET' });
-    const payload = res as { data?: unknown; courses?: unknown };
-    const raw = payload?.data || payload?.courses || [];
-    const arr = Array.isArray(raw) ? raw : Array.isArray((raw as { data?: unknown })?.data) ? (raw as { data: unknown[] }).data : [];
-    const programs = arr.map((c: Record<string, unknown>) => ({ ...c, programName: c.programName || c.courseName }));
-    const shaped = { success: true, data: { programs } } as ApiResponse;
-    programsCache.set(cacheKey, { data: shaped, timestamp: Date.now() });
-    return shaped;
-  },
+ list: async (institutionId: string, cursor?: string | null, limit: number = 10): Promise<ApiResponse> => {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      ...(cursor && { cursor }),
+    });
+    return apiRequest(`/v1/institutions/${institutionId}/courses?${params.toString()}`, { 
+      method: 'GET' 
+    });
+},
   listForInstitutionAdmin: async (institutionId: string): Promise<ApiResponse> => {
     return programsAPI.list(institutionId);
   },

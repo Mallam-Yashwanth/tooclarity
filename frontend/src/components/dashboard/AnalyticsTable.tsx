@@ -11,7 +11,7 @@ export interface CoursePerformanceRow {
   status: "Active" | "Inactive";
   views: number;
   leads: number;
-  engagementRate: string; // e.g., '3.6%'
+
 }
 
 interface AnalyticsTableProps<T = CoursePerformanceRow> {
@@ -35,7 +35,7 @@ const StatusPill: React.FC<{ status: CoursePerformanceRow["status"] }> = ({ stat
   const color = colorMap[status] || colorMap.Inactive;
   return (
     <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm ${color}`}>
-      <span className={`h-2 w-2 rounded-full ${status==='Active' ? 'bg-emerald-500 animate-pulse' : 'bg-current'}`}></span>
+      <span className={`h-2 w-2 rounded-full ${status === 'Active' ? 'bg-emerald-500 animate-pulse' : 'bg-current'}`}></span>
       {status}
     </span>
   );
@@ -65,29 +65,27 @@ const AnalyticsTable = <T,>({
           <table className="min-w-[650px] w-full">
             <thead>
               <tr className="text-gray-500 dark:text-gray-400 text-sm">
-                <th className="text-left font-medium py-3">S.No</th>
-                <th className="text-left font-medium py-3">{nameHeaderOverride || "Course Name"}</th>
-                <th className="text-left font-medium py-3">Status</th>
-                <th className="text-left font-medium py-3">Views</th>
-                <th className="text-left font-medium py-3">Leads</th>
-                <th className="text-left font-medium py-3">Engagement rate</th>
-                <th className="text-left font-medium py-3">Action</th>
+                <th className="text-left font-medium py-3 px-4">S.No</th>
+                <th className="text-left font-medium py-3 px-4">{nameHeaderOverride || "Course Name"}</th>
+                <th className="text-left font-medium py-3 px-4">Status</th>
+                <th className="text-left font-medium py-3 px-4">Views</th>
+                <th className="text-left font-medium py-3 px-4">Leads</th>
+                <th className="text-left font-medium py-3 px-4">Action</th>
               </tr>
             </thead>
             <tbody >
               {defaultRows.map((r, idx) => (
-                <tr key={idx} className="bg-white dark:bg-gray-800 rounded-2xl shadow-[0_1px_0_0_#F0F0F0]/50 dark:shadow-none">
-                  <td className="p-4 text-gray-900 dark:text-gray-100">{r.sno}</td>
-                  <td className="p-4">
+                <tr key={idx} className="bg-white dark:bg-gray-800 rounded-2xl shadow-[0_1px_0_0_#F0F0F0]/50 dark:shadow-none border-b border-transparent last:border-0 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
+                  <td className="p-4 text-gray-900 dark:text-gray-100 align-middle">{r.sno}</td>
+                  <td className="p-4 align-middle">
                     <div className="text-gray-900 dark:text-gray-100 font-medium">{r.name}</div>
                   </td>
-                  <td className="p-4"><StatusPill status={r.status} /></td>
-                  <td className="p-4 text-gray-900 dark:text-gray-100">{r.views.toLocaleString()}</td>
-                  <td className="p-4 text-gray-900 dark:text-gray-100">{r.leads}</td>
-                  <td className="p-4 text-gray-900 dark:text-gray-100">{r.engagementRate}</td>
-                  <td className="p-4">
-                    <Button onClick={onAddCourse} variant="ghost" size="sm" className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
-                      <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="mr-0"/>
+                  <td className="p-4 align-middle"><StatusPill status={r.status} /></td>
+                  <td className="p-4 text-gray-900 dark:text-gray-100 align-middle">{r.views.toLocaleString()}</td>
+                  <td className="p-4 text-gray-900 dark:text-gray-100 align-middle">{r.leads}</td>
+                  <td className="p-4 align-middle">
+                    <Button onClick={onAddCourse} variant="ghost" size="sm" className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 h-8 w-8 p-0 flex items-center justify-center">
+                      <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="mr-0 h-3.5 w-3.5" />
                     </Button>
                   </td>
                 </tr>

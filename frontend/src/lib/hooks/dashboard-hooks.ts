@@ -168,6 +168,8 @@ export function useProgramsList() {
         courseName?: string;
         branch?: Record<string, unknown>;
         branchName?: string;
+        selectBranch?: string;
+        status?: string;
       }>;
     },
     staleTime: 60 * 1000,

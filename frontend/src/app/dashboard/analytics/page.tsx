@@ -232,6 +232,7 @@ function AnalyticsPage() {
 		try {
 			setIsPerfLoading(true);
 			const programs = Array.isArray(programsList) ? programsList : [];
+			console.log('DEBUG: Programs List for Analytics:', programs);
 			const viewsMap = new Map<string, number>();
 			// Use unified yearly views context as aggregate only; no extra range-based API calls
 			const leadCounts = new Map<string, { leads: number; lastTs: number | null }>();
@@ -246,25 +247,37 @@ function AnalyticsPage() {
 			const NOW = Date.now();
 			const WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 			const rows: CoursePerformanceRow[] = programs.map((pg, idx) => {
-				const name = pg.programName;
+				// Fix: Ensure program name is never empty
+				// The programsList hook maps api response to { programName, courseName, ... }
+				// If programName is missing, try courseName, then selectBranch, then fallback.
+				const name = pg.programName || pg.courseName || pg.selectBranch || `Program ${idx + 1}`;
 				const views = viewsMap.get(name) || 0;
 				const lead = leadCounts.get(name) || { leads: 0, lastTs: null };
 
 				// Normalize to simple "Active"/"Inactive" status like subscription page
+				// Fix: Prioritize explicit backend status if available
 				const programStatus = getProgramStatus(pg.startDate || '', pg.endDate || '');
 				let status: 'Active' | 'Inactive' = 'Inactive';
 
-				if (programStatus.status === 'active') {
+				const backendStatus = (pg.status || '').toLowerCase();
+				if (backendStatus === 'active') {
 					status = 'Active';
-				} else if (programStatus.status === 'upcoming') {
-					// Upcoming programs are treated as Inactive until they start
-					status = 'Inactive';
-				} else if (programStatus.status === 'expired') {
+				} else if (backendStatus === 'inactive') {
 					status = 'Inactive';
 				} else {
-					// Fallback for programs without dates: recent leads -> Active
-					if (lead.leads > 0 && (lead.lastTs || 0) >= (NOW - WINDOW_MS)) {
+					// Fallback to date-based logic if backend status is missing or ambiguous
+					if (programStatus.status === 'active') {
 						status = 'Active';
+					} else if (programStatus.status === 'upcoming') {
+						// Upcoming programs are treated as Inactive until they start
+						status = 'Inactive';
+					} else if (programStatus.status === 'expired') {
+						status = 'Inactive';
+					} else {
+						// Fallback for programs without dates: recent leads -> Active
+						if (lead.leads > 0 && (lead.lastTs || 0) >= (NOW - WINDOW_MS)) {
+							status = 'Active';
+						}
 					}
 				}
 
@@ -273,12 +286,9 @@ function AnalyticsPage() {
 					name,
 					status,
 					views,
-					leads: lead.leads,
-					engagementRate: '0%'
+					leads: lead.leads
 				};
 			});
-			const totalLeads = rows.reduce((sum, r) => sum + r.leads, 0) || 1;
-			rows.forEach(r => { r.engagementRate = `${((r.leads / totalLeads) * 100).toFixed(1)}%`; });
 			rows.sort((a, b) => (b.leads - a.leads) || b.views - a.views || a.name.localeCompare(b.name));
 			const resequenced = rows.map((r, i) => ({ ...r, sno: (i + 1).toString().padStart(2, '0') }));
 			setCoursePerformance(resequenced);

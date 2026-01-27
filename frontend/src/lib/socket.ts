@@ -9,54 +9,88 @@ type IOSocket = {
 };
 
 let socketInstance: IOSocket | null = null;
+let socketPromise: Promise<IOSocket | null> | null = null;
+let healthChecked = false;
 
 export async function getSocket(origin?: string) {
-  // Disable Socket.IO in development if backend is not available
-  if (process.env.NODE_ENV === 'development') {
+  // Disable Socket.IO in development if backend is not available.
+  // Run /health check at most once per tab to avoid spamming the server.
+  if (process.env.NODE_ENV === 'development' && !healthChecked) {
+    healthChecked = true;
     try {
       const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
       const response = await fetch(`${backendUrl}/health`, {
         method: 'GET',
-        signal: AbortSignal.timeout(2000)
+        signal: AbortSignal.timeout(2000),
       });
       if (!response.ok) {
-        if (process.env.NODE_ENV === 'development') console.error('Backend not available, skipping Socket.IO connection');
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Backend not available, skipping Socket.IO connection');
+        }
         return null;
       }
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') console.error('Backend not available, skipping Socket.IO connection');
-      if (process.env.NODE_ENV === 'development') console.error('Error: ', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Backend not available, skipping Socket.IO connection');
+        console.error('Error: ', error);
+      }
       return null;
     }
   }
 
-  // Check if instance exists (connected or connecting)
-  if (socketInstance) return socketInstance;
-
-  const { io } = await import('socket.io-client');
-
-  // Double-check after await to handle concurrent calls
-  if (socketInstance) return socketInstance;
-  // Robustly determine the socket URL (Origin only)
-  let url = origin || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-  try {
-    // If it URL contains a path (like /api), strip it to ensure we connect to the root namespace
-    if (!url.startsWith('http')) url = `http://${url}`; // safety for partial URLs
-    const u = new URL(url);
-    url = u.origin; // e.g., "http://localhost:3001"
-  } catch (e) {
-    console.warn('[Socket] Failed to parse API URL, falling back to default', e);
-    url = 'http://localhost:3001';
+  // Reuse existing live socket if available
+  if (socketInstance && socketInstance.connected) {
+    return socketInstance;
   }
 
-  console.log('[SocketManager] Connecting to:', url); // clean log
-  socketInstance = io(url, {
-    withCredentials: true,
-    transports: ['websocket'],
-    timeout: 5000,
-    forceNew: true
-  });
-  return socketInstance;
+  // If a socket is currently being created, await the same promise
+  if (socketPromise) {
+    return socketPromise;
+  }
+
+  socketPromise = (async () => {
+    const { io } = await import('socket.io-client');
+    let url = origin;
+    if (!url) {
+      const envUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (envUrl) {
+        try {
+          url = new URL(envUrl).origin;
+        } catch {
+          url = envUrl.replace(/\/api\/?$/, '');
+        }
+      } else {
+        url = 'http://localhost:3001';
+      }
+    }
+
+    const s = io(url, {
+      withCredentials: true,
+      transports: ['websocket'],
+      timeout: 5000,
+      // allow reuse of a single connection across callers
+      forceNew: false,
+    });
+
+    socketInstance = s;
+
+    // Once connected or errored, clear the construction promise so future
+    // calls can re-attempt if needed.
+    s.on('connect', () => {
+      socketPromise = null;
+    });
+    s.on('connect_error', () => {
+      socketPromise = null;
+    });
+    s.on('disconnect', () => {
+      // keep socketInstance for possible reconnection logic in socketManager;
+      // creation promise is already cleared above.
+    });
+
+    return s;
+  })();
+
+  return socketPromise;
 }
 
 // ------- Production-grade Socket Manager -------

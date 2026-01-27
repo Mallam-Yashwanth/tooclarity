@@ -212,6 +212,37 @@ export interface DashboardChartCache {
   lastUpdated: number;
 }
 
+export interface UnifiedAnalyticsCache {
+  id?: number;
+  metric: 'views' | 'comparisons' | 'leads' | 'callbackRequest' | 'bookDemoRequest';
+  type: 'weekly' | 'monthly' | 'yearly';
+  institutionId?: string;
+  totalCount: number;
+  analytics: Array<{ label: string; count: number }>;
+  dateRange: { from: string; to: string };
+  lastUpdated: number;
+}
+
+export interface AllUnifiedAnalyticsCache {
+  id?: number;
+  type: 'weekly' | 'monthly' | 'yearly';
+  institutionId?: string;
+  views: UnifiedAnalyticsCache;
+  leads: UnifiedAnalyticsCache;
+  callbackRequest: UnifiedAnalyticsCache;
+  bookDemoRequest: UnifiedAnalyticsCache;
+  lastUpdated: number;
+}
+
+export interface DashboardHealthCache {
+  id?: number;
+  institutionId?: string;
+  institution: Record<string, unknown>;
+  branchesWithCourses: Array<Record<string, unknown>>;
+  exportedAt: string;
+  lastUpdated: number;
+}
+
 export interface CachedApiResponseRecord {
   id?: number;
   key: string;
@@ -238,6 +269,8 @@ const DASHBOARD_STUDENTS_STORE = "dashboard_students";
 const DASHBOARD_CHART_STORE = "dashboard_chart";
 const DASHBOARD_CACHED_STORE = "dashboard_cached";
 const DASHBOARD_INSTITUTIONS_STORE = "dashboard_institutions";
+const UNIFIED_ANALYTICS_STORE = "unified_analytics";
+const DASHBOARD_HEALTH_STORE = "dashboard_health";
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -323,6 +356,28 @@ function openDB(): Promise<IDBDatabase> {
           autoIncrement: true,
         });
         store.createIndex("_id", "_id", { unique: true });
+        store.createIndex("lastUpdated", "lastUpdated", { unique: false });
+      }
+
+      if (!db.objectStoreNames.contains(UNIFIED_ANALYTICS_STORE)) {
+        const store = db.createObjectStore(UNIFIED_ANALYTICS_STORE, {
+          keyPath: "id",
+          autoIncrement: true,
+        });
+        store.createIndex("metric", "metric", { unique: false });
+        store.createIndex("type", "type", { unique: false });
+        store.createIndex("institutionId", "institutionId", { unique: false });
+        store.createIndex("lastUpdated", "lastUpdated", { unique: false });
+        // Composite index for quick lookups
+        store.createIndex("metric_type_inst", ["metric", "type", "institutionId"], { unique: false });
+      }
+
+      if (!db.objectStoreNames.contains(DASHBOARD_HEALTH_STORE)) {
+        const store = db.createObjectStore(DASHBOARD_HEALTH_STORE, {
+          keyPath: "id",
+          autoIncrement: true,
+        });
+        store.createIndex("institutionId", "institutionId", { unique: true });
         store.createIndex("lastUpdated", "lastUpdated", { unique: false });
       }
     };
@@ -956,5 +1011,191 @@ export async function getDashboardInstitutionCache(backendId: string): Promise<D
     const req = idx.get(backendId);
     req.onsuccess = () => resolve((req.result as DashboardInstitutionCache) || null);
     req.onerror = () => reject(req.error || new Error("Failed to read dashboard institution"));
+  });
+}
+
+/* ---------------- Unified Analytics caching helpers ---------------- */
+
+export async function saveUnifiedAnalyticsCache(analytics: Omit<UnifiedAnalyticsCache, 'id'>): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(UNIFIED_ANALYTICS_STORE, "readwrite");
+    const store = tx.objectStore(UNIFIED_ANALYTICS_STORE);
+    const idx = store.index("metric_type_inst");
+    const key = [analytics.metric, analytics.type, analytics.institutionId || ''];
+    const getReq = idx.get(key);
+    getReq.onsuccess = () => {
+      const existing = getReq.result as UnifiedAnalyticsCache | undefined;
+      const record: UnifiedAnalyticsCache = {
+        ...(existing?.id ? { id: existing.id } : {}),
+        ...analytics,
+        lastUpdated: Date.now()
+      };
+      const putReq = store.put(record);
+      putReq.onsuccess = () => resolve();
+      putReq.onerror = () => reject(putReq.error || new Error("Failed to save unified analytics"));
+    };
+    getReq.onerror = () => reject(getReq.error || new Error("Failed to lookup unified analytics"));
+  });
+}
+
+export async function getUnifiedAnalyticsCache(
+  metric: 'views' | 'comparisons' | 'leads' | 'callbackRequest' | 'bookDemoRequest',
+  type: 'weekly' | 'monthly' | 'yearly',
+  institutionId?: string
+): Promise<UnifiedAnalyticsCache | null> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(UNIFIED_ANALYTICS_STORE, "readonly");
+    const store = tx.objectStore(UNIFIED_ANALYTICS_STORE);
+    const idx = store.index("metric_type_inst");
+    const key = [metric, type, institutionId || ''];
+    const req = idx.get(key);
+    req.onsuccess = () => {
+      const row = req.result as UnifiedAnalyticsCache | undefined;
+      if (!row) return resolve(null);
+      // Check if cache is still valid (within 30 seconds for real-time updates)
+      if (Date.now() - row.lastUpdated > 30 * 1000) {
+        return resolve(null); // Cache expired, need fresh data
+      }
+      resolve(row);
+    };
+    req.onerror = () => reject(req.error || new Error("Failed to read unified analytics"));
+  });
+}
+
+export async function saveAllUnifiedAnalyticsCache(analytics: Omit<AllUnifiedAnalyticsCache, 'id'>): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(UNIFIED_ANALYTICS_STORE, "readwrite");
+    const store = tx.objectStore(UNIFIED_ANALYTICS_STORE);
+    
+    // Save all metrics individually
+    const savePromises = [
+      saveUnifiedAnalyticsCache(analytics.views),
+      saveUnifiedAnalyticsCache(analytics.leads),
+      saveUnifiedAnalyticsCache(analytics.callbackRequest),
+      saveUnifiedAnalyticsCache(analytics.bookDemoRequest)
+    ];
+    
+    Promise.all(savePromises)
+      .then(() => resolve())
+      .catch((err) => reject(err));
+  });
+}
+
+export async function getAllUnifiedAnalyticsCache(
+  type: 'weekly' | 'monthly' | 'yearly',
+  institutionId?: string
+): Promise<AllUnifiedAnalyticsCache | null> {
+  // Try to get all metrics from cache
+  const [views, leads, callbackRequest, bookDemoRequest] = await Promise.all([
+    getUnifiedAnalyticsCache('views', type, institutionId),
+    getUnifiedAnalyticsCache('leads', type, institutionId),
+    getUnifiedAnalyticsCache('callbackRequest', type, institutionId),
+    getUnifiedAnalyticsCache('bookDemoRequest', type, institutionId)
+  ]);
+  
+  // If any metric is missing or expired, return null to trigger fresh fetch
+  if (!views || !leads || !callbackRequest || !bookDemoRequest) {
+    return null;
+  }
+  
+  // Check if all are from the same time period (within 5 seconds of each other)
+  const times = [views.lastUpdated, leads.lastUpdated, callbackRequest.lastUpdated, bookDemoRequest.lastUpdated];
+  const minTime = Math.min(...times);
+  const maxTime = Math.max(...times);
+  
+  // If data is more than 5 seconds apart, consider it stale
+  if (maxTime - minTime > 5000) {
+    return null;
+  }
+  
+  return {
+    type,
+    institutionId,
+    views,
+    leads,
+    callbackRequest,
+    bookDemoRequest,
+    lastUpdated: Math.max(...times)
+  };
+}
+
+/* ---------------- Dashboard Health/Details caching helpers ---------------- */
+
+export async function saveDashboardHealthCache(health: Omit<DashboardHealthCache, 'id'>): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DASHBOARD_HEALTH_STORE, "readwrite");
+    const store = tx.objectStore(DASHBOARD_HEALTH_STORE);
+    const idx = store.index("institutionId");
+    const getReq = health.institutionId ? idx.get(health.institutionId) : null;
+    
+    if (getReq) {
+      getReq.onsuccess = () => {
+        const existing = getReq.result as DashboardHealthCache | undefined;
+        const record: DashboardHealthCache = {
+          ...(existing?.id ? { id: existing.id } : {}),
+          ...health,
+          lastUpdated: Date.now()
+        };
+        const putReq = store.put(record);
+        putReq.onsuccess = () => resolve();
+        putReq.onerror = () => reject(putReq.error || new Error("Failed to save dashboard health"));
+      };
+      getReq.onerror = () => reject(getReq.error || new Error("Failed to lookup dashboard health"));
+    } else {
+      const record: DashboardHealthCache = {
+        ...health,
+        lastUpdated: Date.now()
+      };
+      const putReq = store.put(record);
+      putReq.onsuccess = () => resolve();
+      putReq.onerror = () => reject(putReq.error || new Error("Failed to save dashboard health"));
+    }
+  });
+}
+
+export async function getDashboardHealthCache(
+  institutionId?: string
+): Promise<DashboardHealthCache | null> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DASHBOARD_HEALTH_STORE, "readonly");
+    const store = tx.objectStore(DASHBOARD_HEALTH_STORE);
+    
+    if (institutionId) {
+      const idx = store.index("institutionId");
+      const req = idx.get(institutionId);
+      req.onsuccess = () => {
+        const row = req.result as DashboardHealthCache | undefined;
+        if (!row) return resolve(null);
+        // Check if cache is still valid (within 5 minutes for dashboard health)
+        if (Date.now() - row.lastUpdated > 5 * 60 * 1000) {
+          return resolve(null); // Cache expired, need fresh data
+        }
+        resolve(row);
+      };
+      req.onerror = () => reject(req.error || new Error("Failed to read dashboard health"));
+    } else {
+      // Get the most recent entry if no institutionId provided
+      const idx = store.index("lastUpdated");
+      const req = idx.openCursor(null, 'prev');
+      req.onsuccess = () => {
+        const cursor = req.result as IDBCursorWithValue | null;
+        if (cursor) {
+          const row = cursor.value as DashboardHealthCache;
+          // Check if cache is still valid
+          if (Date.now() - row.lastUpdated > 5 * 60 * 1000) {
+            return resolve(null);
+          }
+          resolve(row);
+        } else {
+          resolve(null);
+        }
+      };
+      req.onerror = () => reject(req.error || new Error("Failed to read dashboard health"));
+    }
   });
 }

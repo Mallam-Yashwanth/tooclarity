@@ -208,7 +208,7 @@ export default function PaymentCheckout({ onProcessing, onSuccess, onFailure }: 
           try {
             const verifyRes = await paymentAPI.verifyPayment({
               orderId: response.razorpay_order_id || '',
-              paymentId: response.razorpay_payment_id || '', 
+              paymentId: response.razorpay_payment_id || '',
               signature: response.razorpay_signature || '',
               planType: selectedPlan,
               coupon: appliedCoupon ?? null,
@@ -327,9 +327,8 @@ export default function PaymentCheckout({ onProcessing, onSuccess, onFailure }: 
               <button
                 type="button"
                 onClick={() => setSelectedPlan("yearly")}
-                className={`text-left rounded-xl transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                  selectedPlan === "yearly" ? "ring-2 ring-[#0222D7] shadow" : ""
-                }`}
+                className={`text-left rounded-xl transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selectedPlan === "yearly" ? "ring-2 ring-[#0222D7] shadow" : ""
+                  }`}
                 aria-pressed={selectedPlan === "yearly"}
               >
                 <_Card className="m-0">

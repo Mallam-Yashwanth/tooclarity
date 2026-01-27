@@ -3,96 +3,192 @@ const InstitutionAdmin = require("../models/InstituteAdmin");
 const asyncHandler = require("express-async-handler");
 
 exports.getInstitutionAnalytics = asyncHandler(async (req, res) => {
-  const { metric, type } = req.body;
+  const {
+    type,
+    views = false,
+    leads = false,
+    callbackRequest = false,
+    bookDemoRequest = false
+  } = req.body;
+
   const userId = req.userId;
 
-  // Validate inputs
-  if (!metric || !["views", "comparisons", "leads"].includes(metric)) {
-    return res.status(400).json({ success: false, message: "Invalid metric" });
+  if (!["weekly", "monthly", "yearly"].includes(type)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid analytics type",
+    });
   }
 
-  if (!type || !["weekly", "monthly", "yearly"].includes(type)) {
-    return res.status(400).json({ success: false, message: "Invalid analytics type" });
-  }
-
-  // Set Date Range
+  // ---------------------------
+  // Date Range Logic
+  // ---------------------------
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  today.setHours(23, 59, 59, 999);
 
-  let groupFormat = "%Y-%m-%d"; // default (daily)
+  let groupFormat = "%Y-%m-%d";
   let rangeStart = new Date(today);
 
-  if (type === "weekly") {
-    rangeStart.setDate(today.getDate() - 7);
-  } else if (type === "monthly") {
+  if (type === "weekly") rangeStart.setDate(today.getDate() - 7);
+
+  if (type === "monthly") {
     groupFormat = "%Y-%m";
     rangeStart.setMonth(today.getMonth() - 1);
-  } else if (type === "yearly") {
-    groupFormat = "%Y";
+  }
+
+  if (type === "yearly") {
+    groupFormat = "%Y-%m";
     rangeStart.setFullYear(today.getFullYear() - 1);
   }
 
+  // ---------------------------
+  // SINGLE AGGREGATION (your structure)
+  // ---------------------------
   const result = await InstitutionAdmin.aggregate([
-    { $match: { userId: new mongoose.Types.ObjectId(userId) } },
-
-    { $project: { institutionId: 1 } },
+    { $match: { _id: new mongoose.Types.ObjectId(userId) } },
+    { $limit: 1 },
 
     {
       $lookup: {
         from: "analyticsdailies",
-        let: { instId: "$institutionId" },
-        pipeline: [
-          {
-            $match: {
-              metric,
-              $expr: { $eq: ["$institutionId", "$$instId"] },
-              day: { $gte: rangeStart, $lte: today } // DIRECT DATE FILTER ⚡
-            }
-          },
-          {
-            $group: {
-              _id: {
-                label: { $dateToString: { format: groupFormat, date: "$day" } }
-              },
-              totalCount: { $sum: "$count" }
-            }
-          },
-          {
-            $project: {
-              _id: 0,
-              label: "$_id.label",
-              count: "$totalCount"
-            }
-          },
-          { $sort: { label: 1 } }
-        ],
+        localField: "institution",
+        foreignField: "institutionId",
         as: "analytics"
       }
     },
 
-    { $limit: 1 }
-  ]);
+    {
+      $project: {
+        analytics: {
+          $filter: {
+            input: "$analytics",
+            as: "a",
+            cond: {
+              $and: [
+                { $gte: ["$$a.day", rangeStart] },
+                { $lte: ["$$a.day", today] }
+              ]
+            }
+          }
+        }
+      }
+    },
 
+    {
+      $facet: {
+        totals: [
+          { $unwind: "$analytics" },
+          {
+            $group: {
+              _id: null,
+              views: { $sum: "$analytics.views" },
+              leads: { $sum: "$analytics.leads" },
+              callbackRequest: { $sum: "$analytics.callbackRequest" },
+              bookDemoRequest: { $sum: "$analytics.bookDemoRequest" }
+            }
+          }
+        ],
+
+        viewsTimeline: views
+          ? [
+            { $unwind: "$analytics" },
+            {
+              $group: {
+                _id: {
+                  label: { $dateToString: { format: groupFormat, date: "$analytics.day" } }
+                },
+                count: { $sum: "$analytics.views" }
+              }
+            },
+            { $project: { _id: 0, label: "$_id.label", count: 1 } },
+            { $sort: { label: 1 } }
+          ]
+          : [],
+
+        leadsTimeline: leads
+          ? [
+            { $unwind: "$analytics" },
+            {
+              $group: {
+                _id: {
+                  label: { $dateToString: { format: groupFormat, date: "$analytics.day" } }
+                },
+                count: { $sum: "$analytics.leads" }
+              }
+            },
+            { $project: { _id: 0, label: "$_id.label", count: 1 } },
+            { $sort: { label: 1 } }
+          ]
+          : [],
+
+        callbackTimeline: callbackRequest
+          ? [
+            { $unwind: "$analytics" },
+            {
+              $group: {
+                _id: {
+                  label: { $dateToString: { format: groupFormat, date: "$analytics.day" } }
+                },
+                count: { $sum: "$analytics.callbackRequest" }
+              }
+            },
+            { $project: { _id: 0, label: "$_id.label", count: 1 } },
+            { $sort: { label: 1 } }
+          ]
+          : [],
+
+        demoTimeline: bookDemoRequest
+          ? [
+            { $unwind: "$analytics" },
+            {
+              $group: {
+                _id: {
+                  label: { $dateToString: { format: groupFormat, date: "$analytics.day" } }
+                },
+                count: { $sum: "$analytics.bookDemoRequest" }
+              }
+            },
+            { $project: { _id: 0, label: "$_id.label", count: 1 } },
+            { $sort: { label: 1 } }
+          ]
+          : []
+      }
+    }
+  ]);
 
   if (!result.length) {
     return res.status(404).json({
       success: false,
-      message: "Institution not found for this admin"
+      message: "Institution not found for this admin",
     });
   }
 
-  const analytics = result[0].analytics;
-  const totalCount = analytics.reduce((sum, item) => sum + item.count, 0);
+  const { totals, viewsTimeline, leadsTimeline, callbackTimeline, demoTimeline } =
+    result[0];
 
-  return res.status(200).json({
+  const totalData =
+    totals.length > 0
+      ? totals[0]
+      : { views: 0, leads: 0, callbackRequest: 0, bookDemoRequest: 0 };
+
+  // ---------------------------
+  // Build Response Dynamically
+  // ---------------------------
+  const response = {
     success: true,
-    metric,
     type,
     dateRange: {
       from: rangeStart.toISOString().split("T")[0],
       to: today.toISOString().split("T")[0]
     },
-    totalCount,
-    analytics
-  });
+    totals: totalData,
+    timelines: {}
+  };
+
+  if (views) response.timelines.views = viewsTimeline;
+  if (leads) response.timelines.leads = leadsTimeline;
+  if (callbackRequest) response.timelines.callbackRequest = callbackTimeline;
+  if (bookDemoRequest) response.timelines.bookDemoRequest = demoTimeline;
+
+  return res.status(200).json(response);
 });

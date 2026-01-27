@@ -141,7 +141,7 @@ app.use(
 )
 
 app.use(
-  "api/v1/analytics/",
+  "/api/v1/analytics",
   requireInstituteAdmin,
   analyticsRoutes
 )

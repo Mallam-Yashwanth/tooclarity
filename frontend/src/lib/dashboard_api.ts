@@ -92,7 +92,72 @@ export const dashboardAPI = {
   },
 
   /**
+   * Fetches the FULL, structured dashboard data as JSON object (not File).
+   * This is the preferred method for getting dashboard health data.
+   */
+  getFullDashboardDetailsAsJSON: async (): Promise<ApiResponse<{ institution: Record<string, unknown> | null; branchesWithCourses: Array<Record<string, unknown>>; exportedAt: string }>> => {
+    try {
+      const response = await apiFileRequest("/v1/dashboard/get-entire-details", {
+        method: "GET",
+      });
+      
+      const blob = await response.blob();
+      const text = await blob.text();
+      const data = JSON.parse(text);
+      
+      return {
+        success: true,
+        data
+      };
+    } catch (error) {
+      console.error("Error in getFullDashboardDetailsAsJSON API call:", error);
+      // Gracefully handle missing/legacy endpoint by synthesizing from unified course backend
+      try {
+        // 1) Resolve current institution (unified backend)
+        const institution = await getMyInstitution().catch(() => null) as { _id?: string } | null;
+        if (!institution || !institution._id) {
+          return {
+            success: true,
+            data: { institution: null, branchesWithCourses: [], exportedAt: new Date().toISOString() }
+          };
+        }
+
+        // 2) Fetch branches and courses scoped to institution
+        const [branches, courses] = await Promise.all([
+          getInstitutionBranches(institution._id).catch(() => []),
+          getInstitutionCourses(institution._id).catch(() => []),
+        ]);
+
+        // 3) Shape into expected structure
+        const branchesWithCourses = (Array.isArray(branches) ? branches : []).map((b: unknown) => {
+          const branch = b as Record<string, unknown>;
+          return {
+            ...branch,
+            courses: (Array.isArray(courses) ? courses : []).filter((c: unknown) => {
+              const course = c as Record<string, unknown>;
+              const branchId = course.branch || (course.branch as { _id?: string })?._id;
+              return branchId && String(branchId) === String(branch._id);
+            }),
+          };
+        });
+
+        return {
+          success: true,
+          data: { institution, branchesWithCourses, exportedAt: new Date().toISOString() }
+        };
+      } catch (fallbackErr) {
+        console.error("Fallback synthesis for getFullDashboardDetailsAsJSON failed:", fallbackErr);
+        return {
+          success: true,
+          data: { institution: null, branchesWithCourses: [], exportedAt: new Date().toISOString() }
+        };
+      }
+    }
+  },
+
+  /**
    * Fetches the FULL, structured dashboard data as a File object.
+   * @deprecated Use getFullDashboardDetailsAsJSON for better caching support
    */
   getFullDashboardDetails: async (): Promise<File> => {
     try {

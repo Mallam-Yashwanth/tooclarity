@@ -1,6 +1,9 @@
 // server.js
 const dotenv = require('dotenv');
-// ✅ Load correct environment file immediately
+const path = require('path');
+const { Institution } = require('./models/Institution');
+
+// ✅ Load correct environment file
 const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development';
 dotenv.config({ path: envFile });
 
@@ -9,16 +12,11 @@ const cookieParser = require('cookie-parser');
 const globalAuthMiddleware = require('./middleware/globalAuth.middleware');
 
 
-
-
-
-
 console.log(`Environment loaded: ${process.env.NODE_ENV}`);
 console.log(`Using file: ${envFile}`);
 
 
 const mongoose = require('mongoose');
-const path = require('path');
 const redisConnection = require('./config/redisConfig'); // Added Missing Import
 const { createWorker: createNotificationWorker } = require('./jobs/notification.job');
 const { createWorker: createEmailWorker } = require('./jobs/email.job');
@@ -31,7 +29,6 @@ const flushWorker = createFlushWorker(redisConnection); // Initialize Flush Work
 
 // Schedule the Flush Job (Cron)
 scheduleFlushJob().catch(err => console.error('Failed to schedule notification flush:', err));
-const { Institution } = require('./models/Institution');
 const { initializeElasticsearch } = require('./config/esSync');
 
 

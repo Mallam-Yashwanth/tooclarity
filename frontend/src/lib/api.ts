@@ -918,6 +918,18 @@ export const analyticsAPI = {
   },
   getSummaryPrevious: async (range: TimeRangeParam = "weekly"): Promise<ApiResponse> => {
     return apiRequest(`/v1/analytics/summary?range=${range}&compare=prev`, { method: "GET" });
+  },
+  // Unified analytics endpoint using AnalyticsDaily model
+  getInstitutionAnalytics: async (
+    metric: 'views' | 'comparisons' | 'leads',
+    type: 'weekly' | 'monthly' | 'yearly'
+  ): Promise<ApiResponse> => {
+    // Note: Using POST method as GET requests cannot have a body in fetch API
+    // Backend route should be changed from GET to POST to match this
+    return apiRequest(`/v1/analytics/institution`, {
+      method: "POST",
+      body: JSON.stringify({ metric, type }),
+    });
   }
 };
 
@@ -1119,15 +1131,19 @@ export const programsAPI = {
     const wrapper = { totalCourses: 1, courses: [normalized] };
     return apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses`, { method: 'POST', body: JSON.stringify(wrapper) });
   },
- list: async (institutionId: string, cursor?: string | null, limit: number = 10): Promise<ApiResponse> => {
-    const params = new URLSearchParams({
-      limit: String(limit),
-      ...(cursor && { cursor }),
-    });
-    return apiRequest(`/v1/institutions/${institutionId}/courses?${params.toString()}`, { 
-      method: 'GET' 
-    });
-},
+  list: async (institutionId: string): Promise<ApiResponse> => {
+    const cacheKey = `programs_${institutionId}`;
+    const cached = programsCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < PROGRAMS_CACHE_DURATION) return cached.data as ApiResponse<unknown>;
+    const res = await apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses`, { method: 'GET' });
+    const payload = res as { data?: unknown; courses?: unknown };
+    const raw = payload?.data || payload?.courses || [];
+    const arr = Array.isArray(raw) ? raw : Array.isArray((raw as { data?: unknown })?.data) ? (raw as { data: unknown[] }).data : [];
+    const programs = arr.map((c: Record<string, unknown>) => ({ ...c, programName: c.programName || c.courseName || c.selectBranch }));
+    const shaped = { success: true, data: { programs } } as ApiResponse;
+    programsCache.set(cacheKey, { data: shaped, timestamp: Date.now() });
+    return shaped;
+  },
   listForInstitutionAdmin: async (institutionId: string): Promise<ApiResponse> => {
     return programsAPI.list(institutionId);
   },

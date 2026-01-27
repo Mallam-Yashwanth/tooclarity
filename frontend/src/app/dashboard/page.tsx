@@ -1,15 +1,7 @@
 "use client";
 
-
-import React from "react";
-// import { useRouter } from "next/navigation";
+import React, { useEffect, useState } from "react";
 import { withAuth, useAuth } from "../../lib/auth-context";
-import { motion } from "framer-motion";
-import { useState, useEffect } from "react";
-import DashboardStats from "@/components/dashboard/DashboardStats";
-import AdCard from "@/components/dashboard/AdCard";
-import StudentList, { StudentItem } from "@/components/dashboard/StudentList";
-import CourseReachChart from "@/components/dashboard/CourseReachChart";
 import StudentDashboard from "@/components/student/StudentDashboard";
 // import AdminDashboard from "@/components/dashboard/AdminDashboard";
 // import { getMyInstitution, getInstitutionBranches, getInstitutionCourses } from "@/lib/api";
@@ -48,6 +40,12 @@ const itemVariants = {
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
 };
+import InstituteDashboard from "@/components/dashboard/InstituteDashboard";
+import StudentList, { StudentItem } from "@/components/dashboard/StudentList";
+import { motion } from "framer-motion";
+import DashboardStats from "@/components/dashboard/DashboardStats";
+import AdCard from "@/components/dashboard/AdCard";
+import CourseReachChart from "@/components/dashboard/CourseReachChart";
 
 function DashboardPage() {
     const { user } = useAuth();
@@ -238,6 +236,17 @@ function DashboardPage() {
         {/* ProfileCompletionModal has been removed from here */}
         </>
     );
+	// If student, render StudentDashboard
+	if (user?.role === "STUDENT") {
+		return <StudentDashboard />;
+	}
+
+	// If institute admin, render InstituteDashboard (which has the correct context from layout)
+	if (user?.role === "INSTITUTE_ADMIN") {
+		return <InstituteDashboard />;
+	}
+
+	return <div></div>;
 }
 
 export default withAuth(DashboardPage);

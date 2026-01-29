@@ -26,13 +26,15 @@ const PAYMENT_CONTEXT_TTL = 60 * 60; // 60 minutes to survive delayed webhooks
 
 
 exports.createOrder = asyncHandler(async (req, res, next) => {
-  const { planType = "yearly", couponCode, courseIds = [] } = req.body;
+  const { planType = "yearly", couponCode, courseIds = [], listingType } = req.body;
   const userId = req.userId;
+  const isFreeListingRequest = listingType === "free" || req.body.amount === 0;
 
   console.log("[Payment] Create order request received:", {
     userId,
     planType,
     couponCode,
+    isFreeListingRequest,
   });
 
   // ✅ Step 1: Get institution linked to admin
@@ -91,6 +93,88 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     return next(new AppError("No inactive courses available to activate", 400));
   }
 
+  // ✅ FREE LISTING FLOW: Skip Razorpay, activate courses directly with limited features
+  if (isFreeListingRequest) {
+    console.log("[Payment] Processing FREE LISTING for courses:", validSelectedCourseIds.length);
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const now = new Date();
+      // Free listings get 30 days validity
+      const endDate = new Date(now);
+      endDate.setDate(endDate.getDate() + 30);
+
+      // Create subscription record for free listing
+      const freeSubscription = await Subscription.create(
+        [{
+          institution: institutionId,
+          planType: "free",
+          status: "active",
+          razorpayOrderId: `free_${Date.now()}`,
+          razorpayPaymentId: null,
+          startDate: new Date(),
+          endDate,
+          amount: 0,
+          courses: validSelectedCourseIds, // Track which courses this subscription covers
+        }],
+        { session }
+      );
+      console.log("[Payment] Free subscription created:", freeSubscription[0]._id);
+
+      // Mark payment as done for institute admin
+      await InstituteAdmin.updateOne(
+        { institution: institutionId },
+        { $set: { isPaymentDone: true } },
+        { session }
+      );
+
+      // Activate selected courses with FREE listing type
+      const courseUpdateResult = await Course.updateMany(
+        {
+          institution: institutionId,
+          status: { $in: ["Inactive", "inactive"] },
+          _id: { $in: validSelectedCourseIds },
+        },
+        {
+          $set: {
+            status: "Active",
+            listingType: "free", // Mark as free listing with limited features
+            courseSubscriptionStartDate: new Date(),
+            courseSubscriptionEndDate: endDate,
+          },
+        },
+        { session }
+      );
+
+      console.log(`[Payment] ✅ Activated ${courseUpdateResult.modifiedCount} courses with FREE listing`);
+
+      await session.commitTransaction();
+      session.endSession();
+
+      // Return success response for free listing
+      return res.status(200).json({
+        status: "success",
+        message: "Free listing activated successfully",
+        listingType: "free",
+        planType: "free",
+        totalActivatedCourses: courseUpdateResult.modifiedCount,
+        validUntil: endDate,
+        // Return mock Razorpay data for frontend compatibility
+        key: process.env.RAZORPAY_KEY_ID,
+        orderId: freeSubscription[0].razorpayOrderId,
+        amount: 0,
+      });
+    } catch (err) {
+      await session.abortTransaction();
+      session.endSession();
+      console.error("[Payment] Free listing activation failed:", err);
+      return next(new AppError("Failed to activate free listing", 500));
+    }
+  }
+
+  // ✅ PAID FLOW: Continue with Razorpay
   // ✅ Step 3: Validate plan type and get base amount
   const planPrice = PLANS[planType.toLowerCase()];
   if (!planPrice) {
@@ -175,6 +259,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
         startDate: null,
         endDate: null,
         amount,
+        courses: validSelectedCourseIds, // Track which courses this subscription covers
       },
     );
     console.log("[Payment] Subscription record created:", subscription);
@@ -451,14 +536,14 @@ exports.pollSubscriptionStatus = asyncHandler(async (req, res) => {
       try {
         // Get payment context from Redis
         const paymentContext = await RedisUtil.getPaymentContext(orderId);
-        
+
         if (paymentContext && paymentContext.selectedCourseIds && paymentContext.selectedCourseIds.length > 0) {
           // Verify institution matches
           if (paymentContext.institution === sub.institution.toString()) {
             const redisCourseIds = Array.isArray(paymentContext.selectedCourseIds)
               ? paymentContext.selectedCourseIds
               : [];
-            
+
             const validCourseObjectIds = redisCourseIds
               .filter((id) => mongoose.Types.ObjectId.isValid(id))
               .map((id) => new mongoose.Types.ObjectId(id));

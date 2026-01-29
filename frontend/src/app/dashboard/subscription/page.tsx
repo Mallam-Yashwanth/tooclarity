@@ -58,10 +58,10 @@ function ProgramsPage() {
   const { data: institution } = useInstitution();
   const queryClient = useQueryClient();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'details'|'add'|'inactive'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'add' | 'inactive'>('details');
   const [search, setSearch] = useState("");
   const [branchFilter, setBranchFilter] = useState<string>("");
-  const [addInlineMode, setAddInlineMode] = useState<'none'|'course'|'branch'>('none');
+  const [addInlineMode, setAddInlineMode] = useState<'none' | 'course' | 'branch'>('none');
   const [visibleCount, setVisibleCount] = useState<number>(10);
   const [selectedInactive, setSelectedInactive] = useState<Record<string, boolean>>({});
   const [isPaying, setIsPaying] = useState(false);
@@ -79,7 +79,7 @@ function ProgramsPage() {
       const res = await programsAPI.listForInstitutionAdminWithMetrics(String(institution?._id)) as { data?: { programs?: Record<string, unknown>[] } };
       return (res?.data?.programs || []) as Array<Record<string, unknown>>;
     },
-    staleTime: 60*1000,
+    staleTime: 60 * 1000,
   });
 
   // Branch dropdown options - load from backend
@@ -90,7 +90,7 @@ function ProgramsPage() {
       const res = await programsAPI.listBranchesForInstitutionAdmin(String(institution?._id)) as { data?: { branches?: Record<string, unknown>[] } };
       return (res?.data?.branches || []) as Array<Record<string, unknown>>;
     },
-    staleTime: 5*60*1000,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: invoices } = useQuery({
@@ -100,7 +100,7 @@ function ProgramsPage() {
       const res = await programsAPI.subscriptionHistory(String(institution?._id)) as { data?: { items?: Record<string, unknown>[] } };
       return (res?.data?.items || []) as Array<Record<string, unknown>>;
     },
-    staleTime: 60*1000,
+    staleTime: 60 * 1000,
   });
   const paidInvoices = React.useMemo(() => {
     if (!Array.isArray(invoices)) return [];
@@ -136,15 +136,15 @@ function ProgramsPage() {
       seenNames.add(keyName);
       arr.push({ value: id, label });
     });
-    return arr.sort((a,b)=> a.label.localeCompare(b.label));
+    return arr.sort((a, b) => a.label.localeCompare(b.label));
   }, [branchList]);
 
   // Reset visible count when filters change
-  React.useEffect(()=>{ setVisibleCount(10); }, [search, branchFilter, activeTab]);
+  React.useEffect(() => { setVisibleCount(10); }, [search, branchFilter, activeTab]);
 
-  const filteredPrograms = (Array.isArray(programs) ? programs : []).filter((p: Record<string, unknown>)=>{
+  const filteredPrograms = (Array.isArray(programs) ? programs : []).filter((p: Record<string, unknown>) => {
     const q = search.trim().toLowerCase();
-    const name = String(p?.CourseName|| p?.selectBranch || "").toLowerCase();
+    const name = String(p?.CourseName || p?.selectBranch || "").toLowerCase();
     const branch = String(p?.branchName || (p.branch as Record<string, unknown>)?.branchName || (p.institution as Record<string, unknown>)?.name || "").toLowerCase();
     const passSearch = !q || name.includes(q) || branch.includes(q);
     const branchId = typeof p.branch === 'object' && p.branch !== null ? String((p.branch as Record<string, unknown>)?._id || '') : String(p.branch || '');
@@ -211,6 +211,77 @@ function ProgramsPage() {
       }
       return next;
     });
+  };
+
+  const handleFreeListing = async () => {
+    if (!inactiveSelectedCount || isPaying) return;
+
+    const selectedCourseIds = inactiveCourses
+      .filter((course) => !!selectedInactive[course.id])
+      .map((course) => course.id)
+      .filter((courseId) => !!courseId && !courseId.startsWith("inactive-"));
+
+    if (!selectedCourseIds.length) return;
+
+    try {
+      setIsPaying(true);
+
+      const res = await paymentAPI.initiateFreeListing({
+        courseIds: selectedCourseIds,
+      });
+
+      // Check if the response indicates direct activation (no Razorpay needed)
+      const responseData = res.data as {
+        status?: string;
+        listingType?: string;
+        message?: string;
+        totalActivatedCourses?: number;
+        validUntil?: string;
+        orderId?: string;
+      };
+
+      if (res.success && responseData?.listingType === "free") {
+        // Free listing was activated directly by backend - no Razorpay needed
+        console.log("[FreeListing] Direct activation successful:", responseData);
+
+        try {
+          useUserStore.getState().setPaymentStatus(true);
+        } catch (storeError) {
+          console.warn("[FreeListing] Failed to set payment status:", storeError);
+        }
+
+        // Refresh course lists
+        programsAPI.invalidateCache(institution?._id ? String(institution._id) : undefined);
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['programs-page-list-institution-admin', institution?._id] }),
+          queryClient.invalidateQueries({ queryKey: ['subscription-history', institution?._id] }),
+        ]);
+        setSelectedInactive({});
+
+        // Show success state
+        setPaymentVerified({
+          transactionId: responseData.orderId || null,
+          paymentId: null,
+          orderId: responseData.orderId || null,
+        });
+
+        setIsPaying(false);
+        return;
+      }
+
+      // Fallback: If backend returns Razorpay order, open payment popup (shouldn't happen for free)
+      if (!res.success || !res.data) {
+        console.error("Free listing init failed:", res.message);
+        setIsPaying(false);
+        return;
+      }
+
+      console.warn("[FreeListing] Unexpected Razorpay flow for free listing");
+      setIsPaying(false);
+    } catch (error) {
+      console.error("Free listing init error:", error);
+      setIsPaying(false);
+    }
   };
 
   const handleProceedToPay = async () => {
@@ -355,34 +426,34 @@ function ProgramsPage() {
 
           {/* Tabs header */}
           <div className="flex items-center gap-6 border-b border-gray-200 dark:border-gray-800 mb-4 text-gray-900 dark:text-gray-100">
-            <button onClick={()=>setActiveTab('details')} className={`py-2 px-1 ${activeTab==='details'?'border-b-2 border-blue-600 font-medium':'text-gray-500'}`}>Program Details</button>
-            <button onClick={()=>setActiveTab('add')} className={`py-2 px-1 ${activeTab==='add'?'border-b-2 border-blue-600 font-medium':'text-gray-500'}`}>Add Program</button>
-            <button onClick={()=>setActiveTab('inactive')} className={`py-2 px-1 ${activeTab==='inactive'?'border-b-2 border-blue-600 font-medium':'text-gray-500'}`}>Inactive Courses</button>
+            <button onClick={() => setActiveTab('details')} className={`py-2 px-1 ${activeTab === 'details' ? 'border-b-2 border-blue-600 font-medium' : 'text-gray-500'}`}>Program Details</button>
+            <button onClick={() => setActiveTab('add')} className={`py-2 px-1 ${activeTab === 'add' ? 'border-b-2 border-blue-600 font-medium' : 'text-gray-500'}`}>Add Program</button>
+            <button onClick={() => setActiveTab('inactive')} className={`py-2 px-1 ${activeTab === 'inactive' ? 'border-b-2 border-blue-600 font-medium' : 'text-gray-500'}`}>Inactive Courses</button>
           </div>
 
           {/* Utilities row: search + filter */}
-          {activeTab==='details' && (
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <div className="flex-1">
-              <Input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Search program or branch" className="w-full bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-200 dark:border-gray-700" />
+          {activeTab === 'details' && (
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div className="flex-1">
+                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search program or branch" className="w-full bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-200 dark:border-gray-700" />
+              </div>
+              <div className="w-64">
+                <AppSelect
+                  value={branchFilter}
+                  onChange={(val) => setBranchFilter(val)}
+                  options={branchOptions}
+                  placeholder="Filter by Branch"
+                  variant="white"
+                  size="md"
+                  rounded="lg"
+                  className="w-full"
+                />
+              </div>
             </div>
-            <div className="w-64">
-              <AppSelect
-                value={branchFilter}
-                onChange={(val)=> setBranchFilter(val)}
-                options={branchOptions}
-                placeholder="Filter by Branch"
-                variant="white"
-                size="md"
-                rounded="lg"
-                className="w-full"
-              />
-            </div>
-          </div>
           )}
 
           {/* Inactive Courses tab */}
-          {activeTab==='inactive' && (
+          {activeTab === 'inactive' && (
             <div className="mt-6">
               <AnalyticsTable<InactiveCourseRow>
                 variant="embedded"
@@ -461,13 +532,36 @@ function ProgramsPage() {
                           {formatCurrency(totalInactivePrice)}
                         </p>
                       </div>
-                      <Button
-                        disabled={!inactiveSelectedCount || isPaying}
-                        onClick={handleProceedToPay}
-                        className="px-6 py-3 rounded-2xl bg-blue-600 text-white dark:text-gray-100 hover:bg-blue-700 dark:hover:bg-blue-800 disabled:opacity-60"
-                      >
-                        {isPaying ? "Processing..." : "Proceed To Pay"}
-                      </Button>
+                      <div className="flex items-center gap-3">
+                        <div className="relative group">
+                          <Button
+                            disabled={!inactiveSelectedCount || isPaying}
+                            onClick={handleFreeListing}
+                            variant="outline"
+                            className="px-6 py-3 rounded-2xl border-blue-600 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-60"
+                          >
+                            Free Listing
+                          </Button>
+                          {/* Hover Tooltip */}
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-4 py-3 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50 pointer-events-none">
+                            <div className="font-semibold mb-1 text-amber-600 dark:text-amber-500">⚠️ Limited Features</div>
+                            <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                              <li>• Basic listing visibility only</li>
+                              <li>• No analytics or lead tracking</li>
+                              <li>• Limited support priority</li>
+                            </ul>
+                            {/* Arrow */}
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-white dark:border-t-gray-900"></div>
+                          </div>
+                        </div>
+                        <Button
+                          disabled={!inactiveSelectedCount || isPaying}
+                          onClick={handleProceedToPay}
+                          className="px-6 py-3 rounded-2xl bg-blue-600 text-white dark:text-gray-100 hover:bg-blue-700 dark:hover:bg-blue-800 disabled:opacity-60"
+                        >
+                          {isPaying ? "Processing..." : "Proceed To Pay"}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 }
@@ -476,112 +570,112 @@ function ProgramsPage() {
           )}
 
           {/* Program Details table */}
-          {activeTab==='details' && (
-          <div className="overflow-x-auto">
-            {Array.isArray(filteredPrograms) && filteredPrograms.length === 0 ? (
-              <div className="py-10 text-center text-gray-500">No programs found yet.</div>
-            ) : (
-            <table className="min-w-full text-left">
-              <thead className="text-gray-600 text-sm">
-                <tr>
-                  <th className="py-2 pr-4 w-16">S.No</th>
-                  <th className="py-2 pr-4">Course Name</th>
-                  <th className="py-2 pr-4">Status</th>
-                  <th className="py-2 pr-4">Start Date</th>
-                  <th className="py-2 pr-4">End Date</th>
-                  <th className="py-2 pr-4">Leads Generated</th>
-                  <th className="py-2 pr-4">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visiblePrograms.map((p: Record<string, unknown>, idx: number) => (
-                  <tr key={String(p._id) || idx} className="border-t border-gray-100 dark:border-gray-800">
-                    <td className="py-4 pr-4">{String(idx+1).padStart(2,'0')}</td>
-                    <td className="py-4 pr-4">
-                      <div className="font-medium">{String(p.programName || p.selectBranch)}</div>
-                      <div className="text-xs text-gray-500 flex items-center gap-1">
-                        <span className="opacity-60">◎</span> {String(p.branchName || (p.branch as Record<string, unknown>)?.branchName || 'Public')}
-                      </div>
-                    </td>
-                    <td className="py-4 pr-4">
-                      {(() => {
-                        // const status = getProgramStatus(String(p.startDate || ''), String(p.endDate || ''));
-                        const status = p.status as string;
-                        const statusColors = {
-                          active: 'bg-green-100 text-green-700',
-                          // upcoming: 'bg-blue-100 text-blue-700',
-                          // expired: 'bg-red-100 text-red-700',
-                          inactive: 'bg-gray-100 text-gray-700'
-                        };
-                        // Map status to match analytics page
-                        // const displayStatus = status.status === 'active' ? 'Live' : 
-                        //                     status.status === 'upcoming' ? 'Paused' : 
-                        //                     status.status === 'expired' ? 'Expired' : 
-                        //                     'Draft';
-                        return (
-                          <span className={`inline-flex items-center text-xs rounded-full px-2 py-1 ${statusColors[status as keyof typeof statusColors]}`}>
-                            ● {status}
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td className="py-4 pr-4 text-sm">{formatDate(String(p.startDate || ''))}</td>
-                    <td className="py-4 pr-4 text-sm">{formatDate(String(p.endDate || ''))}</td>
-                    <td className="py-4 pr-4 text-sm">{typeof p.leadsGenerated==='number' ? p.leadsGenerated : 0}</td>
-                    <td className="py-4 pr-4 text-sm">
-                      <div className="flex items-center gap-3 text-gray-500">
-                        <button title="Delete" onClick={async()=>{ try{ await programsAPI.remove(String(p._id), String(institution?._id)); queryClient.invalidateQueries({ queryKey: ['programs-page-list-institution-admin', institution?._id] }); }catch{}} } className="h-10 w-10 rounded-full border border-gray-200 dark:border-gray-800 flex items-center justify-center">
-                          <Image src="/Trash.png" alt="Delete" width={20} height={20} className="h-5 w-5 object-contain" />
-                        </button>
-                        <button title="Edit" onClick={() => handleEditProgram(String(p._id))} className="h-10 w-10 rounded-full border border-gray-200 dark:border-gray-800 flex items-center justify-center">
-                          <Image src="/Edit.png" alt="Edit" width={20} height={20} className="h-5 w-5 object-contain" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            )}
-            {Array.isArray(filteredPrograms) && filteredPrograms.length > visibleCount && (
-              <div className="flex items-center justify-center py-5">
-                <Button variant="outline" onClick={()=> setVisibleCount((c)=> c + 10)} className="rounded-full">View more ▾</Button>
-              </div>
-            )}
-          </div>
+          {activeTab === 'details' && (
+            <div className="overflow-x-auto">
+              {Array.isArray(filteredPrograms) && filteredPrograms.length === 0 ? (
+                <div className="py-10 text-center text-gray-500">No programs found yet.</div>
+              ) : (
+                <table className="min-w-full text-left">
+                  <thead className="text-gray-600 text-sm">
+                    <tr>
+                      <th className="py-2 pr-4 w-16">S.No</th>
+                      <th className="py-2 pr-4">Course Name</th>
+                      <th className="py-2 pr-4">Status</th>
+                      <th className="py-2 pr-4">Start Date</th>
+                      <th className="py-2 pr-4">End Date</th>
+                      <th className="py-2 pr-4">Leads Generated</th>
+                      <th className="py-2 pr-4">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visiblePrograms.map((p: Record<string, unknown>, idx: number) => (
+                      <tr key={String(p._id) || idx} className="border-t border-gray-100 dark:border-gray-800">
+                        <td className="py-4 pr-4">{String(idx + 1).padStart(2, '0')}</td>
+                        <td className="py-4 pr-4">
+                          <div className="font-medium">{String(p.programName || p.selectBranch)}</div>
+                          <div className="text-xs text-gray-500 flex items-center gap-1">
+                            <span className="opacity-60">◎</span> {String(p.branchName || (p.branch as Record<string, unknown>)?.branchName || 'Public')}
+                          </div>
+                        </td>
+                        <td className="py-4 pr-4">
+                          {(() => {
+                            // const status = getProgramStatus(String(p.startDate || ''), String(p.endDate || ''));
+                            const status = p.status as string;
+                            const statusColors = {
+                              active: 'bg-green-100 text-green-700',
+                              // upcoming: 'bg-blue-100 text-blue-700',
+                              // expired: 'bg-red-100 text-red-700',
+                              inactive: 'bg-gray-100 text-gray-700'
+                            };
+                            // Map status to match analytics page
+                            // const displayStatus = status.status === 'active' ? 'Live' : 
+                            //                     status.status === 'upcoming' ? 'Paused' : 
+                            //                     status.status === 'expired' ? 'Expired' : 
+                            //                     'Draft';
+                            return (
+                              <span className={`inline-flex items-center text-xs rounded-full px-2 py-1 ${statusColors[status as keyof typeof statusColors]}`}>
+                                ● {status}
+                              </span>
+                            );
+                          })()}
+                        </td>
+                        <td className="py-4 pr-4 text-sm">{formatDate(String(p.startDate || ''))}</td>
+                        <td className="py-4 pr-4 text-sm">{formatDate(String(p.endDate || ''))}</td>
+                        <td className="py-4 pr-4 text-sm">{typeof p.leadsGenerated === 'number' ? p.leadsGenerated : 0}</td>
+                        <td className="py-4 pr-4 text-sm">
+                          <div className="flex items-center gap-3 text-gray-500">
+                            <button title="Delete" onClick={async () => { try { await programsAPI.remove(String(p._id), String(institution?._id)); queryClient.invalidateQueries({ queryKey: ['programs-page-list-institution-admin', institution?._id] }); } catch { } }} className="h-10 w-10 rounded-full border border-gray-200 dark:border-gray-800 flex items-center justify-center">
+                              <Image src="/Trash.png" alt="Delete" width={20} height={20} className="h-5 w-5 object-contain" />
+                            </button>
+                            <button title="Edit" onClick={() => handleEditProgram(String(p._id))} className="h-10 w-10 rounded-full border border-gray-200 dark:border-gray-800 flex items-center justify-center">
+                              <Image src="/Edit.png" alt="Edit" width={20} height={20} className="h-5 w-5 object-contain" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {Array.isArray(filteredPrograms) && filteredPrograms.length > visibleCount && (
+                <div className="flex items-center justify-center py-5">
+                  <Button variant="outline" onClick={() => setVisibleCount((c) => c + 10)} className="rounded-full">View more ▾</Button>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Add Program tab */}
-          {activeTab==='add' && (
+          {activeTab === 'add' && (
             <div className="mt-6">
-              {addInlineMode==='none' && (
+              {addInlineMode === 'none' && (
                 <div className="flex items-center justify-center gap-6 flex-wrap">
-                  <button onClick={()=>setAddInlineMode('course')} className="rounded-2xl bg-blue-50/70 dark:bg-gray-800 border border-blue-100 dark:border-gray-700 flex flex-col items-center justify-center text-center w-[200px] h-[120px]">
+                  <button onClick={() => setAddInlineMode('course')} className="rounded-2xl bg-blue-50/70 dark:bg-gray-800 border border-blue-100 dark:border-gray-700 flex flex-col items-center justify-center text-center w-[200px] h-[120px]">
                     <div className="h-12 w-12 rounded-full bg-white text-gray-700 flex items-center justify-center text-2xl mb-3">+</div>
                     <div className="text-gray-800 dark:text-gray-100 font-medium">Add Program</div>
                   </button>
-                  <button onClick={()=>setAddInlineMode('branch')} className="rounded-2xl bg-blue-50/70 dark:bg-gray-800 border border-blue-100 dark:border-gray-700 flex flex-col items-center justify-center text-center w-[200px] h-[120px]">
+                  <button onClick={() => setAddInlineMode('branch')} className="rounded-2xl bg-blue-50/70 dark:bg-gray-800 border border-blue-100 dark:border-gray-700 flex flex-col items-center justify-center text-center w-[200px] h-[120px]">
                     <div className="h-12 w-12 rounded-full bg-white text-gray-700 flex items-center justify-center text-2xl mb-3">+</div>
                     <div className="text-gray-800 dark:text-gray-100 font-medium">Add Branch</div>
                   </button>
-              </div>
-            )}
-              {addInlineMode!=='none' && (
+                </div>
+              )}
+              {addInlineMode !== 'none' && (
                 <div className="space-y-4">
                   <div>
-                    <Button variant="outline" onClick={()=>setAddInlineMode('none')}>Back</Button>
+                    <Button variant="outline" onClick={() => setAddInlineMode('none')}>Back</Button>
                   </div>
                   <L2DialogBox
                     renderMode="inline"
-                    initialSection={addInlineMode==='course' ? 'course' : 'branch'}
-                    mode={addInlineMode==='course' ? 'subscriptionProgram' : 'default'}
+                    initialSection={addInlineMode === 'course' ? 'course' : 'branch'}
+                    mode={addInlineMode === 'course' ? 'subscriptionProgram' : 'default'}
                     institutionId={institution?._id}
-                    onSuccess={()=>{ onL2Success(); setAddInlineMode('none'); }}
-                    onPrevious={()=> setAddInlineMode('none')}
+                    onSuccess={() => { onL2Success(); setAddInlineMode('none'); }}
+                    onPrevious={() => setAddInlineMode('none')}
                   />
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
           )}
 
         </_CardContent>
@@ -604,18 +698,18 @@ function ProgramsPage() {
             {Array.isArray(paidInvoices) && paidInvoices.length === 0 ? (
               <div className="py-6 text-center text-gray-500">No transactions found yet.</div>
             ) : (
-            (paidInvoices||[]).map((inv: Record<string, unknown>, idx: number)=> (
-              <div key={String(inv._id) || idx} className="grid grid-cols-12 items-center bg-white dark:bg-gray-900 rounded-xl px-3 py-4 shadow-[0_1px_0_rgba(0,0,0,0.03)]">
-                <div className="col-span-2 sm:col-span-1 text-gray-700">{String(idx+1).padStart(2,'0')}</div>
-                <div className="col-span-4 sm:col-span-3 font-medium text-gray-900">{String(inv.invoiceId)}</div>
-                <div className="col-span-3 sm:col-span-3 text-gray-700">{inv.date ? new Date((inv.date as string | number)).toLocaleDateString('en-GB') : '—'}</div>
-                <div className="col-span-3 sm:col-span-2 text-gray-700">{String(inv.planType || '—')}</div>
-                <div className="hidden sm:block col-span-2 text-gray-900">{typeof inv.amount==='number' ? `₹ ${inv.amount.toFixed(2)}` : '—'}</div>
-                <div className="col-span-1 flex justify-end">
-                  <button title="Download" className="h-9 w-9 rounded-full border border-gray-200 dark:border-gray-700 flex items-center justify-center">⬇︎</button>
-            </div>
-          </div>
-            ))
+              (paidInvoices || []).map((inv: Record<string, unknown>, idx: number) => (
+                <div key={String(inv._id) || idx} className="grid grid-cols-12 items-center bg-white dark:bg-gray-900 rounded-xl px-3 py-4 shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+                  <div className="col-span-2 sm:col-span-1 text-gray-700">{String(idx + 1).padStart(2, '0')}</div>
+                  <div className="col-span-4 sm:col-span-3 font-medium text-gray-900">{String(inv.invoiceId)}</div>
+                  <div className="col-span-3 sm:col-span-3 text-gray-700">{inv.date ? new Date((inv.date as string | number)).toLocaleDateString('en-GB') : '—'}</div>
+                  <div className="col-span-3 sm:col-span-2 text-gray-700">{String(inv.planType || '—')}</div>
+                  <div className="hidden sm:block col-span-2 text-gray-900">{typeof inv.amount === 'number' ? `₹ ${inv.amount.toFixed(2)}` : '—'}</div>
+                  <div className="col-span-1 flex justify-end">
+                    <button title="Download" className="h-9 w-9 rounded-full border border-gray-200 dark:border-gray-700 flex items-center justify-center">⬇︎</button>
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </_CardContent>

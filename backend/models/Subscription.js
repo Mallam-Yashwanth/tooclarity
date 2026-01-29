@@ -10,7 +10,7 @@ const subscriptionSchema = new mongoose.Schema(
     },
     planType: {
       type: String,
-      enum: ["monthly", "yearly"],
+      enum: ["monthly", "yearly", "free"],
       required: true,
     },
     status: {
@@ -37,7 +37,11 @@ const subscriptionSchema = new mongoose.Schema(
     amount: {
       type: Number,
       required: true,
-    }
+    },
+    courses: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Course"
+    }]
   },
   { timestamps: true }
 );

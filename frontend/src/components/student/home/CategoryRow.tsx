@@ -33,7 +33,7 @@ const CategoryRow: React.FC<CategoryRowProps> = ({
     <div className="w-full bg-white">
       <div className="max-w-8xl mx-auto px-3 py-5">
         {/* GRID LAYOUT */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-4">
+        <div className="flex overflow-x-auto md:grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 md:overflow-visible gap-4">
           {categories.map((cat) => {
             const isActive = activeCategory === cat.key;
 

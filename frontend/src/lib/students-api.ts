@@ -230,6 +230,7 @@ export const studentDashboardAPI = {
         params.set(key, value);
       }
     });
+    
 
     const qs = params.toString();
 
@@ -238,6 +239,17 @@ export const studentDashboardAPI = {
       { method: "GET", signal }
     );
   },
+
+  filterInstitutionCoursesByQuery: async (
+    query: string,
+    signal?: AbortSignal
+  ): Promise<StudentApiResponse<DashboardCourse[]>> => {
+    return studentApiRequest<DashboardCourse[]>(
+      `/v1/student/course/filter${query ? `?${query}` : ""}`,
+      { method: "GET", signal }
+    );
+  },
+
 
   getCoursebyId: async (
     course_id: string

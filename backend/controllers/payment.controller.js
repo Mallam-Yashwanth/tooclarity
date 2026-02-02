@@ -165,6 +165,9 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   let amount = effectiveCourseCount * planPrice;
   console.log("[Payment] Base amount (before coupon):", amount);
 
+
+  let appliedCouponId = null;
+
   // ✅ Step 4: Check coupon validity and apply discount if applicable
   if (couponCode) {
     const coupon = await Coupon.findOne({ code: couponCode });
@@ -180,6 +183,8 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     const discount = (amount * coupon.discountPercentage) / 100;
     amount = Math.max(0, Math.round((amount - discount) * 100) / 100);
 
+
+    appliedCouponId = coupon._id;
 
     console.log("[Payment] Coupon applied:", {
       couponCode,
@@ -237,6 +242,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
         endDate: null,
         amount,
         courses: validSelectedCourseIds, // Track which courses this subscription covers
+        coupon: appliedCouponId,
       },
     );
     console.log("[Payment] Subscription record created:", subscription);

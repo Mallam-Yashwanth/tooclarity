@@ -110,13 +110,6 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
       );
       console.log("[Payment] Free subscription created:", freeSubscription[0]._id);
 
-      // Mark payment as done for institute admin
-      await InstituteAdmin.updateOne(
-        { institution: institutionId },
-        { $set: { isPaymentDone: true } },
-        { session }
-      );
-
       // Activate selected courses with FREE listing type
       const courseUpdateResult = await Course.updateMany(
         {
@@ -148,8 +141,6 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
         planType: "free",
         totalActivatedCourses: courseUpdateResult.modifiedCount,
         validUntil: endDate,
-        // Return mock Razorpay data for frontend compatibility
-        key: process.env.RAZORPAY_KEY_ID,
         orderId: freeSubscription[0].razorpayOrderId,
         amount: 0,
       });

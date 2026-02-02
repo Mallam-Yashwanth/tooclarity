@@ -97,14 +97,10 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
       const freeSubscription = await Subscription.create(
         [{
           institution: institutionId,
-          planType: "free",
           status: "active",
           razorpayOrderId: `free_${Date.now()}`,
           razorpayPaymentId: null,
-          startDate: new Date(),
-          endDate,
           amount: 0,
-          courses: validSelectedCourseIds, // Track which courses this subscription covers
         }],
         { session }
       );
@@ -165,9 +161,6 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   let amount = effectiveCourseCount * planPrice;
   console.log("[Payment] Base amount (before coupon):", amount);
 
-
-  let appliedCouponId = null;
-
   // ✅ Step 4: Check coupon validity and apply discount if applicable
   if (couponCode) {
     const coupon = await Coupon.findOne({ code: couponCode });
@@ -183,8 +176,6 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     const discount = (amount * coupon.discountPercentage) / 100;
     amount = Math.max(0, Math.round((amount - discount) * 100) / 100);
 
-
-    appliedCouponId = coupon._id;
 
     console.log("[Payment] Coupon applied:", {
       couponCode,
@@ -234,15 +225,10 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     const subscription = await Subscription.create(
       {
         institution: institutionId,
-        planType,
         status: "pending",
         razorpayOrderId: order.id,
         razorpayPaymentId: null,
-        startDate: null,
-        endDate: null,
         amount,
-        courses: validSelectedCourseIds, // Track which courses this subscription covers
-        coupon: appliedCouponId,
       },
     );
     console.log("[Payment] Subscription record created:", subscription);

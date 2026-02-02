@@ -126,7 +126,7 @@ export const CourseCard: React.FC<CourseCardProps> = ({
         </div>
 
         {/* title */}
-        <p className="text-sm text-gray-600">{course.title}</p>
+        <p className="text-sm text-gray-600">{course.description || course.title}</p>
 
         {/* fee + Button */}
         <div className="flex items-center justify-between">

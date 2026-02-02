@@ -1156,6 +1156,25 @@ export const paymentAPI = {
   },
 
   /**
+   * Initiate a FREE listing (₹0 payment) for selected courses
+   * - Creates a Razorpay order with amount 0
+   * - Courses will be activated with limited features
+   */
+  initiateFreeListing: async (
+    payload: { courseIds: string[] }
+  ): Promise<ApiResponse> => {
+    return apiRequest("/v1/payment/create-order", {
+      method: "POST",
+      body: JSON.stringify({
+        amount: 0,
+        planType: "free",
+        courseIds: payload.courseIds,
+        listingType: "free", // Backend will use this to mark courses as limited
+      }),
+    });
+  },
+
+  /**
    * Apply coupon to get discount amount from backend
    */
   applyCoupon: async (code: string): Promise<ApiResponse<{ discountAmount: number }>> => {

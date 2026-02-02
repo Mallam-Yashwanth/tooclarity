@@ -26,13 +26,15 @@ const PAYMENT_CONTEXT_TTL = 60 * 60; // 60 minutes to survive delayed webhooks
 
 
 exports.createOrder = asyncHandler(async (req, res, next) => {
-  const { planType = "yearly", couponCode, courseIds = [] } = req.body;
+  const { planType = "yearly", couponCode, courseIds = [], listingType } = req.body;
   const userId = req.userId;
+  const isFreeListingRequest = listingType === "free" || req.body.amount === 0;
 
   console.log("[Payment] Create order request received:", {
     userId,
     planType,
     couponCode,
+    isFreeListingRequest,
   });
 
   // ✅ Step 1: Get institution linked to admin
@@ -44,23 +46,11 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   }
   console.log("[Payment] Institution found:", institutionId);
 
-  // ✅ Step 2: Capture snapshot of currently inactive courses (used for pricing + enforcement)
-  const inactiveCourseDocs = await Course.find({
-    institution: institutionId,
-    status: { $in: ["Inactive", "inactive"] },
-  })
-    .select("_id")
-    .lean();
-  const inactiveSnapshotIds = inactiveCourseDocs.map((doc) =>
-    doc._id.toString()
-  );
-
-  const totalInactiveCourses = inactiveSnapshotIds.length;
-  console.log("[Payment] Inactive course count:", totalInactiveCourses);
-
-  // ✅ Step 2a: Narrow down to explicitly selected course IDs (if any)
-  // If courseIds not provided, use all inactive courses (for signup flow)
+  // ✅ Step 2: Determine valid selected course IDs
+  // If courseIds explicit provided: validate them
+  // If not provided (signup flow): fetch ALL inactive courses
   let validSelectedCourseIds = [];
+
   if (Array.isArray(courseIds) && courseIds.length) {
     const normalizedIds = [...new Set(courseIds.filter((id) => typeof id === "string" && id.trim()))];
     const objectIds = normalizedIds
@@ -81,9 +71,8 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
       validSelectedCourseIds = foundCourses.map((course) => course._id);
     }
   } else {
-    // If no courseIds provided, use all inactive courses (signup flow)
-    validSelectedCourseIds = inactiveCourseDocs.map((doc) => doc._id);
-    console.log("[Payment] No courseIds provided, using all inactive courses:", validSelectedCourseIds.length);
+    // If no courseIds provided, do NOT auto-select all courses.
+    console.log("[Payment] No courseIds provided. Request will be rejected.");
   }
 
   if (!validSelectedCourseIds.length) {
@@ -91,6 +80,75 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     return next(new AppError("No inactive courses available to activate", 400));
   }
 
+  // ✅ FREE LISTING FLOW: Skip Razorpay, activate courses directly with limited features
+  if (isFreeListingRequest) {
+    console.log("[Payment] Processing FREE LISTING for courses:", validSelectedCourseIds.length);
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const now = new Date();
+      // Free listings get 30 days validity
+      const endDate = new Date(now);
+      endDate.setDate(endDate.getDate() + 30);
+
+      // Create subscription record for free listing
+      const freeSubscription = await Subscription.create(
+        [{
+          institution: institutionId,
+          status: "active",
+          razorpayOrderId: `free_${Date.now()}`,
+          razorpayPaymentId: null,
+          amount: 0,
+        }],
+        { session }
+      );
+      console.log("[Payment] Free subscription created:", freeSubscription[0]._id);
+
+      // Activate selected courses with FREE listing type
+      const courseUpdateResult = await Course.updateMany(
+        {
+          institution: institutionId,
+          status: { $in: ["Inactive", "inactive"] },
+          _id: { $in: validSelectedCourseIds },
+        },
+        {
+          $set: {
+            status: "Active",
+            listingType: "free", // Mark as free listing with limited features
+            courseSubscriptionStartDate: new Date(),
+            courseSubscriptionEndDate: endDate,
+          },
+        },
+        { session }
+      );
+
+      console.log(`[Payment] ✅ Activated ${courseUpdateResult.modifiedCount} courses with FREE listing`);
+
+      await session.commitTransaction();
+      session.endSession();
+
+      // Return success response for free listing
+      return res.status(200).json({
+        status: "success",
+        message: "Free listing activated successfully",
+        listingType: "free",
+        planType: "free",
+        totalActivatedCourses: courseUpdateResult.modifiedCount,
+        validUntil: endDate,
+        orderId: freeSubscription[0].razorpayOrderId,
+        amount: 0,
+      });
+    } catch (err) {
+      await session.abortTransaction();
+      session.endSession();
+      console.error("[Payment] Free listing activation failed:", err);
+      return next(new AppError("Failed to activate free listing", 500));
+    }
+  }
+
+  // ✅ PAID FLOW: Continue with Razorpay
   // ✅ Step 3: Validate plan type and get base amount
   const planPrice = PLANS[planType.toLowerCase()];
   if (!planPrice) {
@@ -150,7 +208,6 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
       {
         institution: institutionId.toString(),
         selectedCourseIds: validSelectedCourseIds.map((id) => id.toString()),
-        inactiveSnapshot: inactiveSnapshotIds,
         totalCourses: effectiveCourseCount,
         totalAmount: amount,
         planType,
@@ -168,12 +225,9 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     const subscription = await Subscription.create(
       {
         institution: institutionId,
-        planType,
         status: "pending",
         razorpayOrderId: order.id,
         razorpayPaymentId: null,
-        startDate: null,
-        endDate: null,
         amount,
       },
     );
@@ -224,9 +278,6 @@ exports.verifyPayment = asyncHandler(async (req, res, next) => {
   const paymentContext = await RedisUtil.getPaymentContext(order_id);
   const redisCourseIds = Array.isArray(paymentContext?.selectedCourseIds)
     ? paymentContext.selectedCourseIds
-    : [];
-  const inactiveSnapshotIds = Array.isArray(paymentContext?.inactiveSnapshot)
-    ? paymentContext.inactiveSnapshot
     : [];
   const validCourseObjectIds = redisCourseIds
     .filter((id) => mongoose.Types.ObjectId.isValid(id))
@@ -319,37 +370,6 @@ exports.verifyPayment = asyncHandler(async (req, res, next) => {
     console.log(
       `[Payment Webhook] ✅ Activated ${courseUpdateResult.modifiedCount} inactive courses for institution ${subscription.institution}`
     );
-
-    // ✅ Reapply inactive status to snapshot courses that weren't part of this payment
-    const selectedIdSet = new Set(
-      validCourseObjectIds.map((id) => id.toString())
-    );
-    const reapplyInactiveIds = inactiveSnapshotIds
-      .filter(
-        (id) =>
-          mongoose.Types.ObjectId.isValid(id) && !selectedIdSet.has(id)
-      )
-      .map((id) => new mongoose.Types.ObjectId(id));
-
-    if (reapplyInactiveIds.length) {
-      await Course.updateMany(
-        {
-          institution: subscription.institution,
-          _id: { $in: reapplyInactiveIds },
-        },
-        {
-          $set: { status: "Inactive" },
-          $unset: {
-            courseSubscriptionStartDate: "",
-            courseSubscriptionEndDate: "",
-          },
-        },
-        { session }
-      );
-      console.log(
-        `[Payment Webhook] 🔁 Reverted ${reapplyInactiveIds.length} unselected inactive courses`
-      );
-    }
 
     // ✅ Cache subscription status
     // await RedisUtil.setex(
@@ -451,14 +471,14 @@ exports.pollSubscriptionStatus = asyncHandler(async (req, res) => {
       try {
         // Get payment context from Redis
         const paymentContext = await RedisUtil.getPaymentContext(orderId);
-        
+
         if (paymentContext && paymentContext.selectedCourseIds && paymentContext.selectedCourseIds.length > 0) {
           // Verify institution matches
           if (paymentContext.institution === sub.institution.toString()) {
             const redisCourseIds = Array.isArray(paymentContext.selectedCourseIds)
               ? paymentContext.selectedCourseIds
               : [];
-            
+
             const validCourseObjectIds = redisCourseIds
               .filter((id) => mongoose.Types.ObjectId.isValid(id))
               .map((id) => new mongoose.Types.ObjectId(id));
@@ -504,41 +524,6 @@ exports.pollSubscriptionStatus = asyncHandler(async (req, res) => {
                 console.log(
                   `[Poll Status] ✅ Activated ${courseUpdateResult.modifiedCount} courses for institution ${sub.institution}`
                 );
-
-                // Reapply inactive status to unselected courses from snapshot
-                const inactiveSnapshotIds = Array.isArray(paymentContext?.inactiveSnapshot)
-                  ? paymentContext.inactiveSnapshot
-                  : [];
-
-                const selectedIdSet = new Set(
-                  validCourseObjectIds.map((id) => id.toString())
-                );
-                const reapplyInactiveIds = inactiveSnapshotIds
-                  .filter(
-                    (id) =>
-                      mongoose.Types.ObjectId.isValid(id) && !selectedIdSet.has(id)
-                  )
-                  .map((id) => new mongoose.Types.ObjectId(id));
-
-                if (reapplyInactiveIds.length) {
-                  await Course.updateMany(
-                    {
-                      institution: sub.institution,
-                      _id: { $in: reapplyInactiveIds },
-                    },
-                    {
-                      $set: { status: "Inactive" },
-                      $unset: {
-                        courseSubscriptionStartDate: "",
-                        courseSubscriptionEndDate: "",
-                      },
-                    },
-                    { session }
-                  );
-                  console.log(
-                    `[Poll Status] 🔁 Reverted ${reapplyInactiveIds.length} unselected inactive courses`
-                  );
-                }
 
                 await session.commitTransaction();
                 session.endSession();

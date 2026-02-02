@@ -56,14 +56,21 @@ const courseSchema = new mongoose.Schema(
       type: String, // file path / URL
     },
 
-    status:{
+
+    status: {
       type: String,
-      enum:['Active','Inactive'],
-      default:'Inactive'
+      enum: ['Active', 'Inactive'],
+      default: 'Inactive'
     },
 
-    courseSubscriptionStartDate:{type:Date},
-    courseSubscriptionEndDate:{type:Date},
+    listingType: {
+      type: String,
+      enum: ['free', 'paid'],
+      default: 'paid'
+    },
+
+    courseSubscriptionStartDate: { type: Date },
+    courseSubscriptionEndDate: { type: Date },
 
     // Additional fields for Under Graduate / Post Graduate
     graduationType: { type: String },
@@ -141,7 +148,7 @@ courseSchema.post('save', async function (doc) {
       await esClient.delete({
         index: 'courses_index',
         id: doc._id.toString(),
-      }).catch(() => {});
+      }).catch(() => { });
       console.log(`🗑️ Removed inactive course ${doc._id} from Elasticsearch`);
     }
   } catch (err) {
@@ -168,7 +175,7 @@ courseSchema.post('findOneAndUpdate', async function (doc) {
       await esClient.delete({
         index: 'courses_index',
         id: doc._id.toString(),
-      }).catch(() => {});
+      }).catch(() => { });
       console.log(`🗑️ Removed inactive course ${doc._id} from Elasticsearch`);
     }
   } catch (err) {

@@ -211,7 +211,7 @@ const CourseReachChart: React.FC<CourseReachChartProps> = ({
                   domain={yTicksOverride ? [0, Math.max(...yTicksOverride)] : [0, 'auto']}
                   tickFormatter={(value) => value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}
                 />
-                <YAxis yAxisId="right" orientation="right" hide />
+
                 <Tooltip
                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   cursor={{ stroke: '#e5e7eb', strokeWidth: 1 }}
@@ -238,7 +238,7 @@ const CourseReachChart: React.FC<CourseReachChartProps> = ({
                 />
                 {showLegend && (
                   <Line
-                    yAxisId="right"
+                    yAxisId="left"
                     type="monotone"
                     dataKey="leads"
                     stroke="#10b981"

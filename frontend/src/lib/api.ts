@@ -170,6 +170,7 @@ export interface PaymentInitPayload {
   planType?: string; // e.g., "yearly" | "monthly"
   couponCode?: string | null;
   courseIds?: string[];
+  noOfMonths?: number;
   // institutionId: string;
 }
 

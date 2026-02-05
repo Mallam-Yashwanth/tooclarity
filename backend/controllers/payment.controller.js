@@ -26,7 +26,7 @@ const PAYMENT_CONTEXT_TTL = 60 * 60; // 60 minutes to survive delayed webhooks
 
 
 exports.createOrder = asyncHandler(async (req, res, next) => {
-  const { planType = "yearly", couponCode, courseIds = [], listingType } = req.body;
+  const { planType, couponCode, courseIds = [], listingType, noOfMonths } = req.body;
   const userId = req.userId;
   const isFreeListingRequest = listingType === "free" || req.body.amount === 0;
 
@@ -35,6 +35,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     planType,
     couponCode,
     isFreeListingRequest,
+    noOfMonths
   });
 
   // ✅ Step 1: Get institution linked to admin
@@ -158,7 +159,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
 
   const effectiveCourseCount = validSelectedCourseIds.length;
 
-  let amount = effectiveCourseCount * planPrice;
+  let amount = effectiveCourseCount * planPrice * noOfMonths;
   console.log("[Payment] Base amount (before coupon):", amount);
 
   // ✅ Step 4: Check coupon validity and apply discount if applicable
@@ -301,10 +302,10 @@ exports.verifyPayment = asyncHandler(async (req, res, next) => {
   }
 
   // ✅ Idempotency guard
-  if (subscription.status === "active") {
-    console.log(`[Payment Webhook] ⚠️ Subscription already active for order_id: ${order_id}`);
-    return res.status(200).send("OK");
-  }
+  // if (subscription.status === "active") {
+  //   console.log(`[Payment Webhook] ⚠️ Subscription already active for order_id: ${order_id}`);
+  //   return res.status(200).send("OK");
+  // }
 
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -341,12 +342,12 @@ exports.verifyPayment = asyncHandler(async (req, res, next) => {
     }
 
     // ✅ Mark payment done for institute admin
-    await InstituteAdmin.updateOne(
-      { institution: subscription.institution },
-      { $set: { isPaymentDone: true } },
-      { session }
-    );
-    console.log(`[Payment Webhook] ✅ Institute payment marked as done`);
+    // await InstituteAdmin.updateOne(
+    //   { institution: subscription.institution },
+    //   { $set: { isPaymentDone: true } },
+    //   { session }
+    // );
+    // console.log(`[Payment Webhook] ✅ Institute payment marked as done`);
 
     // ✅ Activate relevant inactive courses
     const courseMatch = {

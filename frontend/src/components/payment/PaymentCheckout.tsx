@@ -2,7 +2,13 @@
 
 import React, { useEffect, useState } from "react";
 import { _Card, _CardContent, _CardHeader, _CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"; import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CheckCircle2, Info } from "lucide-react";
 import { paymentAPI } from "@/lib/api";
@@ -41,10 +47,10 @@ const PLAN_MAP: Record<PlanKey, Plan> = {
   monthly: {
     key: "monthly",
     title: "Monthly",
-    currentPrice: 199,
-    discount: 0,
-    subtitle: "Coming Soon",
-    comingSoon: true,
+    oldPrice: "199 INR",
+    currentPrice: 99,
+    discount: 67,
+    comingSoon: false,
   },
   yearly: {
     key: "yearly",
@@ -61,18 +67,36 @@ type PaymentCheckoutProps = {
   onProcessing?: (data: { paymentId?: string | null; orderId?: string | null }) => void;
   onSuccess?: (data: { transactionId?: string | null; paymentId?: string | null; orderId?: string | null }) => void;
   onFailure?: (data: { paymentId?: string | null; orderId?: string | null }) => void;
+  customPaymentDetails?: {
+    totalInactiveCourses: number;
+    pricePerCourse: number;
+    totalAmount: number;
+    courseIds: string[];
+  };
 };
 
-export default function PaymentCheckout({ onProcessing, onSuccess, onFailure }: PaymentCheckoutProps) {
+export default function PaymentCheckout({ onProcessing, onSuccess, onFailure, customPaymentDetails }: PaymentCheckoutProps) {
   const [selectedPlan, setSelectedPlan] = useState<PlanKey>("yearly");
+  const [selectedMonths, setSelectedMonths] = useState("1");
   const [coupon, setCoupon] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [isPaying, setIsPaying] = useState(false);
-  const [paymentDetails, setPaymentDetails] = useState<{ totalInactiveCourses: number; pricePerCourse: number; totalAmount: number } | null>(null);
+  const [paymentDetails, setPaymentDetails] = useState<{ totalInactiveCourses: number; pricePerCourse: number; totalAmount: number } | null>(
+    customPaymentDetails
+      ? {
+        totalInactiveCourses: customPaymentDetails.totalInactiveCourses,
+        pricePerCourse: customPaymentDetails.pricePerCourse,
+        totalAmount: customPaymentDetails.totalAmount,
+      }
+      : null
+  );
 
   const plan = PLAN_MAP[selectedPlan];
 
   useEffect(() => {
+    // If custom details provided (e.g. from subscription page with selected courses), do NOT fetch from API
+    if (customPaymentDetails) return;
+
     let active = true;
     (async () => {
       try {
@@ -101,7 +125,7 @@ export default function PaymentCheckout({ onProcessing, onSuccess, onFailure }: 
     return () => {
       active = false;
     };
-  }, [plan.currentPrice]);
+  }, [plan.currentPrice, customPaymentDetails]);
 
   // Coupon state
   const [couponDiscount, setCouponDiscount] = useState(0);
@@ -124,8 +148,9 @@ export default function PaymentCheckout({ onProcessing, onSuccess, onFailure }: 
   } | null>(null);
 
   const totalInactiveCourses = paymentDetails?.totalInactiveCourses ?? 0;
-  const baseAmount = paymentDetails?.pricePerCourse ?? plan.currentPrice;
-  const _subtotal = paymentDetails?.totalAmount ?? baseAmount;
+  const baseAmount = plan.currentPrice;
+  const duration = selectedPlan === "monthly" ? parseInt(selectedMonths || "1", 10) : 1;
+  const _subtotal = totalInactiveCourses * baseAmount * duration;
   const _payable = Math.max(_subtotal - couponDiscount, 0);
 
   async function applyCoupon() {
@@ -161,6 +186,8 @@ export default function PaymentCheckout({ onProcessing, onSuccess, onFailure }: 
         amount: _payable,
         planType: selectedPlan,
         couponCode: appliedCoupon ?? undefined,
+        courseIds: customPaymentDetails?.courseIds,
+        noOfMonths: selectedPlan === "monthly" ? Number(selectedMonths) : 1,
       });
 
       if (!res.success || !res.data) {
@@ -306,22 +333,33 @@ export default function PaymentCheckout({ onProcessing, onSuccess, onFailure }: 
 
             {/* Plans */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {/* Monthly (disabled / coming soon) */}
-              <div
-                className={
-                  "text-left rounded-xl transition-shadow select-none cursor-not-allowed"
-                }
-                aria-disabled
+              {/* Monthly */}
+              <button
+                type="button"
+                onClick={() => setSelectedPlan("monthly")}
+                className={`text-left rounded-xl transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selectedPlan === "monthly" ? "ring-2 ring-[#0222D7] shadow" : ""
+                  }`}
+                aria-pressed={selectedPlan === "monthly"}
               >
-                <_Card className="m-0 border-muted bg-muted/30">
+                <_Card className="m-0">
                   <_CardContent className="px-6">
-                    <div className="flex h-[100px] flex-col items-center justify-center gap-1 text-center opacity-80">
+                    <div className="relative flex h-[100px] flex-col items-center justify-center gap-1 text-center">
+                      {PLAN_MAP.monthly.badge ? (
+                        <span className="absolute -top-3 rounded-full bg-[#0222D7] px-2 py-1 text-[10px] font-medium text-white shadow">
+                          {PLAN_MAP.monthly.badge}
+                        </span>
+                      ) : null}
                       <div className="text-base font-medium">Monthly</div>
-                      <div className="text-xs text-muted-foreground">Coming Soon</div>
+                      {PLAN_MAP.monthly.oldPrice ? (
+                        <div className="text-xs text-muted-foreground line-through">
+                          {PLAN_MAP.monthly.oldPrice}
+                        </div>
+                      ) : null}
+                      <div className="text-lg font-semibold">{formatINR(PLAN_MAP.monthly.currentPrice)} INR</div>
                     </div>
                   </_CardContent>
                 </_Card>
-              </div>
+              </button>
 
               {/* Yearly */}
               <button
@@ -382,7 +420,7 @@ export default function PaymentCheckout({ onProcessing, onSuccess, onFailure }: 
         {/* Right column: Summary */}
         <aside className="sm:pt-7">
           <_Card className="bg-muted/30">
-            <_CardHeader className="px-6">
+            <_CardHeader className="p-6 pb-2">
               <_CardTitle className="text-base">Amount summary</_CardTitle>
             </_CardHeader>
             <_CardContent className="space-y-4 px-6 pb-6">
@@ -405,6 +443,32 @@ export default function PaymentCheckout({ onProcessing, onSuccess, onFailure }: 
                   </div>
                   <div>{formatINR(baseAmount)} INR</div>
                 </div>
+
+                {/* Duration Selector - Only for Monthly */}
+                {selectedPlan === "monthly" && (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      Duration
+                      <div className="text-muted-foreground text-xs">
+                        (Select number of months)
+                      </div>
+                    </div>
+                    <div className="w-[100px]">
+                      <Select value={selectedMonths} onValueChange={setSelectedMonths}>
+                        <SelectTrigger className="h-8">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 12 }, (_, i) => i + 1).map((num) => (
+                            <SelectItem key={num} value={String(num)}>
+                              {num} Month{num > 1 ? "s" : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
 
                 {/* Backend discount only (from coupon) */}
                 <div className="flex items-center justify-between">

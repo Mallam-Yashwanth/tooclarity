@@ -425,12 +425,106 @@ exports.verifyPayment = asyncHandler(async (req, res, next) => {
 exports.pollSubscriptionStatus = asyncHandler(async (req, res) => {
   try {
     const userId = req.userId;
-    const { orderId } = req.query;
+    const { orderId, paymentId, signature } = req.query;
 
     if (!userId) {
       return res
         .status(400)
         .json({ status: "error", message: "Missing userId" });
+    }
+
+    // ✅ MANUAL VERIFICATION (Immediate Activation)
+    // If paymentId and signature provided, we verify and activate immediately
+
+    if (orderId && paymentId && signature) {
+      const generated_signature = crypto
+        .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+        .update(orderId + "|" + paymentId)
+        .digest("hex");
+
+      if (generated_signature === signature) {
+        console.log(`[Poll Status] ✅ Signature verified for order ${orderId}`);
+
+        const subscription = await Subscription.findOne({ razorpayOrderId: orderId });
+
+        if (subscription && subscription.status !== "active") {
+          const paymentContext = await RedisUtil.getPaymentContext(orderId);
+          const redisCourseIds = Array.isArray(paymentContext?.selectedCourseIds)
+            ? paymentContext.selectedCourseIds
+            : [];
+          const noOfMonths = parseInt(paymentContext?.noOfMonths || 1, 10);
+          const validCourseObjectIds = redisCourseIds
+            .filter((id) => mongoose.Types.ObjectId.isValid(id))
+            .map((id) => new mongoose.Types.ObjectId(id));
+
+          const session = await mongoose.startSession();
+          session.startTransaction();
+
+          try {
+            const now = new Date();
+            const endDate =
+              subscription.planType === "yearly"
+                ? new Date(now.setFullYear(now.getFullYear() + 1))
+                : new Date(now.setMonth(now.getMonth() + noOfMonths));
+
+            // Activate Subscription
+            await Subscription.updateOne(
+              { razorpayOrderId: orderId },
+              {
+                $set: {
+                  status: "active",
+                  razorpayPaymentId: paymentId,
+                  startDate: new Date(),
+                  endDate,
+                },
+              },
+              { session }
+            );
+
+            // Mark payment done for institute admin
+            await InstituteAdmin.updateOne(
+              { institution: subscription.institution },
+              { $set: { isPaymentDone: true } },
+              { session }
+            );
+
+            // Activate Courses
+            if (validCourseObjectIds.length > 0) {
+              const courseMatch = {
+                institution: subscription.institution,
+                status: { $in: ["Inactive", "inactive"] },
+                _id: { $in: validCourseObjectIds },
+              };
+
+              await Course.updateMany(
+                courseMatch,
+                {
+                  $set: {
+                    status: "Active",
+                    courseSubscriptionStartDate: new Date(),
+                    courseSubscriptionEndDate: endDate,
+                  },
+                },
+                { session }
+              );
+            }
+
+            await session.commitTransaction();
+            console.log(`[Poll Status] ✅ Subscription manually activated for order ${orderId}`);
+
+            // Clean up Redis
+            await RedisUtil.deletePaymentContext(orderId);
+
+          } catch (err) {
+            await session.abortTransaction();
+            console.error("[Poll Status] ❌ Activation transaction failed:", err);
+          } finally {
+            session.endSession();
+          }
+        }
+      } else {
+        console.warn(`[Poll Status] ⚠️ Invalid signature for order ${orderId}`);
+      }
     }
 
     const subscription = await Subscription.aggregate([
@@ -460,95 +554,26 @@ exports.pollSubscriptionStatus = asyncHandler(async (req, res) => {
       },
     ]);
 
-    if (!subscription || subscription.length === 0) {
-      return res.status(404).json({ success: false, message: "pending" });
-    }
+    // Filter to the specific order if multiple exist or just find the relevant one
+    const sub = subscription.find(s => s.razorpayOrderId === orderId) || subscription[0];
 
-    const sub = subscription[0];
-    const status = sub.status;
-
-    // ✅ If subscription is active and orderId is provided, activate selected courses
-    if (status === "active" && orderId) {
-      try {
-        // Get payment context from Redis
-        const paymentContext = await RedisUtil.getPaymentContext(orderId);
-
-        if (paymentContext && paymentContext.selectedCourseIds && paymentContext.selectedCourseIds.length > 0) {
-          // Verify institution matches
-          if (paymentContext.institution === sub.institution.toString()) {
-            const redisCourseIds = Array.isArray(paymentContext.selectedCourseIds)
-              ? paymentContext.selectedCourseIds
-              : [];
-
-            const validCourseObjectIds = redisCourseIds
-              .filter((id) => mongoose.Types.ObjectId.isValid(id))
-              .map((id) => new mongoose.Types.ObjectId(id));
-
-            if (validCourseObjectIds.length > 0) {
-              const now = new Date();
-              const endDate =
-                sub.planType === "yearly"
-                  ? new Date(now.setFullYear(now.getFullYear() + 1))
-                  : new Date(now.setMonth(now.getMonth() + 1));
-
-              const session = await mongoose.startSession();
-              session.startTransaction();
-
-              try {
-                // Mark payment done for institute admin
-                await InstituteAdmin.updateOne(
-                  { institution: sub.institution },
-                  { $set: { isPaymentDone: true } },
-                  { session }
-                );
-                console.log(`[Poll Status] ✅ Institute payment marked as done`);
-
-                // Activate selected courses
-                const courseMatch = {
-                  institution: sub.institution,
-                  status: { $in: ["Inactive", "inactive"] },
-                  _id: { $in: validCourseObjectIds },
-                };
-
-                const courseUpdateResult = await Course.updateMany(
-                  courseMatch,
-                  {
-                    $set: {
-                      status: "Active",
-                      courseSubscriptionStartDate: new Date(),
-                      courseSubscriptionEndDate: endDate,
-                    },
-                  },
-                  { session }
-                );
-
-                console.log(
-                  `[Poll Status] ✅ Activated ${courseUpdateResult.modifiedCount} courses for institution ${sub.institution}`
-                );
-
-                await session.commitTransaction();
-                session.endSession();
-
-                // Delete payment context after successful activation
-                await RedisUtil.deletePaymentContext(orderId);
-              } catch (activateErr) {
-                await session.abortTransaction();
-                session.endSession();
-                console.error("[Poll Status] ❌ Course activation failed:", activateErr);
-                // Continue to return status even if activation fails
-              }
-            }
-          }
-        }
-      } catch (contextErr) {
-        console.error("[Poll Status] ⚠️ Error checking payment context:", contextErr);
-        // Continue to return status even if context check fails
+    if (!sub) {
+      // Fallback if no specific order found but subscription list exists
+      if (subscription.length === 0) {
+        return res.status(404).json({ success: false, message: "pending" });
       }
     }
 
+    // If we activated it above, sub.status might still be stale in 'subscription' fetch 
+    // if fetch happened before update? No, we fetch after. 
+    // Wait, I put the aggregate call *after* the update logic block. So it should return the fresh status.
+
+    // Safe check if sub is undefined
+    if (!sub) return res.status(404).json({ success: false, message: "pending" });
+
     return res
       .status(200)
-      .json({ success: true, message: status });
+      .json({ success: true, message: sub.status });
   } catch (err) {
     console.error("[Poll Subscription] ❌ Error:", err);
     return res

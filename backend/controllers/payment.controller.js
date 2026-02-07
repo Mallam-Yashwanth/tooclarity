@@ -227,6 +227,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
       {
         institution: institutionId,
         status: "pending",
+        planType,
         razorpayOrderId: order.id,
         razorpayPaymentId: null,
         amount,

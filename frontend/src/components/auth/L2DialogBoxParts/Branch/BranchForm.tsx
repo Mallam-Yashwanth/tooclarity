@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useState , useMemo} from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import InputField from "@/components/ui/InputField";
@@ -70,6 +70,19 @@ export default function BranchForm({
     contactInfo: "",
     locationUrl: "",
   };
+
+  const isBranchFormValid = useMemo(() => {
+    const hasRequiredFields = 
+      currentBranch.branchName?.trim().length > 0 &&
+      currentBranch.branchAddress?.trim().length > 0 &&
+      currentBranch.contactInfo?.trim().length > 0 &&
+      currentBranch.locationUrl?.trim().length > 0;
+
+    // We check if any property in the errors object actually has a message
+    const hasNoValidationErrors = !Object.values(errors).some(msg => msg && msg.length > 0);
+
+    return hasRequiredFields && hasNoValidationErrors;
+  }, [currentBranch, errors]);
 
 
   // ✅ 4. Create a handler to manage country selection
@@ -185,14 +198,14 @@ export default function BranchForm({
         )}
         <Button
           type="submit"
-          disabled={isLoading}
-          className={`w-full sm:max-w-[350px] h-[48px] rounded-[12px] font-semibold transition-colors ${
-            isLoading
-              ? "opacity-50 cursor-not-allowed bg-blue-600"
-              : "bg-[#6B7280] hover:bg-[#6B7280]/90"
+          disabled={isLoading || !isBranchFormValid} 
+          className={`w-full sm:max-w-[350px] h-[48px] rounded-[12px] font-semibold transition-all duration-300 ${
+            !isBranchFormValid || isLoading
+              ? "bg-[#6B7280] cursor-not-allowed opacity-50" // Gray state (Default)
+              : "bg-[#0222D7] hover:bg-[#021bb0] shadow-md active:scale-[0.98]" // ✅ Blue state (Valid)
           } text-white text-[16px] sm:text-[18px]`}
         >
-          <Plus size={16} />
+          <Plus size={16} className="mr-2" />
           {isLoading ? "Saving..." : "Save & Add Course"}
         </Button>
       </div>

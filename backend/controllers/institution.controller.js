@@ -42,6 +42,7 @@ exports.createL1Institution = asyncHandler(async (req, res, next) => {
     )[0];
 
     user.institution = newInstitution._id;
+    user.isProfileCompleted = true;
     await user.save({ session, validateBeforeSave: false });
 
     await session.commitTransaction();
@@ -228,13 +229,13 @@ exports.uploadFileData = asyncHandler(async (req, res, next) => {
   }
 
   // 🚫 If admin already has institution, stop creation
-  if (institutionAdmin.institution) {
-    return res.status(400).json({
-      success: false,
-      message:
-        "Institution already exists for this admin. Cannot create a new one.",
-    });
-  }
+  // if (institutionAdmin.institution) {
+  //   return res.status(400).json({
+  //     success: false,
+  //     message:
+  //       "Institution already exists for this admin. Cannot create a new one.",
+  //   });
+  // }
 
   // --- Start transaction ---
   const session = await Institution.startSession();

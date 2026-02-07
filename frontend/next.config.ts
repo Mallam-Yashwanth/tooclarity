@@ -2,9 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // ✅ ESLint settings — keep strict in production
-  eslint: {
-    ignoreDuringBuilds: false, // build fails on critical lint issues
-  },
+  // eslint: {
+  //   ignoreDuringBuilds: false, // build fails on critical lint issues
+  // },
 
   // ✅ Remote image optimization (for Unsplash / Source Unsplash)
   images: {

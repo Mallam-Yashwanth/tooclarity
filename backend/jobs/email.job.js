@@ -5,12 +5,7 @@ const { sendPaymentSuccessEmail } = require('../services/otp.service');
 
 const QUEUE_NAME = 'email-queue';
 
-const redisConnection = new IORedis({
-  host: process.env.REDIS_HOST || '127.0.0.1',
-  port: Number(process.env.REDIS_PORT || 6379),
-  password: process.env.REDIS_PASSWORD || '',
-  maxRetriesPerRequest: null,
-});
+const redisConnection = require('../config/redisConfig');
 
 const emailQueue = new Queue(QUEUE_NAME, { connection: redisConnection });
 

@@ -3,6 +3,7 @@ import {
   metricsAPI,
   enquiriesAPI,
   getMyInstitution,
+  branchAPI,
   apiRequest,
   //ApiResponse 
 } from '../api';
@@ -307,6 +308,37 @@ export function useChartData(
     refetchInterval: 30 * 60 * 1000, // Refetch every 30 minutes when active
     refetchOnWindowFocus: false, // Prevent refetch on window focus
     refetchOnMount: false, // Prevent refetch on component mount if data exists
+  });
+}
+
+
+
+export function useInfiniteBranches(institutionId?: string, limit: number = 10) {
+  return useInfiniteQuery({
+    queryKey: ['branches-infinite', institutionId],
+    enabled: !!institutionId,
+    initialPageParam: null as string | null,
+    queryFn: async ({ pageParam }) => {
+      return await branchAPI.getBranchesWithCursor(institutionId!, pageParam, limit);
+    },
+    getNextPageParam: (lastPage: any) => lastPage?.nextCursor ?? undefined,
+  });
+}
+
+export function useInfinitePrograms(institutionId?: string, limit: number = 10) {
+  return useInfiniteQuery({
+    queryKey: ['programs-infinite', institutionId],
+    enabled: !!institutionId,
+    initialPageParam: null as string | null,
+    queryFn: async ({ pageParam }) => {
+      const res = await programsAPI.list(institutionId!, 
+        // pageParam, limit
+      );
+      return res;
+    },
+    getNextPageParam: (lastPage: any) => {
+      return lastPage?.nextCursor || undefined;
+    },
   });
 }
 

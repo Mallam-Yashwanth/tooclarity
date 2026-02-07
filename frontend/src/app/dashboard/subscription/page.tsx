@@ -12,11 +12,12 @@ import Image from "next/image";
 import AppSelect from "@/components/ui/AppSelect";
 import L2DialogBox from "@/components/auth/L2DialogBox";
 import { getProgramStatus, formatDate } from "@/lib/utility";
-import { useRouter } from "next/navigation";
+import {useSearchParams, usePathname, useRouter } from "next/navigation";
 import AnalyticsTable from "@/components/dashboard/AnalyticsTable";
 import { loadRazorpayScript } from "@/lib/razorpay";
 import { useUserStore } from "@/lib/user-store";
 import PaymentCheckout from "@/components/payment/PaymentCheckout";
+import { Suspense } from "react";
 
 type InactiveCourseRow = {
   id: string;
@@ -59,7 +60,18 @@ function ProgramsPage() {
   const { data: institution } = useInstitution();
   const queryClient = useQueryClient();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'details' | 'add' | 'inactive'>('details');
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Derive activeTab from the URL. If no ?tab= is present, default to 'details'
+  const activeTab = (searchParams.get("tab") as 'details' | 'add' | 'inactive') || 'details';
+
+  // Function to update the URL
+  const handleTabChange = (tabName: 'details' | 'add' | 'inactive') => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tabName);
+    router.push(`${pathname}?${params.toString()}`);
+  };
   const [search, setSearch] = useState("");
   const [branchFilter, setBranchFilter] = useState<string>("");
   const [addInlineMode, setAddInlineMode] = useState<'none' | 'course' | 'branch'>('none');
@@ -115,9 +127,9 @@ function ProgramsPage() {
   }, [invoices]);
 
   const onL2Success = () => {
-    queryClient.invalidateQueries({ queryKey: ['programs-page-list-institution-admin'] });
-    setActiveTab('details');
-  };
+  queryClient.invalidateQueries({ queryKey: ['programs-page-list-institution-admin'] });
+  handleTabChange('details'); 
+};
 
   // Navigation function for edit button
   const handleEditProgram = (programId: string) => {
@@ -340,12 +352,22 @@ function ProgramsPage() {
                 <div className="text-2xl font-semibold">Your Listed Programs</div>
               </div>
 
-              {/* Tabs header */}
-              <div className="flex items-center gap-6 border-b border-gray-200 dark:border-gray-800 mb-4 text-gray-900 dark:text-gray-100">
-                <button onClick={() => setActiveTab('details')} className={`py-2 px-1 ${activeTab === 'details' ? 'border-b-2 border-blue-600 font-medium' : 'text-gray-500'}`}>Program Details</button>
-                <button onClick={() => setActiveTab('add')} className={`py-2 px-1 ${activeTab === 'add' ? 'border-b-2 border-blue-600 font-medium' : 'text-gray-500'}`}>Add Program</button>
-                <button onClick={() => setActiveTab('inactive')} className={`py-2 px-1 ${activeTab === 'inactive' ? 'border-b-2 border-blue-600 font-medium' : 'text-gray-500'}`}>Inactive Courses</button>
-              </div>
+          {/* Tabs header */}
+          <div className="flex items-center gap-6 border-b border-gray-200 dark:border-gray-800 mb-4 text-gray-900 dark:text-gray-100">
+            <button
+              onClick={() => handleTabChange('details')}
+              className={`py-2 px-1 ${activeTab === 'details' ? 'border-b-2 border-blue-600 font-medium' : 'text-gray-500'}`}
+            >
+              Program Details
+            </button>
+
+            <button
+              onClick={() => handleTabChange('inactive')}
+              className={`py-2 px-1 ${activeTab === 'inactive' ? 'border-b-2 border-blue-600 font-medium' : 'text-gray-500'}`}
+            >
+              Inactive Courses
+            </button>
+          </div>
 
               {/* Utilities row: search + filter */}
               {activeTab === 'details' && (
@@ -636,6 +658,12 @@ function ProgramsPage() {
   );
 }
 
+function ProgramsPageWrapper() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ProgramsPage />
+    </Suspense>
+  );
+}
+
 export default withAuth(ProgramsPage);
-
-

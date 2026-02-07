@@ -166,7 +166,7 @@ const CourseDetailsPage: React.FC = () => {
           institutionId: courseData.institution.id || ``,
           title: courseData.course.courseName || courseData.course.selectBranch|| "Untitled Course",
           institution: courseData.institution?.instituteName || "Unknown Institution",
-          location: courseData.institution?.locationURL || courseData.course.location || "Location not specified",
+          location: courseData.institution?.locationURL || courseData.course.locationURL || "Location not specified",
           description: courseData.course.aboutCourse || 'Discover quality education with comprehensive learning programs',
           aboutCourse: courseData.course.aboutCourse || 'Our institution provides world-class education with experienced faculty and modern facilities.',
           eligibility: courseData.course.eligibilityCriteria || 'All students meeting basic requirements',

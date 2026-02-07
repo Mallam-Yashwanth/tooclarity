@@ -16,6 +16,12 @@ const subscriptionSchema = new mongoose.Schema(
       index: true,
     },
 
+    planType: {
+      type: String,
+      enum: ["monthly", "yearly", "free"],
+      default: "yearly",
+    },
+
     razorpayOrderId: {
       type: String,
 

@@ -253,6 +253,94 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
 });
 
 
+/**
+ * Shared Helper: Activate Subscription & Courses
+ * Handles the logic for updating subscription, institute admin, coupon, and courses.
+ */
+const activateSubscription = async ({ orderId, paymentId, session, paymentContext }) => {
+  // 1. Fetch Subscription
+  console.log(`[Activation] Fetching subscription for order: ${orderId}`);
+  const subscription = await Subscription.findOne({ razorpayOrderId: orderId }).session(session);
+
+  if (!subscription) {
+    throw new Error(`Subscription not found for orderId: ${orderId}`);
+  }
+
+  // Idempotency Check
+  if (subscription.status === "active") {
+    console.log(`[Activation] Subscription already active for order: ${orderId}`);
+    return { alreadyActive: true, subscription };
+  }
+
+  // 2. Calculate End Date
+  const now = new Date();
+  // Ensure we use the noOfMonths from payment context, default to 1 if missing
+  const noOfMonths = parseInt(paymentContext?.noOfMonths || 1, 10);
+
+  const endDate =
+    subscription.planType === "yearly"
+      ? new Date(now.setFullYear(now.getFullYear() + 1))
+      : new Date(now.setMonth(now.getMonth() + noOfMonths));
+
+  // 3. Update Subscription Status
+  subscription.status = "active";
+  subscription.razorpayPaymentId = paymentId;
+  subscription.startDate = new Date();
+  subscription.endDate = endDate;
+  await subscription.save({ session });
+
+  // 4. Increment Coupon Usage (if applicable)
+  if (subscription.coupon) {
+    await Coupon.updateOne(
+      { _id: subscription.coupon },
+      { $inc: { useCount: 1 } },
+      { session }
+    );
+    console.log(`[Activation] Coupon use count incremented`);
+  }
+
+  // 5. Update Institute Payment Status
+  await InstituteAdmin.updateOne(
+    { institution: subscription.institution },
+    { $set: { isPaymentDone: true } },
+    { session }
+  );
+
+  // 6. Activate Selected Courses
+  let coursesActivated = 0;
+  const redisCourseIds = Array.isArray(paymentContext?.selectedCourseIds)
+    ? paymentContext.selectedCourseIds
+    : [];
+
+  const validCourseObjectIds = redisCourseIds
+    .filter((id) => mongoose.Types.ObjectId.isValid(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
+
+  if (validCourseObjectIds.length > 0) {
+    const courseMatch = {
+      institution: subscription.institution,
+      status: { $in: ["Inactive", "inactive"] },
+      _id: { $in: validCourseObjectIds },
+    };
+
+    const courseUpdateResult = await Course.updateMany(
+      courseMatch,
+      {
+        $set: {
+          status: "Active",
+          courseSubscriptionStartDate: new Date(),
+          courseSubscriptionEndDate: endDate,
+        },
+      },
+      { session }
+    );
+    coursesActivated = courseUpdateResult.modifiedCount;
+  }
+
+  console.log(`[Activation] Success. Activated ${coursesActivated} courses.`);
+  return { alreadyActive: false, subscription, coursesActivated };
+};
+
 exports.verifyPayment = asyncHandler(async (req, res, next) => {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
@@ -276,151 +364,68 @@ exports.verifyPayment = asyncHandler(async (req, res, next) => {
 
   const { order_id, id: payment_id, amount } = payload.payment.entity;
 
+  // Retrieve Context
   const paymentContext = await RedisUtil.getPaymentContext(order_id);
-  const redisCourseIds = Array.isArray(paymentContext?.selectedCourseIds)
-    ? paymentContext.selectedCourseIds
-    : [];
-  const validCourseObjectIds = redisCourseIds
-    .filter((id) => mongoose.Types.ObjectId.isValid(id))
-    .map((id) => new mongoose.Types.ObjectId(id));
-
-  if (!validCourseObjectIds.length) {
-    console.log(
-      `[Payment Webhook] ⚠️ Missing or invalid course selection in Redis for order_id: ${order_id}`
-    );
-    return next(new AppError("Missing course selection for payment context", 422));
+  if (!paymentContext) {
+    console.error(`[Payment Webhook] ⚠️ Payment context missing for order: ${order_id}`);
+    // If payment context is strictly required for course activation, throw an error.
+    // Otherwise, the activateSubscription helper will handle missing course IDs gracefully.
+    // For now, we'll let it proceed, but log the warning.
   }
-
-  // ✅ 3. Find subscription (minimal projection)
-  const subscription = await Subscription.findOne({ razorpayOrderId: order_id })
-    .select("status institution planType coupon")
-    .lean();
-
-  if (!subscription) {
-    console.log(`[Payment Webhook] ⚠️ No subscription found for order_id: ${order_id}`);
-    return res.status(200).send("OK");
-  }
-
-  // ✅ Idempotency guard
-  // if (subscription.status === "active") {
-  //   console.log(`[Payment Webhook] ⚠️ Subscription already active for order_id: ${order_id}`);
-  //   return res.status(200).send("OK");
-  // }
 
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const now = new Date();
-    const endDate =
-      subscription.planType === "yearly"
-        ? new Date(now.setFullYear(now.getFullYear() + 1))
-        : new Date(now.setMonth(now.getMonth() + 1));
-
-    // ✅ Activate subscription
-    await Subscription.updateOne(
-      { razorpayOrderId: order_id },
-      {
-        $set: {
-          status: "active",
-          razorpayPaymentId: payment_id,
-          startDate: new Date(),
-          endDate,
-        },
-      },
-      { session }
-    );
-
-    // ✅ Increment coupon usage if applied
-    if (subscription.coupon) {
-      await Coupon.updateOne(
-        { _id: subscription.coupon },
-        { $inc: { useCount: 1 } },
-        { session }
-      );
-      console.log(`[Payment Webhook] 🎟️ Coupon ${subscription.coupon} usage incremented`);
-    }
-
-    // ✅ Mark payment done for institute admin
-    // await InstituteAdmin.updateOne(
-    //   { institution: subscription.institution },
-    //   { $set: { isPaymentDone: true } },
-    //   { session }
-    // );
-    // console.log(`[Payment Webhook] ✅ Institute payment marked as done`);
-
-    // ✅ Activate relevant inactive courses
-    const courseMatch = {
-      institution: subscription.institution,
-      status: { $in: ["Inactive", "inactive"] },
-      _id: { $in: validCourseObjectIds },
-    };
-
-    const courseUpdateResult = await Course.updateMany(
-      courseMatch,
-      {
-        $set: {
-          status: "Active",
-          courseSubscriptionStartDate: new Date(),
-          courseSubscriptionEndDate: endDate,
-        },
-      },
-      { session }
-    );
-
-    console.log(
-      `[Payment Webhook] ✅ Activated ${courseUpdateResult.modifiedCount} inactive courses for institution ${subscription.institution}`
-    );
-
-    // ✅ Cache subscription status
-    // await RedisUtil.setex(
-    //   `sub_status:${subscription.institution.toString()}`,
-    //   3600,
-    //   "active"
-    // );
+    // ✅ CALL SHARED ACTIVATION HELPER
+    const result = await activateSubscription({
+      orderId: order_id,
+      paymentId: payment_id,
+      session,
+      paymentContext
+    });
 
     await session.commitTransaction();
     session.endSession();
 
-    console.log(
-      `[Payment Webhook] ✅ Subscription + course updates completed successfully for order_id: ${order_id}`
-    );
-
-    // ✅ Send email (non-critical, outside session)
-    const admin = await InstituteAdmin.findOne({
-      institution: subscription.institution,
-    })
-      .select("name email")
-      .lean();
-
-    if (admin?.email) {
-      await addPaymentSuccessEmailJob({
-        name: admin.name,
-        email: admin.email,
-        planType: subscription.planType,
-        amount: amount / 100, // paise → INR
-        orderId: order_id,
-        startDate: new Date(),
-        endDate,
-      });
-
-      console.log(`[Payment Webhook] 📧 Payment success email queued for ${admin.email}`);
-    } else {
-      console.log(`[Payment Webhook] ⚠️ No email found for institution admin.`);
+    if (result.alreadyActive) {
+      console.log(`[Payment Webhook] Payment already processed for ${order_id}`);
+      return res.status(200).json({ status: "already_active" });
     }
 
+    console.log(`[Payment Webhook] ✅ Activation complete for ${order_id}`);
+
+    // ✅ Post-activation: Send Email (Non-transactional)
+    try {
+      const admin = await InstituteAdmin.findOne({ institution: result.subscription.institution }).select("name email").lean();
+      if (admin?.email) {
+        await addPaymentSuccessEmailJob({
+          name: admin.name,
+          email: admin.email,
+          planType: result.subscription.planType,
+          amount: amount / 100, // Use amount from webhook payload (paise -> INR)
+          orderId: order_id,
+          startDate: result.subscription.startDate,
+          endDate: result.subscription.endDate,
+        });
+        console.log(`[Payment Webhook] 📧 Email queued for ${admin.email}`);
+      }
+    } catch (emailErr) {
+      console.error("[Payment Webhook] ⚠️ Failed to queue email:", emailErr);
+    }
+
+    // Cleanup
     await RedisUtil.deletePaymentContext(order_id);
 
     return res.status(200).json({ status: "success" });
+
   } catch (err) {
     await session.abortTransaction();
     session.endSession();
-    console.log("[Payment Webhook] ❌ Transaction failed:", err);
-    return next(new AppError("Payment verification failed.", 500));
+    console.error(`[Payment Webhook] ❌ Transaction failed for order ${order_id}: ${err.message}`);
+    return next(new AppError("Payment verification failed", 500));
   }
 });
-
-
 
 exports.pollSubscriptionStatus = asyncHandler(async (req, res) => {
   try {
@@ -428,14 +433,11 @@ exports.pollSubscriptionStatus = asyncHandler(async (req, res) => {
     const { orderId, paymentId, signature } = req.query;
 
     if (!userId) {
-      return res
-        .status(400)
-        .json({ status: "error", message: "Missing userId" });
+      return res.status(400).json({ status: "error", message: "Missing userId" });
     }
 
     // ✅ MANUAL VERIFICATION (Immediate Activation)
     // If paymentId and signature provided, we verify and activate immediately
-
     if (orderId && paymentId && signature) {
       const generated_signature = crypto
         .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
@@ -445,82 +447,32 @@ exports.pollSubscriptionStatus = asyncHandler(async (req, res) => {
       if (generated_signature === signature) {
         console.log(`[Poll Status] ✅ Signature verified for order ${orderId}`);
 
-        const subscription = await Subscription.findOne({ razorpayOrderId: orderId });
+        const paymentContext = await RedisUtil.getPaymentContext(orderId);
 
-        if (subscription && subscription.status !== "active") {
-          const paymentContext = await RedisUtil.getPaymentContext(orderId);
-          const redisCourseIds = Array.isArray(paymentContext?.selectedCourseIds)
-            ? paymentContext.selectedCourseIds
-            : [];
-          const noOfMonths = parseInt(paymentContext?.noOfMonths || 1, 10);
-          const validCourseObjectIds = redisCourseIds
-            .filter((id) => mongoose.Types.ObjectId.isValid(id))
-            .map((id) => new mongoose.Types.ObjectId(id));
+        const session = await mongoose.startSession();
+        session.startTransaction();
 
-          const session = await mongoose.startSession();
-          session.startTransaction();
+        try {
+          // ✅ CALL SHARED ACTIVATION HELPER
+          const result = await activateSubscription({
+            orderId,
+            paymentId,
+            session,
+            paymentContext
+          });
 
-          try {
-            const now = new Date();
-            const endDate =
-              subscription.planType === "yearly"
-                ? new Date(now.setFullYear(now.getFullYear() + 1))
-                : new Date(now.setMonth(now.getMonth() + noOfMonths));
+          await session.commitTransaction();
+          console.log(`[Poll Status] ✅ Manual activation successful for ${orderId}`);
 
-            // Activate Subscription
-            await Subscription.updateOne(
-              { razorpayOrderId: orderId },
-              {
-                $set: {
-                  status: "active",
-                  razorpayPaymentId: paymentId,
-                  startDate: new Date(),
-                  endDate,
-                },
-              },
-              { session }
-            );
+          // Cleanup
+          await RedisUtil.deletePaymentContext(orderId);
 
-            // Mark payment done for institute admin
-            await InstituteAdmin.updateOne(
-              { institution: subscription.institution },
-              { $set: { isPaymentDone: true } },
-              { session }
-            );
-
-            // Activate Courses
-            if (validCourseObjectIds.length > 0) {
-              const courseMatch = {
-                institution: subscription.institution,
-                status: { $in: ["Inactive", "inactive"] },
-                _id: { $in: validCourseObjectIds },
-              };
-
-              await Course.updateMany(
-                courseMatch,
-                {
-                  $set: {
-                    status: "Active",
-                    courseSubscriptionStartDate: new Date(),
-                    courseSubscriptionEndDate: endDate,
-                  },
-                },
-                { session }
-              );
-            }
-
-            await session.commitTransaction();
-            console.log(`[Poll Status] ✅ Subscription manually activated for order ${orderId}`);
-
-            // Clean up Redis
-            await RedisUtil.deletePaymentContext(orderId);
-
-          } catch (err) {
-            await session.abortTransaction();
-            console.error("[Poll Status] ❌ Activation transaction failed:", err);
-          } finally {
-            session.endSession();
-          }
+        } catch (err) {
+          await session.abortTransaction();
+          console.error(`[Poll Status] ❌ Manual activation failed for order ${orderId}: ${err.message}`);
+          // Don't error out the poll request; just log and fall through to return status
+        } finally {
+          session.endSession();
         }
       } else {
         console.warn(`[Poll Status] ⚠️ Invalid signature for order ${orderId}`);

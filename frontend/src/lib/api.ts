@@ -311,6 +311,7 @@ export interface PaymentInitPayload {
   planType?: string; // e.g., "yearly" | "monthly"
   couponCode?: string | null;
   courseIds?: string[];
+  noOfMonths?: number;
   // institutionId: string;
 }
 
@@ -1339,6 +1340,25 @@ export const paymentAPI = {
     return apiRequest("/v1/payment/create-order", {
       method: "POST",
       body: JSON.stringify(payload),
+    });
+  },
+
+  /**
+   * Initiate a FREE listing (₹0 payment) for selected courses
+   * - Creates a Razorpay order with amount 0
+   * - Courses will be activated with limited features
+   */
+  initiateFreeListing: async (
+    payload: { courseIds: string[] }
+  ): Promise<ApiResponse> => {
+    return apiRequest("/v1/payment/create-order", {
+      method: "POST",
+      body: JSON.stringify({
+        amount: 0,
+        planType: "free",
+        courseIds: payload.courseIds,
+        listingType: "free", // Backend will use this to mark courses as limited
+      }),
     });
   },
 

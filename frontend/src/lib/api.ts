@@ -311,6 +311,7 @@ export interface PaymentInitPayload {
   planType?: string; // e.g., "yearly" | "monthly"
   couponCode?: string | null;
   courseIds?: string[];
+  noOfMonths?: number;
   // institutionId: string;
 }
 
@@ -918,6 +919,18 @@ export const analyticsAPI = {
   },
   getSummaryPrevious: async (range: TimeRangeParam = "weekly"): Promise<ApiResponse> => {
     return apiRequest(`/v1/analytics/summary?range=${range}&compare=prev`, { method: "GET" });
+  },
+  // Unified analytics endpoint using AnalyticsDaily model
+  getInstitutionAnalytics: async (
+    metric: 'views' | 'comparisons' | 'leads',
+    type: 'weekly' | 'monthly' | 'yearly'
+  ): Promise<ApiResponse> => {
+    // Note: Using POST method as GET requests cannot have a body in fetch API
+    // Backend route should be changed from GET to POST to match this
+    return apiRequest(`/v1/analytics/institution`, {
+      method: "POST",
+      body: JSON.stringify({ metric, type }),
+    });
   }
 };
 
@@ -1119,15 +1132,19 @@ export const programsAPI = {
     const wrapper = { totalCourses: 1, courses: [normalized] };
     return apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses`, { method: 'POST', body: JSON.stringify(wrapper) });
   },
- list: async (institutionId: string, cursor?: string | null, limit: number = 10): Promise<ApiResponse> => {
-    const params = new URLSearchParams({
-      limit: String(limit),
-      ...(cursor && { cursor }),
-    });
-    return apiRequest(`/v1/institutions/${institutionId}/courses?${params.toString()}`, { 
-      method: 'GET' 
-    });
-},
+  list: async (institutionId: string): Promise<ApiResponse> => {
+    const cacheKey = `programs_${institutionId}`;
+    const cached = programsCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < PROGRAMS_CACHE_DURATION) return cached.data as ApiResponse<unknown>;
+    const res = await apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses`, { method: 'GET' });
+    const payload = res as { data?: unknown; courses?: unknown };
+    const raw = payload?.data || payload?.courses || [];
+    const arr = Array.isArray(raw) ? raw : Array.isArray((raw as { data?: unknown })?.data) ? (raw as { data: unknown[] }).data : [];
+    const programs = arr.map((c: Record<string, unknown>) => ({ ...c, programName: c.programName || c.courseName || c.selectBranch }));
+    const shaped = { success: true, data: { programs } } as ApiResponse;
+    programsCache.set(cacheKey, { data: shaped, timestamp: Date.now() });
+    return shaped;
+  },
   listForInstitutionAdmin: async (institutionId: string): Promise<ApiResponse> => {
     return programsAPI.list(institutionId);
   },
@@ -1323,6 +1340,25 @@ export const paymentAPI = {
     return apiRequest("/v1/payment/create-order", {
       method: "POST",
       body: JSON.stringify(payload),
+    });
+  },
+
+  /**
+   * Initiate a FREE listing (₹0 payment) for selected courses
+   * - Creates a Razorpay order with amount 0
+   * - Courses will be activated with limited features
+   */
+  initiateFreeListing: async (
+    payload: { courseIds: string[] }
+  ): Promise<ApiResponse> => {
+    return apiRequest("/v1/payment/create-order", {
+      method: "POST",
+      body: JSON.stringify({
+        amount: 0,
+        planType: "free",
+        courseIds: payload.courseIds,
+        listingType: "free", // Backend will use this to mark courses as limited
+      }),
     });
   },
 

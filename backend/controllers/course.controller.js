@@ -6,11 +6,9 @@ const asyncHandler = require("express-async-handler");
 const { uploadStream } = require("../services/upload.service");
 const RedisUtil = require("../utils/redis.util");
 const mongoose = require("mongoose");
-const Subscription = require("../models/Subscription");
 const { esClient } = require("../config/elasticsearch");
-const UserStats = require("../models/userStats");
-const Enquiries = require("../models/Enquiries");
 const ObjectId = mongoose.Types.ObjectId;
+const redisClient = require("../config/redisConfig");
 // Generic helpers
 async function incrementMetricGeneric(req, res, next, cfg) {
   const { institutionId, courseId } = req.params;
@@ -1395,22 +1393,24 @@ exports.filterCourses = async (req, res) => {
 exports.updateStatsAndCreateEnquiry = async (req, res) => {
   try {
     const userId = req.userId;
-    const { institutionId, type } = req.body;
+    const { institutionId, courseId, type } = req.body;
 
-    if (!institutionId || !type) {
-      return res
-        .status(400)
-        .json({ message: "institutionId and type are required" });
+    if (!institutionId || !courseId || !type) {
+      return res.status(400).json({
+        message: "institutionId, courseId and type are required",
+      });
     }
 
     const typeMapping = {
       demoRequest: {
         statField: "requestDemoCount",
         enquiryType: "Requested for demo",
+        redisPrefix: "bookDemoRequest",
       },
       callRequest: {
         statField: "callRequestCount",
         enquiryType: "Requested for callback",
+        redisPrefix: "callbackRequest",
       },
     };
 
@@ -1469,8 +1469,36 @@ exports.updateStatsAndCreateEnquiry = async (req, res) => {
         message: "Failed to update stats & create enquiry",
       });
     }
-  } catch (error) {
-    console.log("error", error);
-    res.send(error);
+
+    // TRACK ANALYTICS IN REDIS
+    const analyticsKey = `${typeData.redisPrefix}:${courseId}:${institutionId}`;
+    await RedisUtil.trackUniqueCourseViewOrImpression(
+      analyticsKey,
+      courseId,
+      institutionId,
+      userId
+    );
+
+    // PUSH ENQUIRY INTO QUEUE
+    const enquiryPayload = {
+      institutionId,
+      courseId,
+      userId,
+      enquiryType: typeData.enquiryType,
+      timestamp: Date.now(),
+    };
+
+    await redisClient.rpush("pendingEnquiries", JSON.stringify(enquiryPayload));
+
+    // INCREMENT USERSTATS QUEUE
+    await redisClient.hset("pendingUserStats", userId, typeData.statField);
+
+    return res.status(200).json({
+      success: true,
+      message: "Enquiry received successfully",
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal error" });
   }
 };

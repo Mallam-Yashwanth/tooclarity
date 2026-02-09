@@ -12,7 +12,7 @@ import Image from "next/image";
 import AppSelect from "@/components/ui/AppSelect";
 import L2DialogBox from "@/components/auth/L2DialogBox";
 import { getProgramStatus, formatDate } from "@/lib/utility";
-import {useSearchParams, usePathname, useRouter } from "next/navigation";
+import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import AnalyticsTable from "@/components/dashboard/AnalyticsTable";
 import { loadRazorpayScript } from "@/lib/razorpay";
 import { useUserStore } from "@/lib/user-store";
@@ -73,7 +73,7 @@ function ProgramsPage() {
   };
   const [search, setSearch] = useState("");
   const [branchFilter, setBranchFilter] = useState<string>("");
-  const [addInlineMode, setAddInlineMode] = useState<'none'|'course'|'branch'>('none');
+  const [addInlineMode, setAddInlineMode] = useState<'none' | 'course' | 'branch'>('none');
   const [visibleCount, setVisibleCount] = useState<number>(10);
   const [selectedInactive, setSelectedInactive] = useState<Record<string, boolean>>({});
   const [isPaying, setIsPaying] = useState(false);
@@ -91,7 +91,7 @@ function ProgramsPage() {
       const res = await programsAPI.listForInstitutionAdminWithMetrics(String(institution?._id)) as { data?: { programs?: Record<string, unknown>[] } };
       return (res?.data?.programs || []) as Array<Record<string, unknown>>;
     },
-    staleTime: 60*1000,
+    staleTime: 60 * 1000,
   });
 
   // Branch dropdown options - load from backend
@@ -102,7 +102,7 @@ function ProgramsPage() {
       const res = await programsAPI.listBranchesForInstitutionAdmin(String(institution?._id)) as { data?: { branches?: Record<string, unknown>[] } };
       return (res?.data?.branches || []) as Array<Record<string, unknown>>;
     },
-    staleTime: 5*60*1000,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: invoices } = useQuery({
@@ -112,7 +112,7 @@ function ProgramsPage() {
       const res = await programsAPI.subscriptionHistory(String(institution?._id)) as { data?: { items?: Record<string, unknown>[] } };
       return (res?.data?.items || []) as Array<Record<string, unknown>>;
     },
-    staleTime: 60*1000,
+    staleTime: 60 * 1000,
   });
   const paidInvoices = React.useMemo(() => {
     if (!Array.isArray(invoices)) return [];
@@ -125,13 +125,13 @@ function ProgramsPage() {
   }, [invoices]);
 
   const onL2Success = () => {
-  queryClient.invalidateQueries({ queryKey: ['programs-page-list-institution-admin'] });
-  handleTabChange('details'); 
-};
+    queryClient.invalidateQueries({ queryKey: ['programs-page-list-institution-admin'] });
+    handleTabChange('details');
+  };
 
   // Navigation function for edit button
   const handleEditProgram = (programId: string) => {
-    router.push(`/dashboard/settings?editProgram=${programId}`);
+    router.push(`/dashboard/listings?view=course&edit=${programId}`);
   };
 
   const branchOptions = useMemo(() => {
@@ -148,15 +148,15 @@ function ProgramsPage() {
       seenNames.add(keyName);
       arr.push({ value: id, label });
     });
-    return arr.sort((a,b)=> a.label.localeCompare(b.label));
+    return arr.sort((a, b) => a.label.localeCompare(b.label));
   }, [branchList]);
 
   // Reset visible count when filters change
-  React.useEffect(()=>{ setVisibleCount(10); }, [search, branchFilter, activeTab]);
+  React.useEffect(() => { setVisibleCount(10); }, [search, branchFilter, activeTab]);
 
-  const filteredPrograms = (Array.isArray(programs) ? programs : []).filter((p: Record<string, unknown>)=>{
+  const filteredPrograms = (Array.isArray(programs) ? programs : []).filter((p: Record<string, unknown>) => {
     const q = search.trim().toLowerCase();
-    const name = String(p?.CourseName|| p?.selectBranch || "").toLowerCase();
+    const name = String(p?.CourseName || p?.selectBranch || "").toLowerCase();
     const branch = String(p?.branchName || (p.branch as Record<string, unknown>)?.branchName || (p.institution as Record<string, unknown>)?.name || "").toLowerCase();
     const passSearch = !q || name.includes(q) || branch.includes(q);
     const branchId = typeof p.branch === 'object' && p.branch !== null ? String((p.branch as Record<string, unknown>)?._id || '') : String(p.branch || '');
@@ -383,28 +383,28 @@ function ProgramsPage() {
           </div>
 
           {/* Utilities row: search + filter */}
-          {activeTab==='details' && (
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <div className="flex-1">
-              <Input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Search program or branch" className="w-full bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-200 dark:border-gray-700" />
+          {activeTab === 'details' && (
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div className="flex-1">
+                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search program or branch" className="w-full bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-200 dark:border-gray-700" />
+              </div>
+              <div className="w-64">
+                <AppSelect
+                  value={branchFilter}
+                  onChange={(val) => setBranchFilter(val)}
+                  options={branchOptions}
+                  placeholder="Filter by Branch"
+                  variant="white"
+                  size="md"
+                  rounded="lg"
+                  className="w-full"
+                />
+              </div>
             </div>
-            <div className="w-64">
-              <AppSelect
-                value={branchFilter}
-                onChange={(val)=> setBranchFilter(val)}
-                options={branchOptions}
-                placeholder="Filter by Branch"
-                variant="white"
-                size="md"
-                rounded="lg"
-                className="w-full"
-              />
-            </div>
-          </div>
           )}
 
           {/* Inactive Courses tab */}
-          {activeTab==='inactive' && (
+          {activeTab === 'inactive' && (
             <div className="mt-6">
               <AnalyticsTable<InactiveCourseRow>
                 variant="embedded"
@@ -498,113 +498,113 @@ function ProgramsPage() {
           )}
 
           {/* Program Details table */}
-          {activeTab==='details' && (
-          <div className="overflow-x-auto">
-            {Array.isArray(filteredPrograms) && filteredPrograms.length === 0 ? (
-              <div className="py-10 text-center text-gray-500">No programs found yet.</div>
-            ) : (
-            <table className="min-w-full text-left">
-              <thead className="text-gray-600 text-sm">
-                <tr>
-                  <th className="py-2 pr-4 w-16">S.No</th>
-                  <th className="py-2 pr-4">Course Name</th>
-                  <th className="py-2 pr-4">Status</th>
-                  <th className="py-2 pr-4">Start Date</th>
-                  <th className="py-2 pr-4">End Date</th>
-                  <th className="py-2 pr-4">Leads Generated</th>
-                  <th className="py-2 pr-4">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visiblePrograms.map((p: Record<string, unknown>, idx: number) => (
-                  <tr key={String(p._id) || idx} className="border-t border-gray-100 dark:border-gray-800">
-                    <td className="py-4 pr-4">{String(idx+1).padStart(2,'0')}</td>
-                    <td className="py-4 pr-4">
-                      <div className="font-medium">{String(p.programName || p.selectBranch)}</div>
-                      <div className="text-xs text-gray-500 flex items-center gap-1">
-                        <span className="opacity-60">◎</span> {String(p.branchName || (p.branch as Record<string, unknown>)?.branchName || 'Public')}
-                      </div>
-                    </td>
-                    <td className="py-4 pr-4">
-                      {(() => {
-                        // const status = getProgramStatus(String(p.startDate || ''), String(p.endDate || ''));
-                        const status = p.status as string;
-                        const statusColors = {
-                          active: 'bg-green-100 text-green-700',
-                          // upcoming: 'bg-blue-100 text-blue-700',
-                          // expired: 'bg-red-100 text-red-700',
-                          inactive: 'bg-gray-100 text-gray-700'
-                        };
-                        // Map status to match analytics page
-                        // const displayStatus = status.status === 'active' ? 'Live' : 
-                        //                     status.status === 'upcoming' ? 'Paused' : 
-                        //                     status.status === 'expired' ? 'Expired' : 
-                        //                     'Draft';
-                        return (
-                          <span className={`inline-flex items-center text-xs rounded-full px-2 py-1 ${statusColors[status as keyof typeof statusColors]}`}>
-                            ● {status}
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td className="py-4 pr-4 text-sm">{formatDate(String(p.startDate || ''))}</td>
-                    <td className="py-4 pr-4 text-sm">{formatDate(String(p.endDate || ''))}</td>
-                    <td className="py-4 pr-4 text-sm">{typeof p.leadsGenerated==='number' ? p.leadsGenerated : 0}</td>
-                    <td className="py-4 pr-4 text-sm">
-                      <div className="flex items-center gap-3 text-gray-500">
-                        <button title="Delete" onClick={async()=>{ try{ await programsAPI.remove(String(p._id), String(institution?._id)); queryClient.invalidateQueries({ queryKey: ['programs-page-list-institution-admin', institution?._id] }); }catch{}} } className="h-10 w-10 rounded-full border border-gray-200 dark:border-gray-800 flex items-center justify-center">
-                          <Image src="/Trash.png" alt="Delete" width={20} height={20} className="h-5 w-5 object-contain" />
-                        </button>
-                        <button title="Edit" onClick={() => handleEditProgram(String(p._id))} className="h-10 w-10 rounded-full border border-gray-200 dark:border-gray-800 flex items-center justify-center">
-                          <Image src="/Edit.png" alt="Edit" width={20} height={20} className="h-5 w-5 object-contain" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            )}
-            {Array.isArray(filteredPrograms) && filteredPrograms.length > visibleCount && (
-              <div className="flex items-center justify-center py-5">
-                <Button variant="outline" onClick={()=> setVisibleCount((c)=> c + 10)} className="rounded-full">View more ▾</Button>
-              </div>
-            )}
-          </div>
+          {activeTab === 'details' && (
+            <div className="overflow-x-auto">
+              {Array.isArray(filteredPrograms) && filteredPrograms.length === 0 ? (
+                <div className="py-10 text-center text-gray-500">No programs found yet.</div>
+              ) : (
+                <table className="min-w-full text-left">
+                  <thead className="text-gray-600 text-sm">
+                    <tr>
+                      <th className="py-2 pr-4 w-16">S.No</th>
+                      <th className="py-2 pr-4">Course Name</th>
+                      <th className="py-2 pr-4">Status</th>
+                      <th className="py-2 pr-4">Start Date</th>
+                      <th className="py-2 pr-4">End Date</th>
+                      <th className="py-2 pr-4">Leads Generated</th>
+                      <th className="py-2 pr-4">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visiblePrograms.map((p: Record<string, unknown>, idx: number) => (
+                      <tr key={String(p._id) || idx} className="border-t border-gray-100 dark:border-gray-800">
+                        <td className="py-4 pr-4">{String(idx + 1).padStart(2, '0')}</td>
+                        <td className="py-4 pr-4">
+                          <div className="font-medium">{String(p.programName || p.selectBranch)}</div>
+                          <div className="text-xs text-gray-500 flex items-center gap-1">
+                            <span className="opacity-60">◎</span> {String(p.branchName || (p.branch as Record<string, unknown>)?.branchName || 'Public')}
+                          </div>
+                        </td>
+                        <td className="py-4 pr-4">
+                          {(() => {
+                            // const status = getProgramStatus(String(p.startDate || ''), String(p.endDate || ''));
+                            const status = p.status as string;
+                            const statusColors = {
+                              active: 'bg-green-100 text-green-700',
+                              // upcoming: 'bg-blue-100 text-blue-700',
+                              // expired: 'bg-red-100 text-red-700',
+                              inactive: 'bg-gray-100 text-gray-700'
+                            };
+                            // Map status to match analytics page
+                            // const displayStatus = status.status === 'active' ? 'Live' : 
+                            //                     status.status === 'upcoming' ? 'Paused' : 
+                            //                     status.status === 'expired' ? 'Expired' : 
+                            //                     'Draft';
+                            return (
+                              <span className={`inline-flex items-center text-xs rounded-full px-2 py-1 ${statusColors[status as keyof typeof statusColors]}`}>
+                                ● {status}
+                              </span>
+                            );
+                          })()}
+                        </td>
+                        <td className="py-4 pr-4 text-sm">{formatDate(String(p.startDate || ''))}</td>
+                        <td className="py-4 pr-4 text-sm">{formatDate(String(p.endDate || ''))}</td>
+                        <td className="py-4 pr-4 text-sm">{typeof p.leadsGenerated === 'number' ? p.leadsGenerated : 0}</td>
+                        <td className="py-4 pr-4 text-sm">
+                          <div className="flex items-center gap-3 text-gray-500">
+                            <button title="Delete" onClick={async () => { try { await programsAPI.remove(String(p._id), String(institution?._id)); queryClient.invalidateQueries({ queryKey: ['programs-page-list-institution-admin', institution?._id] }); } catch { } }} className="h-10 w-10 rounded-full border border-gray-200 dark:border-gray-800 flex items-center justify-center">
+                              <Image src="/Trash.png" alt="Delete" width={20} height={20} className="h-5 w-5 object-contain" />
+                            </button>
+                            <button title="Edit" onClick={() => handleEditProgram(String(p._id))} className="h-10 w-10 rounded-full border border-gray-200 dark:border-gray-800 flex items-center justify-center">
+                              <Image src="/Edit.png" alt="Edit" width={20} height={20} className="h-5 w-5 object-contain" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {Array.isArray(filteredPrograms) && filteredPrograms.length > visibleCount && (
+                <div className="flex items-center justify-center py-5">
+                  <Button variant="outline" onClick={() => setVisibleCount((c) => c + 10)} className="rounded-full">View more ▾</Button>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Add Program tab */}
-          {activeTab==='add' && (
+          {activeTab === 'add' && (
             <div className="mt-6">
-              {addInlineMode==='none' && (
+              {addInlineMode === 'none' && (
                 <div className="flex items-center justify-center gap-6 flex-wrap">
-                  <button onClick={()=>setAddInlineMode('course')} className="rounded-2xl bg-blue-50/70 dark:bg-gray-800 border border-blue-100 dark:border-gray-700 flex flex-col items-center justify-center text-center w-[200px] h-[120px]">
+                  <button onClick={() => setAddInlineMode('course')} className="rounded-2xl bg-blue-50/70 dark:bg-gray-800 border border-blue-100 dark:border-gray-700 flex flex-col items-center justify-center text-center w-[200px] h-[120px]">
                     <div className="h-12 w-12 rounded-full bg-white text-gray-700 flex items-center justify-center text-2xl mb-3">+</div>
                     <div className="text-gray-800 dark:text-gray-100 font-medium">Add Program</div>
                   </button>
-                  <button onClick={()=>setAddInlineMode('branch')} className="rounded-2xl bg-blue-50/70 dark:bg-gray-800 border border-blue-100 dark:border-gray-700 flex flex-col items-center justify-center text-center w-[200px] h-[120px]">
+                  <button onClick={() => setAddInlineMode('branch')} className="rounded-2xl bg-blue-50/70 dark:bg-gray-800 border border-blue-100 dark:border-gray-700 flex flex-col items-center justify-center text-center w-[200px] h-[120px]">
                     <div className="h-12 w-12 rounded-full bg-white text-gray-700 flex items-center justify-center text-2xl mb-3">+</div>
                     <div className="text-gray-800 dark:text-gray-100 font-medium">Add Branch</div>
                   </button>
-              </div>
-            )}
-              {addInlineMode!=='none' && (
+                </div>
+              )}
+              {addInlineMode !== 'none' && (
                 <div className="space-y-4">
                   <div>
-                    <Button variant="outline" onClick={()=>setAddInlineMode('none')}>Back</Button>
+                    <Button variant="outline" onClick={() => setAddInlineMode('none')}>Back</Button>
                   </div>
                   <L2DialogBox
                     renderMode="inline"
-                    initialSection={addInlineMode==='course' ? 'course' : 'branch'}
-                    mode={addInlineMode==='course' ? 'subscriptionProgram' : 'default'}
+                    initialSection={addInlineMode === 'course' ? 'course' : 'branch'}
+                    mode={addInlineMode === 'course' ? 'subscriptionProgram' : 'default'}
                     institutionId={institution?._id}
                     institutionType={institution?.institutionType}
-                    onSuccess={()=>{ onL2Success(); setAddInlineMode('none'); }}
-                    onPrevious={()=> setAddInlineMode('none')}
+                    onSuccess={() => { onL2Success(); setAddInlineMode('none'); }}
+                    onPrevious={() => setAddInlineMode('none')}
                   />
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
           )}
 
         </_CardContent>
@@ -627,18 +627,18 @@ function ProgramsPage() {
             {Array.isArray(paidInvoices) && paidInvoices.length === 0 ? (
               <div className="py-6 text-center text-gray-500">No transactions found yet.</div>
             ) : (
-            (paidInvoices||[]).map((inv: Record<string, unknown>, idx: number)=> (
-              <div key={String(inv._id) || idx} className="grid grid-cols-12 items-center bg-white dark:bg-gray-900 rounded-xl px-3 py-4 shadow-[0_1px_0_rgba(0,0,0,0.03)]">
-                <div className="col-span-2 sm:col-span-1 text-gray-700">{String(idx+1).padStart(2,'0')}</div>
-                <div className="col-span-4 sm:col-span-3 font-medium text-gray-900">{String(inv.invoiceId)}</div>
-                <div className="col-span-3 sm:col-span-3 text-gray-700">{inv.date ? new Date((inv.date as string | number)).toLocaleDateString('en-GB') : '—'}</div>
-                <div className="col-span-3 sm:col-span-2 text-gray-700">{String(inv.planType || '—')}</div>
-                <div className="hidden sm:block col-span-2 text-gray-900">{typeof inv.amount==='number' ? `₹ ${inv.amount.toFixed(2)}` : '—'}</div>
-                <div className="col-span-1 flex justify-end">
-                  <button title="Download" className="h-9 w-9 rounded-full border border-gray-200 dark:border-gray-700 flex items-center justify-center">⬇︎</button>
-            </div>
-          </div>
-            ))
+              (paidInvoices || []).map((inv: Record<string, unknown>, idx: number) => (
+                <div key={String(inv._id) || idx} className="grid grid-cols-12 items-center bg-white dark:bg-gray-900 rounded-xl px-3 py-4 shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+                  <div className="col-span-2 sm:col-span-1 text-gray-700">{String(idx + 1).padStart(2, '0')}</div>
+                  <div className="col-span-4 sm:col-span-3 font-medium text-gray-900">{String(inv.invoiceId)}</div>
+                  <div className="col-span-3 sm:col-span-3 text-gray-700">{inv.date ? new Date((inv.date as string | number)).toLocaleDateString('en-GB') : '—'}</div>
+                  <div className="col-span-3 sm:col-span-2 text-gray-700">{String(inv.planType || '—')}</div>
+                  <div className="hidden sm:block col-span-2 text-gray-900">{typeof inv.amount === 'number' ? `₹ ${inv.amount.toFixed(2)}` : '—'}</div>
+                  <div className="col-span-1 flex justify-end">
+                    <button title="Download" className="h-9 w-9 rounded-full border border-gray-200 dark:border-gray-700 flex items-center justify-center">⬇︎</button>
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </_CardContent>

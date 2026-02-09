@@ -5,9 +5,9 @@ import { useAllUnifiedAnalytics } from "@/lib/hooks/dashboard-hooks";
 import { AllUnifiedAnalyticsCache } from "@/lib/localDb";
 
 interface AnalyticsContextValue {
-  weekly: AllUnifiedAnalyticsCache | undefined;
-  monthly: AllUnifiedAnalyticsCache | undefined;
-  yearly: AllUnifiedAnalyticsCache | undefined;
+  weekly: AllUnifiedAnalyticsCache | null | undefined;
+  monthly: AllUnifiedAnalyticsCache | null | undefined;
+  yearly: AllUnifiedAnalyticsCache | null | undefined;
   isLoading: boolean;
 }
 
@@ -44,4 +44,3 @@ export function useAnalyticsContext() {
   }
   return context;
 }
-

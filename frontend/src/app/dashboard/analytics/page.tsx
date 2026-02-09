@@ -384,7 +384,7 @@ function AnalyticsPage() {
 
 	// Navigation function for analytics action button
 	const handleAnalyticsAction = () => {
-		router.push('/dashboard/subscription');
+		router.push('/dashboard/listings');
 	};
 
 	return (

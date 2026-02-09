@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { toast } from "react-toastify";
 import {
   Loader2,
   Smartphone,
@@ -9,6 +10,7 @@ import {
   Eye,
   EyeOff,
   type LucideIcon,
+  ChevronLeft,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { authAPI } from "@/lib/api";
@@ -20,7 +22,6 @@ import {
   loadGoogleIdentityScript,
   redirectToGoogleOAuth,
 } from "@/lib/google-auth";
-
 
 type OAuthProvider = {
   id: string;
@@ -46,17 +47,30 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
   onOtpRequired,
 }) => {
   const router = useRouter();
-  const { refreshUser } = useAuth();
+  const { login, refreshUser } = useAuth();
+  
 
   const [isScriptLoaded, setIsScriptLoaded] = useState(false);
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     contactNumber: "",
-    password: "",
+    username: "",
+    otpvalue: "",
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
+  const [otpSend, setotpSend] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [otpError, setotpError] = useState(false);
+  const [otpTimer, setOtpTimer] = useState(30);
+  const desktopOtpRefs = useRef<HTMLInputElement[]>([]);
+  const otpRefs = React.useRef<Array<HTMLInputElement | null>>([]);
+  const [buttonDisabled, setButtonDisabled] = useState(true);
+
+
+  
+  
+    
+
 
   const handleRegisterSuccess = useCallback(async () => {
     await refreshUser();
@@ -67,9 +81,7 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
     const isProfileCompleted = !!latestUser?.isProfileCompleted;
 
     if (role === "STUDENT") {
-      router.replace(
-        isProfileCompleted ? "/dashboard" : "/student/onboarding"
-      );
+      router.replace(isProfileCompleted ? "/dashboard" : "/student/onboarding");
     }
   }, [refreshUser, onSuccess, router]);
 
@@ -135,6 +147,12 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+
+    const phone = formData.contactNumber?.trim() || "";
+    if (phone?.length === 9) {
+      setButtonDisabled(false);
+    } else setButtonDisabled(true);
+
     if (formError) setFormError(null);
   };
 
@@ -143,37 +161,119 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
     event.preventDefault();
     setFormError(null);
 
-    const sanitizedPhone = formData.contactNumber.replace(/\D/g, "");
+    
 
-    if (!/^\d{10}$/.test(sanitizedPhone)) {
-      return setFormError("Phone number must be exactly 10 digits.");
-    }
-
-    if (formData.password.length < 6) {
-      return setFormError("Password must be at least 6 characters long.");
-    }
-
-    setIsSubmitting(true);
+    setIsLoading(true);
     try {
-      const response = await authAPI.signUp({
-        contactNumber: sanitizedPhone,
-        password: formData.password,
-        type: "student",
-      });
+      
+      const response = await authAPI.verifyOTP({
+              otp: formData.otpvalue || "",
+              contactNumber: formData.contactNumber || "",
+              isLogin: false,
+            });
 
-      if (!response.success)
+      if (!response.success) {
+        setotpError(true);
+        toast.error(response.message || "Registration failed.");
         return setFormError(response.message || "Registration failed.");
-
-      if (onOtpRequired) {
-        onOtpRequired(sanitizedPhone);
       }
+
+      toast.success("Registration successful!");
+      router.replace("/student/onboarding");
     } catch (err) {
+      setFormData((prev) => ({
+          ...prev,
+          otpvalue: "",
+        }));
       console.error("Registration error:", err);
+      toast.error("Unexpected error. Please try again.");
       setFormError("Unexpected error. Please try again.");
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
+
+  const handleotp = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const phone = formData.contactNumber?.trim() || "";
+
+    if (!/^\d{10}$/.test(phone)) {
+      toast.error("Enter a valid 10-digit mobile number");
+      return;
+    }
+    if (formData.username.length < 3) {
+      toast.error("Username must be at least 3 characters long");
+      return;
+    }
+
+    
+
+    setIsLoading(true);
+    setFormError(null);
+
+    try {
+       
+      
+      const response = await authAPI.signUp({
+        contactNumber: formData.contactNumber,
+        name: formData.username,
+        type: "student",
+      });
+      if (!response.success) {
+        toast.error(response.message || "Registration failed.");
+        return setFormError(response.message || "Registration failed.");
+      }
+
+      
+      
+      toast.success("OTP sent successfully");
+      setotpSend(true);
+    
+   
+    } catch (err) {
+    
+      setButtonDisabled(true);
+      toast.error("Unexpected error. Please try again.");
+      setFormError("Unexpected error. Please try again.");
+    
+    }  finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendotp = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setIsLoading(true);
+      setFormError(null);
+      setotpError(false);
+      setOtpTimer(30);
+      try {
+        // call api to resend otp
+        
+         const response = await authAPI.resendOTP(formData);
+        
+        if (!response) {
+          toast.error("An error occurred during login. Please try again.");
+          setFormError("An error occurred during login. Please try again.");
+          return;
+        }
+  
+  
+        // so success otp send
+        toast.success("OTP resend successfully");
+        setotpSend(true);
+      } catch (error) {
+        console.error("Login error:", error);
+        toast.error("Invalid Phone number");
+         setFormError("Invalid phone number. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+
+
 
   // 🔹 Providers
   const renderedProviders = useMemo(
@@ -210,116 +310,651 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({
     [isScriptLoaded, loadingProvider, handleGoogleClick]
   );
 
-  return (
-    <section className="flex min-h-screen flex-col bg-gradient-to-b from-white via-white to-blue-50 px-4 py-6 sm:px-6 sm:py-10 lg:px-10 lg:py-16">
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
-        <header className="flex items-center gap-3 text-blue-600">
-          {/* <button
-            onClick={() => router.back()}
-            className="rounded-full p-1 transition hover:bg-blue-50"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button> */}
-        </header>
+  const handleOtpChange = (index: number, value: string) => {
+    if (!/^\d?$/.test(value)) return;
+    setotpError(false);
+    const otpArray = (formData.otpvalue || "").split("");
+    otpArray[index] = value;
 
-        <div className="mb-8 flex flex-col items-center">
-          <div className="grid place-items-center rounded-full p-6">
-            <Image
-              src="/Too Clarity.png"
-              alt="Too Clarity Logo"
-              width={120}
-              height={60}
-              priority
+    setFormData((prev) => ({
+      ...prev,
+      otpvalue: otpArray.join(""),
+    }));
+  };
+
+  useEffect(() => {
+    if (otpSend) {
+      if (otpTimer === 0) return;
+
+      const interval = setInterval(() => {
+        setOtpTimer((prev) => prev - 1);
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [otpTimer, otpSend]);
+
+  useEffect(() => {
+    if (!otpSend) return;
+  
+    setTimeout(() => {
+      const isMobile = window.innerWidth < 640;
+  
+      if (isMobile) {
+        otpRefs.current[0]?.focus();
+      } else {
+        desktopOtpRefs.current[0]?.focus();
+      }
+    }, 0);
+  }, [otpSend]);
+
+   const handleBackClick = () => {
+   
+      // Normal back navigation
+      router.replace("/");
+    
+  };
+
+  return (
+    <>
+      <section className="hidden sm:flex min-h-screen w-full bg-white">
+          {/* LEFT SIDE – DESIGN */}
+        <div className="hidden lg:flex relative w-1/2 min-h-screen overflow-hidden">
+          <div className=" w-full max-w-xl h-full">
+            {/* 1st BIG bubble */}
+            <div
+              className="
+                absolute
+                -top-[40%]
+                -left-[23%]
+                h-[120%]
+                w-[120%]
+                rounded-full
+                bg-gradient-to-br
+                from-[#0222d7]
+                to-[#011481]
+              "
+            />
+
+
+            {/* CONTENT */}
+            <div className="absolute top-14 left-20 z-10 text-white">
+              <Image
+                src="/TCNewLogo.jpg"
+                alt="Too Clarity Logo"
+                width={90}
+                height={90}
+                priority
+              />
+
+
+              <h1
+                className="absolute font-bold"
+                style={{
+                  width: "294px",
+                  top: "21px",
+                  left: "105px",
+                  fontSize: "40px",
+                  lineHeight: "100%",
+                }}
+              >
+                Tooclarity
+              </h1>
+
+
+              <h2
+                className="absolute font-semibold"
+                style={{
+                  top: "140px",
+                  fontSize: "50px",
+                  lineHeight: "122%",
+                }}
+              >
+                Welcome
+              </h2>
+
+
+              <p
+                className="relative font-semibold"
+                style={{
+                  top: "110px",
+                  fontSize: "31px",
+              
+                }}
+              >
+                Sign Up to your account
+              </p>
+            </div>
+
+
+            {/* 2nd bubble */}
+            <div
+              className="
+                absolute
+                top-[62%]
+                left-[50%]
+                h-[290px]
+                w-[290px]
+                rounded-full
+                bg-gradient-to-br
+                from-[#0222d7]
+                to-[#011481]
+              "
+            />
+
+
+            {/* 3rd bubble */}
+            <div
+              className="
+                absolute
+                -bottom-[16%]
+                -left-[15%]
+                h-[420px]
+                w-[420px]
+                rounded-full
+                bg-gradient-to-br
+                from-[#0222d7]
+                to-[#011481]
+              "
             />
           </div>
         </div>
+        {/* Right side */}
+        <div className=" w-full lg:w-1/2  min-h-screen flex items-center justify-center">
+          <div className="w-full max-w-[540px] rounded-3xl bg-white p-15 shadow-2xl">
+            <div className="flex justify-center mb-6 px-4 py-2 text-3xl font-bold tracking-wide text-[#242f6d]">
+              Sign Up
+            </div>
 
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold text-gray-900">
-            Create your account
-          </h1>
-          <p className="text-sm text-gray-500">
-            Enter your phone number and password to register.
-          </p>
+
+            { otpSend ? (
+              <div className="m-4 flex flex-col">
+                <div className="p-1 text-[#000000]">
+                  <h1 className="text-5 font-semibold">
+                    Verify account with OTP
+                  </h1>
+                  <p className="text-[14px] text-gray-500 pl-1">
+                    We have sent 6 digit code to {formData.contactNumber}
+                  </p>
+
+
+                  <form className="mt-6 space-y-6" onSubmit={handleSubmit}>
+                    <div className="pb-10">
+                      {/* otp boxes*/}
+                      <div className="flex justify-start gap-3 mt-6  text-black mb-0">
+                      {[0, 1, 2, 3, 4, 5].map((i) => (
+                        <input
+                          key={i}
+                          ref={(el) => {
+                            if (el) desktopOtpRefs.current[i] = el;
+                          }}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={1}
+                          value={formData.otpvalue?.[i] || ""}
+                          onChange={(e) => {
+                            handleOtpChange(i, e.target.value);
+
+                            // move to next box on input
+                            if (e.target.value && i < 5) {
+                              desktopOtpRefs.current[i + 1]?.focus();
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            // move back on backspace
+                            if (
+                              e.key === "Backspace" &&
+                              !formData.otpvalue?.[i] &&
+                              i > 0
+                            ) {
+                              desktopOtpRefs.current[i - 1]?.focus();
+                            }
+                          }}
+                          className={`
+                            w-12 h-12 text-center text-lg font-semibold rounded-2
+                            border text-black
+                            ${
+                              otpError
+                                ? "border-red-500"
+                                : formData.otpvalue?.[i]
+                                ? "border-green-500"
+                                : "border-gray-300"
+                            }
+                            focus:outline-none focus:ring-2 ${
+                              otpError
+                                ? "focus:ring-red-500"
+                                : "focus:ring-green-500"
+                            }
+                          `}
+                        />
+                      ))}
+                    </div>
+
+
+                      {/*otp timer*/}
+                      <div className="mt-4 text-start text-sm text-gray-500">
+                        {otpTimer > 0 ? (
+                          <>
+                            Didn’t get a code?{" "}
+                            <span className="text-blue-600 font-medium">
+                              Resend OTP in 0:{otpTimer.toString().padStart(2, "0")}
+                            </span>
+                          </>
+                        ) : (
+                          <button
+                            onClick={handleResendotp}
+                            className="text-blue-600 font-medium hover:underline"
+                          >
+                            Resend OTP
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+
+                    <div>
+                      <button
+                        type="submit"
+                        disabled={isLoading || formData.otpvalue?.length !== 6  }
+                        className={`w-full rounded-[30px] py-3 text-base font-semibold text-[18px]
+                          flex items-center justify-center bg-[#EEEEEE] text-[#B0B1B3]
+                          disabled:bg-[#EEEEEE] disabled:opacity-60 disabled:cursor-not-allowed
+                          enabled:bg-[#0222D7] enabled:text-white transition-colors duration-300 ease-in-out
+                        `}
+                      >
+                        {isLoading && <Loader2 className="h-5 w-5 animate-spin" />}
+                        {isLoading ? "Verifying OTP..." : "Verify OTP "}
+                      </button>
+
+
+                      <div className="mt-[15px]">
+                        <p className="text-[14px] text-[#060B13] text-center">
+                          By continuing, you agree to our T&C and Privacy policy
+                        </p>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            ) : (
+              <div className="m-4 flex flex-col">
+                <div className="p-1 text-[#000000]">
+                  <h1 className="text-5 font-semibold">Enter your Details</h1>
+
+
+                  <form className="mt-6 space-y-6" onSubmit={handleotp}>
+                    {/* Full Name */}
+                     <div className="relative w-full">
+                    <input
+                      type="text"
+                      id="fullName"
+                      placeholder=" "
+                      value={formData.username}
+                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                      className="
+                        peer
+                        w-full h-[55px]
+                        rounded-[30px]
+                        border border-gray-300
+                        bg-white
+                        px-5 py-3
+                        text-[18px] text-black
+                        outline-none
+                        focus:ring-0
+
+                        focus:border-[#0222D7]
+                        
+                        not-placeholder-shown:border-[#0222D7]
+                      "
+                    />
+
+                    <label
+                      htmlFor="fullName"
+                      className="
+                      absolute left-5
+                      -top-2.5
+                      bg-white px-2
+                      text-[16px]
+                      text-gray-300
+                      transition-colors duration-200
+                      pointer-events-none
+
+                      peer-focus:text-[#0222D7]
+                      peer-not-placeholder-shown:text-[#0222D7]
+                    "
+                    >
+                      Full name
+                    </label>
+                  </div>
+
+
+                    {/* phone */}
+                    <label className="block relative group ">
+                    {/* Smartphone Icon */}
+                    <span className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 transition-colors duration-200 group-focus-within:text-[#0222D7]">
+                      <Smartphone size={18} />
+                    </span>
+
+                    <input
+                      type="tel"
+                      name="contactNumber"
+                      value={formData.contactNumber}
+                      placeholder="Enter mobile number"
+                      required
+                      disabled={isLoading}
+                      onChange={handleInputChange}
+                      className="
+                        w-full h-[53px] text-[18px] rounded-[30px]
+                        border border-gray-200 bg-gray-50
+                        py-3 pl-12 pr-4 text-base text-[#000000]
+                        outline-none transition
+                        hover:border-[#0222D7]
+                        focus:border-[#0222D7] focus:bg-white
+                        disabled:opacity-50 disabled:cursor-not-allowed
+                      "
+                    />
+                  </label>
+
+
+                    <button
+                      type="submit"
+                      disabled={isLoading || buttonDisabled}
+                      className={`w-full rounded-[30px] py-3 text-base font-semibold text-[18px]
+                        flex items-center justify-center bg-[#EEEEEE] text-[#B0B1B3]
+                        disabled:bg-[#EEEEEE] disabled:opacity-60 disabled:cursor-not-allowed
+                        enabled:bg-[#0222D7] enabled:text-white transition-colors duration-300 ease-in-out
+                      `}
+                    >
+                      {isLoading && <Loader2 className="h-5 w-5 animate-spin" />}
+                      {isLoading ? "Sending OTP..." : "Continue "}
+                    </button>
+                  </form>
+
+
+                  <div className="mt-6 text-center text-[16px] text-[#000000]">
+                    Already have an account?{" "}
+                    <button
+                      onClick={() => router.push("/student/login")}
+                      className="font-semibold text-blue-600 hover:underline"
+                    >
+                      Sign In
+                    </button>
+                  </div>
+
+
+                  <div className="mt-6 flex items-center gap-3 text-xs text-gray-400">
+                    <span className="h-px flex-1 bg-gray-200" />
+                    <span>Or Login with</span>
+                    <span className="h-px flex-1 bg-gray-200" />
+                  </div>
+
+
+                  <div className="mt-6">{renderedProviders}</div>
+                </div>
+              </div>
+            )}
+
+
+          </div>
+        </div>
+      </section>
+
+    
+
+      {/* // mobile view  */}
+      <section className="sm:hidden  font-montserrat  min-h-screen bg-linear-to-b from-[#0222D7] to-[#000D56] flex flex-col text-white ">
+        {/* upper blue box */}
+        <div className="flex flex-col w-full h-[234px] p-4 pt-10 ">
+          <div className="flex h-11 w-full pt-4 ">
+            <div
+              onClick={handleBackClick} 
+              className=" h-full w-11 p-2.5 "
+            >
+              <ChevronLeft className="h-6 w-6" />
+            </div>
+          </div>
+
+          <div className=" flex flex-1 mt-10 p-4">
+            <div className=" w-[258px] text-[#ffffff] ">
+              <div className="font-semibold pb-[5px] text-[25px] leading-none">
+                SignUp
+              </div>
+              <p className=" opacity-70  text-[14px] leading-relaxed ">
+                Please SignUp here to continue the application
+              </p>
+            </div>
+          </div>
         </div>
 
-        <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
-          <label className="block">
-            <div className="relative">
-              <Smartphone className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-              <input
-                type="tel"
-                name="contactNumber"
-                value={formData.contactNumber}
-                maxLength={10}
-                onChange={handleInputChange}
-                inputMode="numeric"
-                placeholder="+91 Mobile number"
-                className="w-full rounded-2xl border border-gray-200 bg-gray-50 py-3 pl-12 pr-4 text-base text-gray-900 outline-none transition hover:border-blue-200 focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
-              />
-            </div>
-          </label>
+        {/* lower white box */}
+        <div className="w-full  flex-1  bg-white rounded-t-[30px]  text-gray-900 ">
+          <div className="flex w-full h-[167px] justify-center mt-2  ">
+            <img
+              className="w-[167px] h-full"
+              src="/login.gif"
+              alt="Login GIF"
+            />
+          </div>
 
-          <label className="block">
-            <div className="relative">
-              <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-              <input
-                type={showPassword ? "text" : "password"}
-                name="password"
-                value={formData.password}
-                onChange={handleInputChange}
-                placeholder="Password"
-                className="w-full rounded-2xl border border-gray-200 bg-gray-50 py-3 pl-12 pr-12 text-base text-gray-900 outline-none transition hover:border-blue-200 focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((prev) => !prev)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-                className="absolute right-3 top-2 flex h-8 w-8 items-center justify-center text-gray-500 transition hover:text-gray-700"
-              >
-                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-              </button>
-            </div>
-          </label>
+          {otpSend ? (
+            // take otp form
+            <div className="m-4 flex flex-col ">
+              <div className="p-1 text-[#000000]">
+                <h1 className="text-5  font-semibold">
+                  Verify account with OTP
+                </h1>
+                <p className="text-[14px] text-gray-500 pl-1">
+                  We have sent 6 digit code to {formData.contactNumber}
+                </p>
 
-          {formError && (
-            <p className="text-sm text-red-500 text-center font-medium">
-              {formError}
-            </p>
+                <form className="mt-6  space-y-6" onSubmit={handleSubmit}>
+                  <div className="pb-[116px]  ">
+                    {/* OTP INPUT BOXES */}
+                    <div className="flex justify-start gap-3 mt-6  text-black mb-0">
+                      {[0, 1, 2, 3, 4, 5].map((i) => (
+                        <input
+                          key={i}
+                          ref={(el) => {
+                            if (el) otpRefs.current[i] = el;
+                          }}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={1}
+                          value={formData.otpvalue?.[i] || ""}
+                          onChange={(e) => {
+                            handleOtpChange(i, e.target.value);
+
+                            // move to next box on input
+                            if (e.target.value && i < 5) {
+                              otpRefs.current[i + 1]?.focus();
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            // move back on backspace
+                            if (
+                              e.key === "Backspace" &&
+                              !formData.otpvalue?.[i] &&
+                              i > 0
+                            ) {
+                              otpRefs.current[i - 1]?.focus();
+                            }
+                          }}
+                          className={`
+                            w-12 h-12 text-center text-lg font-semibold rounded-2
+                            border text-black
+                            ${
+                              otpError
+                                ? "border-red-500"
+                                : formData.otpvalue?.[i]
+                                ? "border-green-500"
+                                : "border-gray-300"
+                            }
+                            focus:outline-none focus:ring-2 ${
+                              otpError
+                                ? "focus:ring-red-500"
+                                : "focus:ring-green-500"
+                            }
+                          `}
+                        />
+                      ))}
+                    </div>
+
+                    {/* OTP TIMER */}
+                    <div className="mt-4  text-start text-sm text-gray-500">
+                      {otpTimer > 0 ? (
+                        <>
+                          Didn’t get a code?{" "}
+                          <span className="text-blue-600 font-medium">
+                            Resend OTP in 0:
+                            {otpTimer.toString().padStart(2, "0")}
+                          </span>
+                        </>
+                      ) : (
+                        <button
+                          onClick={handleResendotp}
+                          className="text-blue-600 font-medium hover:underline"
+                        >
+                          Resend OTP
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <button
+                      type="submit"
+                      disabled={isLoading || formData.otpvalue?.length !== 6}
+                      className={`w-full rounded-[30px] py-3 text-base font-semibold  text-[18px]   flex items-center justify-center bg-[#EEEEEE] text-[#B0B1B3]
+                    disabled:bg-[#EEEEEE] disabled:opacity-60 disabled:cursor-not-allowed
+                    enabled:bg-[#0222D7] enabled:text-white transition-colors duration-300 ease-in-out
+                     `}
+                    >
+                      {isLoading && (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      )}
+                      {isLoading ? "Verifying OTP..." : "Verify OTP "}
+                    </button>
+                    <div className="mt-[15px]">
+                      <p className="w-[315px] text-[14px] text-[#060B13] pl-12 pr-12 text-center">
+                        By continuing, you agree to our T&C and Privacy policy
+                      </p>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          ) : (
+            <div className="m-4 flex flex-col ">
+              <div className="p-1 text-[#000000]">
+                <h1 className="text-5  font-semibold">Enter your Details</h1>
+
+                <form className="mt-6 space-y-6" onSubmit={handleotp}>
+                  <div className="relative w-full">
+                    <input
+                      type="text"
+                      id="fullName"
+                      placeholder=" "
+                      value={formData.username}
+                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                      className="
+                        peer
+                        w-full h-[55px]
+                        rounded-[30px]
+                        border border-gray-300
+                        bg-white
+                        px-5 py-3
+                        text-[18px] text-black
+                        outline-none
+                        focus:ring-0
+
+                        focus:border-[#0222D7]
+                        
+                        not-placeholder-shown:border-[#0222D7]
+                      "
+                    />
+
+                    <label
+                      htmlFor="fullName"
+                      className="
+                      absolute left-5
+                      -top-2.5
+                      bg-white px-2
+                      text-[16px]
+                      text-gray-300
+                      transition-colors duration-200
+                      pointer-events-none
+
+                      peer-focus:text-[#0222D7]
+                      peer-not-placeholder-shown:text-[#0222D7]
+                    "
+                    >
+                      Full name
+                    </label>
+                  </div>
+
+                  <label className="block relative group ">
+                    {/* Smartphone Icon */}
+                    <span className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 transition-colors duration-200 group-focus-within:text-[#0222D7]">
+                      <Smartphone size={18} />
+                    </span>
+
+                    <input
+                      type="tel"
+                      name="contactNumber"
+                      value={formData.contactNumber}
+                      placeholder="Enter mobile number"
+                      required
+                      disabled={isLoading}
+                      onChange={handleInputChange}
+                      className="
+                        w-full h-[53px] text-[18px] rounded-[30px]
+                        border border-gray-200 bg-gray-50
+                        py-3 pl-12 pr-4 text-base text-[#000000]
+                        outline-none transition
+                        hover:border-[#0222D7]
+                        focus:border-[#0222D7] focus:bg-white
+                        disabled:opacity-50 disabled:cursor-not-allowed
+                      "
+                    />
+                  </label>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading || buttonDisabled}
+                    className={`w-full rounded-[30px] py-3 text-base font-semibold  text-[18px]   flex items-center justify-center bg-[#EEEEEE] text-[#B0B1B3]
+                    disabled:bg-[#EEEEEE] disabled:opacity-60 disabled:cursor-not-allowed
+                    enabled:bg-[#0222D7] enabled:text-white transition-colors duration-300 ease-in-out
+                     `}
+                  >
+                    {isLoading && <Loader2 className="h-5 w-5 animate-spin" />}
+                    {isLoading ? "Sending OTP..." : "Continue "}
+                  </button>
+                </form>
+
+                <div className="mt-6 text-center text-[16px]  text-[#000000]">
+                  Don&apos;t have an account?{" "}
+                  <button
+                    onClick={() => router.push("/student/login")}
+                    className="font-semibold text-blue-600 hover:underline"
+                  >
+                    Sign In
+                  </button>
+                </div>
+
+                <div className="mt-6 flex items-center gap-3 text-xs text-gray-400">
+                  <span className="h-px flex-1 bg-gray-200" />
+                  <span>Or Login with</span>
+                  <span className="h-px flex-1 bg-gray-200" />
+                </div>
+                <div className="mt-6 ">{renderedProviders}</div>
+              </div>
+            </div>
           )}
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full rounded-2xl bg-blue-600 py-3 text-base font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {isSubmitting ? (
-              <Loader2 className="mx-auto h-5 w-5 animate-spin" />
-            ) : (
-              "Continue"
-            )}
-          </button>
-        </form>
-
-        <div className="mt-6 text-center text-sm text-gray-600">
-          Already have an account?{" "}
-          <button
-            onClick={() => router.push("/student/login")}
-            className="font-semibold text-blue-600 hover:underline"
-          >
-            Sign in
-          </button>
+          
         </div>
-
-        <div className="mt-6 flex items-center gap-3 text-xs text-gray-400">
-          <span className="h-px flex-1 bg-gray-200" />
-          <span>OR</span>
-          <span className="h-px flex-1 bg-gray-200" />
-        </div>
-
-        <div className="mt-6 space-y-3">{renderedProviders}</div>
-      </div>
-    </section>
+      </section>
+    </>
   );
 };
 

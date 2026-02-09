@@ -1,4 +1,4 @@
-const Course = require("../models/Course");
+const  Course  = require("../models/Course");
 const { Institution } = require("../models/Institution");
 const InstituteAdminModel = require("../models/InstituteAdmin");
 const AppError = require("../utils/appError");
@@ -20,7 +20,7 @@ async function incrementMetricGeneric(req, res, next, cfg) {
   const course = await Course.findOneAndUpdate(
     { _id: courseId, institution: institutionId },
     { $inc: incUpdate },
-    { new: true }
+    { new: true },
   );
   if (!course) return next(new AppError("Course not found", 404));
 
@@ -45,7 +45,7 @@ async function incrementMetricGeneric(req, res, next, cfg) {
   } catch (err) {
     console.error(
       "CourseController: rollup update failed",
-      err?.message || err
+      err?.message || err,
     );
   }
 
@@ -57,9 +57,8 @@ async function incrementMetricGeneric(req, res, next, cfg) {
       payload[metricField] = course[metricField];
       io.to(`institution:${institutionId}`).emit(updatedEvent, payload);
 
-      const inst = await Institution.findById(institutionId).select(
-        "institutionAdmin"
-      );
+      const inst =
+        await Institution.findById(institutionId).select("institutionAdmin");
       if (inst?.institutionAdmin) {
         const adminId = String(inst.institutionAdmin);
         io.to(`institutionAdmin:${adminId}`).emit(updatedEvent, payload);
@@ -79,11 +78,11 @@ async function incrementMetricGeneric(req, res, next, cfg) {
             metricField === "courseViews"
               ? { totalViews: total }
               : metricField === "comparisons"
-              ? { totalComparisons: total }
-              : { totalLeads: total };
+                ? { totalComparisons: total }
+                : { totalLeads: total };
           io.to(`institutionAdmin:${adminId}`).emit(
             institutionAdminTotalEvent,
-            totalPayload
+            totalPayload,
           );
         }
       }
@@ -91,7 +90,7 @@ async function incrementMetricGeneric(req, res, next, cfg) {
   } catch (err) {
     console.error(
       "CourseController: socket emit/institutionAdmin total failed",
-      err?.message || err
+      err?.message || err,
     );
   }
 
@@ -230,7 +229,7 @@ async function institutionAdminRangeGeneric(userId, rollupField, range) {
 async function institutionAdminPreviousRangeGeneric(
   userId,
   rollupField,
-  range
+  range,
 ) {
   const institutions = await Institution.find({
     institutionAdmin: userId,
@@ -288,67 +287,157 @@ const checkOwnership = async (institutionId, userId) => {
   if (institution.institutionAdmin.toString() !== userId) {
     throw new AppError(
       "You are not authorized to perform this action for this institution",
-      403
+      403,
     );
   }
   return institution;
 };
 
 exports.createCourse = asyncHandler(async (req, res, next) => {
-  const { institutionId } = req.params;
+  const userId = req.userId;
+  const { courses } = req.body;
 
-  // Ensure the user owns the institution
-  await checkOwnership(institutionId, req.userId);
-
-  const { courses, totalCourses } = req.body;
-
-  if (!totalCourses || !Array.isArray(courses) || courses.length < 1) {
+  if (!Array.isArray(courses) || courses.length === 0) {
     return next(new AppError("No courses provided", 400));
   }
 
-  // Add institutionId and defaults to each course object
-  const coursesToInsert = courses.map((course) => ({
-    ...course,
-    institution: institutionId,
-    image: course.image || "",
-    brochure: course.brochure || "",
-  }));
+  const pipeline = [
+    /* ----------------------------------------------------
+       1. Match Institute Admin
+    ---------------------------------------------------- */
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(userId),
+        role: "INSTITUTE_ADMIN",
+      },
+    },
 
-  // Insert all courses at once
-  const createdCourses = await Course.insertMany(coursesToInsert);
+    /* ----------------------------------------------------
+       2. Attach institution + defaults to each course
+    ---------------------------------------------------- */
+    {
+      $project: {
+        courses: {
+          $map: {
+            input: courses,
+            as: "course",
+            in: {
+              $mergeObjects: [
+                "$$course",
+                {
+                  institution: "$institution",
+                  branch: {
+                    $cond: [
+                      {
+                        $regexMatch: {
+                          input: "$$course.branch",
+                          regex: /^[0-9a-fA-F]{24}$/,
+                        },
+                      },
+                      { $toObjectId: "$$course.branch" },
+                      null,
+                    ],
+                  },
+                  
+                  status: "Inactive",
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+
+    /* ----------------------------------------------------
+       3. One document per course
+    ---------------------------------------------------- */
+    { $unwind: "$courses" },
+
+    /* ----------------------------------------------------
+       4. Replace root with course document
+    ---------------------------------------------------- */
+    {
+      $replaceRoot: {
+        newRoot: "$courses",
+      },
+    },
+
+    /* ----------------------------------------------------
+       5. Insert into courses collection
+    ---------------------------------------------------- */
+    {
+      $merge: {
+        into: "courses",
+        whenMatched: "fail",
+        whenNotMatched: "insert",
+      },
+    },
+  ];
+
+  await InstituteAdminModel.aggregate(pipeline);
 
   res.status(201).json({
     success: true,
-    count: createdCourses.length,
-    data: createdCourses,
+    message: "Courses created successfully",
+    count: courses.length,
   });
 });
 
 exports.getAllCoursesForInstitution = asyncHandler(async (req, res, next) => {
-  const { institutionId } = req.params;
-
-  await checkOwnership(institutionId, req.userId);
-
-  const page = parseInt(req.query.page, 10) || 1;
+  const userId = req.userId;
   const limit = parseInt(req.query.limit, 10) || 10;
-  const skip = (page - 1) * limit;
+  const cursor = req.query.cursor;
 
-  const q = { institution: institutionId };
-  if (req.query.type) {
-    q.type = req.query.type; // optional filter by type: 'PROGRAM' | 'COURSE'
+  const matchQuery = {
+    institution: null,
+  };
+  if (cursor) {
+    matchQuery._id = { $lt: new mongoose.Types.ObjectId(cursor) };
   }
-  const courses = await Course.find(q).skip(skip).limit(limit);
-  const totalCourses = await Course.countDocuments(q);
+
+  const pipeline = [
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(userId),
+        role: "INSTITUTE_ADMIN",
+      },
+    },
+    {
+      $lookup: {
+        from: "courses",
+        let: { instId: "$institution" },
+        pipeline: [
+          { $match: { $expr: { $eq: ["$institution", "$$instId"] } } },
+          ...(cursor
+            ? [
+                {
+                  $match: { _id: { $lt: new mongoose.Types.ObjectId(cursor) } },
+                },
+              ]
+            : []),
+          { $sort: { _id: -1 } },
+          { $limit: limit + 1 },
+        ],
+        as: "courses",
+      },
+    },
+  ];
+
+  const result = await InstituteAdminModel.aggregate(pipeline);
+  const courses = result[0]?.courses || [];
+
+  let nextCursor = null;
+  if (courses.length > limit) {
+    const nextItem = courses.pop();
+    nextCursor = nextItem._id;
+  }
 
   res.status(200).json({
     success: true,
-    count: courses.length,
-    pagination: {
-      total: totalCourses,
-      page,
-      pages: Math.ceil(totalCourses / limit),
-    },
     data: courses,
+    nextCursor,
   });
 });
 
@@ -374,7 +463,7 @@ exports.getCourseById = asyncHandler(async (req, res) => {
           "viewCourse",
           courseId,
           parsed.course.institution,
-          userId
+          userId,
         );
       }
 
@@ -441,7 +530,7 @@ exports.getCourseById = asyncHandler(async (req, res) => {
         "viewCourse",
         courseId,
         raw.institution._id,
-        userId
+        userId,
       );
     }
 
@@ -462,52 +551,37 @@ exports.getCourseById = asyncHandler(async (req, res) => {
 
 exports.updateCourse = asyncHandler(async (req, res, next) => {
   const { institutionId, courseId } = req.params;
+
+  // Check ownership
   await checkOwnership(institutionId, req.userId);
 
-  let course = await Course.findById(courseId);
+  // Find course
+  const course = await Course.findById(courseId);
   if (!course || course.institution.toString() !== institutionId) {
     return next(
       new AppError(
         "Course not found or does not belong to this institution",
-        404
-      )
+        404,
+      ),
     );
   }
 
-  const updateData = { ...req.body };
-  const folderPath = `tco_clarity/courses/${institutionId}`;
-
-  if (req.files) {
-    const uploadPromises = [];
-    if (req.files.image) {
-      uploadPromises.push(
-        uploadStream(req.files.image[0].buffer, {
-          folder: `${folderPath}/images`,
-          resource_type: "image",
-        }).then((result) => (updateData.image = result.secure_url))
-      );
-    }
-    if (req.files.brochure) {
-      uploadPromises.push(
-        uploadStream(req.files.brochure[0].buffer, {
-          folder: `${folderPath}/brochures`,
-          resource_type: "auto",
-        }).then((result) => (updateData.brochure = result.secure_url))
-      );
-    }
-    await Promise.all(uploadPromises);
-  }
-
-  const updatedCourse = await Course.findByIdAndUpdate(courseId, updateData, {
+  const updatedCourse = await Course.findByIdAndUpdate(
+  courseId,
+  { $set: req.body },
+  {
     new: true,
-    runValidators: true,
-  });
+    runValidators: false,  
+    strict: false,         
+  }
+);
 
   res.status(200).json({
     success: true,
     data: updatedCourse,
   });
 });
+
 
 exports.deleteCourse = asyncHandler(async (req, res, next) => {
   const { institutionId, courseId } = req.params;
@@ -519,8 +593,8 @@ exports.deleteCourse = asyncHandler(async (req, res, next) => {
     return next(
       new AppError(
         "Course not found or does not belong to this institution",
-        404
-      )
+        404,
+      ),
     );
   }
 
@@ -543,7 +617,7 @@ exports.incrementMetricUnified = asyncHandler(async (req, res, next) => {
 
   if (!isViews && !isComparisons && !isLeads) {
     return next(
-      new AppError("Invalid metric. Use metric=views|comparisons|leads", 400)
+      new AppError("Invalid metric. Use metric=views|comparisons|leads", 400),
     );
   }
 
@@ -555,18 +629,18 @@ exports.incrementMetricUnified = asyncHandler(async (req, res, next) => {
         institutionAdminTotalEvent: "institutionAdminTotalViews",
       }
     : isComparisons
-    ? {
-        metricField: "comparisons",
-        rollupField: "comparisonRollups",
-        updatedEvent: "comparisonsUpdated",
-        institutionAdminTotalEvent: "institutionAdminTotalComparisons",
-      }
-    : {
-        metricField: "leadsGenerated",
-        rollupField: "leadsRollups",
-        updatedEvent: "leadsUpdated",
-        institutionAdminTotalEvent: "institutionAdminTotalLeads",
-      };
+      ? {
+          metricField: "comparisons",
+          rollupField: "comparisonRollups",
+          updatedEvent: "comparisonsUpdated",
+          institutionAdminTotalEvent: "institutionAdminTotalComparisons",
+        }
+      : {
+          metricField: "leadsGenerated",
+          rollupField: "leadsRollups",
+          updatedEvent: "leadsUpdated",
+          institutionAdminTotalEvent: "institutionAdminTotalLeads",
+        };
 
   return incrementMetricGeneric(req, res, next, cfg);
 });
@@ -671,7 +745,7 @@ exports.getInstitutionAdminMetricSummaryUnified = asyncHandler(
 
     if (!isViews && !isComparisons && !isLeads)
       return next(
-        new AppError("Invalid metric. Use metric=views|comparisons|leads", 400)
+        new AppError("Invalid metric. Use metric=views|comparisons|leads", 400),
       );
 
     if (isLeads) {
@@ -704,7 +778,7 @@ exports.getInstitutionAdminMetricSummaryUnified = asyncHandler(
     return res
       .status(200)
       .json({ success: true, data: { totalComparisons: total } });
-  }
+  },
 );
 
 // ----- Unified institutionAdmin metric by range -----
@@ -719,7 +793,7 @@ exports.getInstitutionAdminMetricByRangeUnified = asyncHandler(
 
     if (!isViews && !isComparisons && !isLeads)
       return next(
-        new AppError("Invalid metric. Use metric=views|comparisons|leads", 400)
+        new AppError("Invalid metric. Use metric=views|comparisons|leads", 400),
       );
 
     if (isLeads) {
@@ -744,13 +818,13 @@ exports.getInstitutionAdminMetricByRangeUnified = asyncHandler(
       req.userId,
       rollupField,
       cs,
-      ce
+      ce,
     );
     const previous = await aggregateRollupsTotal(
       req.userId,
       rollupField,
       ps,
-      pe
+      pe,
     );
     const trend = previous > 0 ? ((current - previous) / previous) * 100 : 0;
     if (isViews)
@@ -768,7 +842,7 @@ exports.getInstitutionAdminMetricByRangeUnified = asyncHandler(
         trend: { value: Math.abs(trend), isPositive: trend >= 0 },
       },
     });
-  }
+  },
 );
 
 // ----- Series: monthly counts for a given year -----
@@ -781,7 +855,7 @@ exports.getInstitutionAdminMetricSeriesUnified = asyncHandler(
     const isLeads = raw === "leads" || raw === "leadsgenerated";
     if (!isViews && !isComparisons && !isLeads) {
       return next(
-        new AppError("Invalid metric. Use metric=views|comparisons|leads", 400)
+        new AppError("Invalid metric. Use metric=views|comparisons|leads", 400),
       );
     }
 
@@ -835,8 +909,88 @@ exports.getInstitutionAdminMetricSeriesUnified = asyncHandler(
       series.push(agg[0]?.total || 0);
     }
     return res.status(200).json({ success: true, data: { series } });
-  }
+  },
 );
+
+exports.requestCallback = asyncHandler(async (req, res, next) => {
+  const { institutionId, courseId } = req.params;
+  const userId = req.userId;
+
+  console.log(
+    `📞 [requestCallback] Request from user ${userId} for institution ${institutionId}, course ${courseId}`,
+  );
+
+  try {
+    let subscription = null;
+    const now = new Date();
+
+    // 1️⃣ Check subscription cache first
+    const cachedSub = await RedisUtil.getCachedSubscription(institutionId);
+    if (cachedSub) {
+      console.log("✅ Subscription cache hit");
+      subscription = JSON.parse(cachedSub);
+
+      const isActive =
+        subscription.status === "active" &&
+        new Date(subscription.startDate) <= now &&
+        new Date(subscription.endDate) > now;
+
+      if (!isActive) {
+        console.warn(
+          "⚠️ Cached subscription expired or invalid — fetching from DB",
+        );
+        subscription = null;
+      }
+    } else {
+      console.log("⚙️ No cached subscription found — will query MongoDB");
+    }
+
+    // 2️⃣ If no valid cached subscription, fetch from MongoDB
+    if (!subscription) {
+      const subscriptionFromDB = await Subscription.findOne({
+        institution: institutionId,
+        status: "active",
+        startDate: { $lte: now },
+        endDate: { $gt: now },
+      });
+
+      if (!subscriptionFromDB) {
+        console.warn("❌ No valid active subscription found in DB");
+        return res.status(403).json({
+          success: false,
+          message: "Institution subscription inactive or expired",
+        });
+      }
+
+      subscription = subscriptionFromDB.toObject();
+
+      // Cache it for 5 minutes
+      await RedisUtil.cacheSubscription(institutionId, subscription, 300);
+      console.log("💾 Cached fresh subscription data from DB");
+    }
+
+    // 3️⃣ If reached here, subscription is valid — continue logic
+    console.log(
+      "✅ Valid subscription confirmed — proceeding with callback flow",
+    );
+
+    // ⬇️ Continue your callback logic below (e.g., record callback request)
+    // For example:
+    // await CallbackRequest.create({ userId, institutionId, courseId, createdAt: new Date() });
+
+    return res.status(200).json({
+      success: true,
+      message: "Callback request accepted",
+    });
+  } catch (error) {
+    console.error("❌ [requestCallback] Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "An error occurred while processing the callback request.",
+      error: error.message,
+    });
+  }
+});
 
 exports.searchCourses = asyncHandler(async (req, res) => {
   const userId = req.userId;
@@ -949,7 +1103,7 @@ exports.searchCourses = asyncHandler(async (req, res) => {
         "leadImpression",
         course._id.toString(),
         course.institutionDetails._id.toString(),
-        userId
+        userId,
       );
     }
   }
@@ -1191,8 +1345,8 @@ exports.filterCourses = async (req, res) => {
           key === "priceRange"
             ? [value.trim()]
             : value.includes(",")
-            ? value.split(",").map((v) => v.trim())
-            : [value.trim()];
+              ? value.split(",").map((v) => v.trim())
+              : [value.trim()];
       }
 
       if (!Array.isArray(value)) value = [value];
@@ -1217,7 +1371,7 @@ exports.filterCourses = async (req, res) => {
           "leadImpression",
           course._id.toString(),
           course.institutionDetails._id.toString(),
-          userId
+          userId,
         );
       }
     }
@@ -1260,10 +1414,59 @@ exports.updateStatsAndCreateEnquiry = async (req, res) => {
       },
     };
 
-    const typeData = typeMapping[type];
-    if (!typeData) {
-      return res.status(400).json({
-        message: "Invalid type",
+    if (!typeMapping[type]) {
+      return res
+        .status(400)
+        .json({ message: "Invalid type. Must be demoRequest or callRequest" });
+    }
+
+    const { statField, enquiryType } = typeMapping[type];
+
+    const session = await mongoose.startSession();
+
+    try {
+      await session.withTransaction(async () => {
+        // STEP 1 — Increase stat count
+        await UserStats.findOneAndUpdate(
+          { userId },
+          { $inc: { [statField]: 1 } },
+          { upsert: true, new: true, session },
+        );
+
+        // STEP 2 — Create enquiry
+        await Enquiries.create(
+          [
+            {
+              institution: institutionId,
+              programInterest: "",
+              enquiryType,
+              student: userId,
+              status: enquiryType,
+              statusHistory: [
+                {
+                  status: enquiryType,
+                  changedBy: userId,
+                  changedAt: new Date(),
+                  notes: "",
+                },
+              ],
+            },
+          ],
+          { session },
+        );
+      });
+
+      session.endSession();
+      return res.status(200).json({
+        success: true,
+        message: "Stats updated & enquiry created successfully",
+      });
+    } catch (error) {
+      session.endSession();
+      console.error("Transaction Error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to update stats & create enquiry",
       });
     }
 

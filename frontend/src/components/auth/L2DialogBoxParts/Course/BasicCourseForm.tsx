@@ -114,11 +114,11 @@ export default function BasicCourseForm({
 
       <InputField
         label="Location"
-        name="location"
-        value={currentCourse.location}
+        name="locationURL"
+        value={currentCourse.locationURL}
         onChange={handleCourseChange}
         placeholder="Enter Place name"
-        error={courseErrors.location} // ✅ 3. Display the error
+        error={courseErrors.locationURL} // ✅ 3. Display the error
         required
       />
     </div>

@@ -17,6 +17,14 @@ import AnalyticsTable from "@/components/dashboard/AnalyticsTable";
 import { loadRazorpayScript } from "@/lib/razorpay";
 import { useUserStore } from "@/lib/user-store";
 import PaymentCheckout from "@/components/payment/PaymentCheckout";
+import {
+  _Dialog,
+  _DialogContent,
+  _DialogHeader,
+  _DialogTitle,
+  _DialogDescription,
+  _DialogFooter,
+} from "@/components/ui/dialog";
 import { Suspense } from "react";
 
 type InactiveCourseRow = {
@@ -82,6 +90,12 @@ function ProgramsPage() {
   const [, setPaymentVerified] = useState<{ transactionId?: string | null; paymentId?: string | null; orderId?: string | null } | null>(null);
   const [, setPaymentFailed] = useState<{ paymentId?: string | null; orderId?: string | null } | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; programId: string | null; programName: string }>({
+    open: false,
+    programId: null,
+    programName: '',
+  });
+  const [isDeleting, setIsDeleting] = useState(false);
   const selectedPlan = "yearly" as const;
   const appliedCoupon: string | null = null;
   // Add/Branch forms are delegated to L2DialogBox for reuse across the app
@@ -426,7 +440,7 @@ function ProgramsPage() {
                                   <th className="py-3 pr-4">Course Name</th>
                                   <th className="py-3 pr-4">Status</th>
                                   <th className="py-3 pr-4">Start Date</th>
-                                  <th className="py-3 pr-4">End Date</th>
+                                  {/* <th className="py-3 pr-4">End Date</th> */}
                                 </tr>
                               </thead>
                               <tbody>
@@ -450,7 +464,7 @@ function ProgramsPage() {
                                       </span>
                                     </td>
                                     <td className="py-4 pr-4 text-sm">{course.startDate}</td>
-                                    <td className="py-4 pr-4 text-sm">{course.endDate}</td>
+                                    {/* <td className="py-4 pr-4 text-sm">{course.endDate}</td> */}
                                   </tr>
                                 ))}
                               </tbody>
@@ -520,8 +534,8 @@ function ProgramsPage() {
                           <th className="py-2 pr-4">Course Name</th>
                           <th className="py-2 pr-4">Status</th>
                           <th className="py-2 pr-4">Start Date</th>
-                          <th className="py-2 pr-4">End Date</th>
-                          <th className="py-2 pr-4">Leads Generated</th>
+                          {/* <th className="py-2 pr-4">End Date</th> */}
+                          {/* <th className="py-2 pr-4">Leads Generated</th> */}
                           <th className="py-2 pr-4">Action</th>
                         </tr>
                       </thead>
@@ -537,35 +551,43 @@ function ProgramsPage() {
                             </td>
                             <td className="py-4 pr-4">
                               {(() => {
-                                // const status = getProgramStatus(String(p.startDate || ''), String(p.endDate || ''));
-                                const status = p.status as string;
+                                const rawStatus = String(p.status || '').toLowerCase();
                                 const statusColors = {
-                                  active: 'bg-green-100 text-green-700',
-                                  // upcoming: 'bg-blue-100 text-blue-700',
-                                  // expired: 'bg-red-100 text-red-700',
+                                  active: 'bg-emerald-100 text-emerald-700',
                                   inactive: 'bg-gray-100 text-gray-700'
                                 };
-                                // Map status to match analytics page
-                                // const displayStatus = status.status === 'active' ? 'Live' : 
-                                //                     status.status === 'upcoming' ? 'Paused' : 
-                                //                     status.status === 'expired' ? 'Expired' : 
-                                //                     'Draft';
+                                const dotColors = {
+                                  active: 'bg-emerald-500',
+                                  inactive: 'bg-gray-400'
+                                };
+                                const displayStatus = rawStatus === 'active' ? 'Active' : 'Inactive';
+                                const colorClass = statusColors[rawStatus as keyof typeof statusColors] || statusColors.inactive;
+                                const dotClass = dotColors[rawStatus as keyof typeof dotColors] || dotColors.inactive;
                                 return (
-                                  <span className={`inline-flex items-center text-xs rounded-full px-2 py-1 ${statusColors[status as keyof typeof statusColors]}`}>
-                                    ● {status}
+                                  <span className={`inline-flex items-center gap-2 text-sm font-medium rounded-full px-3 py-1.5 ${colorClass}`}>
+                                    <span className={`h-2 w-2 rounded-full ${dotClass} ${rawStatus === 'active' ? 'animate-pulse' : ''}`}></span>
+                                    {displayStatus}
                                   </span>
                                 );
                               })()}
                             </td>
                             <td className="py-4 pr-4 text-sm">{formatDate(String(p.startDate || ''))}</td>
-                            <td className="py-4 pr-4 text-sm">{formatDate(String(p.endDate || ''))}</td>
-                            <td className="py-4 pr-4 text-sm">{typeof p.leadsGenerated === 'number' ? p.leadsGenerated : 0}</td>
+                            {/* <td className="py-4 pr-4 text-sm">{formatDate(String(p.endDate || ''))}</td> */}
+                            {/* <td className="py-4 pr-4 text-sm">{typeof p.leadsGenerated === 'number' ? p.leadsGenerated : 0}</td> */}
                             <td className="py-4 pr-4 text-sm">
                               <div className="flex items-center gap-3 text-gray-500">
-                                <button title="Delete" onClick={async () => { try { await programsAPI.remove(String(p._id), String(institution?._id)); queryClient.invalidateQueries({ queryKey: ['programs-page-list-institution-admin', institution?._id] }); } catch { } }} className="h-10 w-10 rounded-full border border-gray-200 dark:border-gray-800 flex items-center justify-center">
+                                <button
+                                  title="Delete"
+                                  onClick={() => setDeleteConfirm({
+                                    open: true,
+                                    programId: String(p._id),
+                                    programName: String(p.programName || p.selectBranch || 'this program'),
+                                  })}
+                                  className="h-10 w-10 rounded-full border border-gray-200 dark:border-gray-800 flex items-center justify-center hover:bg-red-50 hover:border-red-200 transition-colors"
+                                >
                                   <Image src="/Trash.png" alt="Delete" width={20} height={20} className="h-5 w-5 object-contain" />
                                 </button>
-                                <button title="Edit" onClick={() => handleEditProgram(String(p._id))} className="h-10 w-10 rounded-full border border-gray-200 dark:border-gray-800 flex items-center justify-center">
+                                <button title="Edit" onClick={() => handleEditProgram(String(p._id))} className="h-10 w-10 rounded-full border border-gray-200 dark:border-gray-800 flex items-center justify-center hover:bg-blue-50 hover:border-blue-200 transition-colors">
                                   <Image src="/Edit.png" alt="Edit" width={20} height={20} className="h-5 w-5 object-contain" />
                                 </button>
                               </div>
@@ -654,6 +676,52 @@ function ProgramsPage() {
           </_Card>
         </>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <_Dialog open={deleteConfirm.open} onOpenChange={(open) => setDeleteConfirm((prev) => ({ ...prev, open }))}>
+        <_DialogContent
+          className="max-w-md"
+          showCloseButton={false}
+          overlayClassName="bg-black/60 backdrop-blur-sm"
+        >
+          <_DialogHeader>
+            <_DialogTitle className="text-xl text-gray-900 dark:text-gray-100">Delete Program</_DialogTitle>
+            <_DialogDescription className="text-gray-600 dark:text-gray-400 mt-2">
+              Are you sure you want to delete <span className="font-semibold text-gray-900 dark:text-gray-100">&quot;{deleteConfirm.programName}&quot;</span>? This action cannot be undone.
+            </_DialogDescription>
+          </_DialogHeader>
+          <_DialogFooter className="mt-6 flex gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirm({ open: false, programId: null, programName: '' })}
+              disabled={isDeleting}
+              className="flex-1 rounded-xl"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!deleteConfirm.programId) return;
+                setIsDeleting(true);
+                try {
+                  await programsAPI.remove(deleteConfirm.programId, String(institution?._id));
+                  queryClient.invalidateQueries({ queryKey: ['programs-page-list-institution-admin', institution?._id] });
+                } catch (err) {
+                  console.error('Failed to delete program:', err);
+                } finally {
+                  setIsDeleting(false);
+                  setDeleteConfirm({ open: false, programId: null, programName: '' });
+                }
+              }}
+              disabled={isDeleting}
+              className="flex-1 rounded-xl bg-red-600 hover:bg-red-700 text-white"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </_DialogFooter>
+        </_DialogContent>
+      </_Dialog>
     </div>
   );
 }

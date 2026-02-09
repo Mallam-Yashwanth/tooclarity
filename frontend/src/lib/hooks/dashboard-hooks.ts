@@ -10,6 +10,7 @@ import {
   DashboardStatsCache as DashboardStats,
   DashboardStudentCache as StudentItem,
   DashboardInstitutionCache as Institution,
+  AllUnifiedAnalyticsCache,
   replaceDashboardStudentsWithLatestTen,
   prependAndTrimDashboardStudents
 } from '../localDb';
@@ -89,6 +90,89 @@ export function useDashboardStats(timeRange: 'weekly' | 'monthly' | 'yearly' = '
       } as DashboardStats;
 
       return stats;
+    },
+    enabled: !!institution?._id,
+    staleTime: 60 * 1000, // 1 minute in-memory cache
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  });
+}
+
+// Unified analytics hook for analytics page (views, leads, callbacks, demos)
+export function useAllUnifiedAnalytics(timeRange: 'weekly' | 'monthly' | 'yearly' = 'monthly') {
+  const { data: institution } = useInstitution();
+
+  return useQuery<AllUnifiedAnalyticsCache | null>({
+    queryKey: ['all-unified-analytics', timeRange, institution?._id],
+    queryFn: async (): Promise<AllUnifiedAnalyticsCache | null> => {
+      if (!institution?._id) {
+        return null;
+      }
+
+      // Fetch all metrics in parallel
+      const [viewsRes, leadsRes] = await Promise.all([
+        programsAPI.summaryViews(String(institution._id), timeRange),
+        metricsAPI.getInstitutionAdminByRange('leads', timeRange),
+      ]);
+
+      // Calculate totals from program views
+      const viewsPrograms = Array.isArray((viewsRes as { data?: { programs?: unknown[] } })?.data?.programs)
+        ? (viewsRes as { data: { programs: Record<string, unknown>[] } }).data.programs
+        : [];
+      const viewsTotal = viewsPrograms.reduce((sum, p) => sum + (Number(p.inRangeViews) || 0), 0);
+
+      const leadsTotal = (leadsRes as { data?: { totalLeads?: number } })?.data?.totalLeads || 0;
+
+      const now = new Date();
+      const dateRange = { from: now.toISOString(), to: now.toISOString() };
+
+      // Build unified analytics structure
+      const result: AllUnifiedAnalyticsCache = {
+        type: timeRange,
+        institutionId: institution._id,
+        views: {
+          metric: 'views',
+          type: timeRange,
+          institutionId: institution._id,
+          totalCount: viewsTotal,
+          analytics: viewsPrograms.map(p => ({
+            label: String(p.programName || ''),
+            count: Number(p.inRangeViews) || 0
+          })),
+          dateRange,
+          lastUpdated: Date.now()
+        },
+        leads: {
+          metric: 'leads',
+          type: timeRange,
+          institutionId: institution._id,
+          totalCount: leadsTotal,
+          analytics: [],
+          dateRange,
+          lastUpdated: Date.now()
+        },
+        callbackRequest: {
+          metric: 'callbackRequest',
+          type: timeRange,
+          institutionId: institution._id,
+          totalCount: 0, // Placeholder - fetch from appropriate API if available
+          analytics: [],
+          dateRange,
+          lastUpdated: Date.now()
+        },
+        bookDemoRequest: {
+          metric: 'bookDemoRequest',
+          type: timeRange,
+          institutionId: institution._id,
+          totalCount: 0, // Placeholder - fetch from appropriate API if available
+          analytics: [],
+          dateRange,
+          lastUpdated: Date.now()
+        },
+        lastUpdated: Date.now()
+      };
+
+      return result;
     },
     enabled: !!institution?._id,
     staleTime: 60 * 1000, // 1 minute in-memory cache
@@ -261,8 +345,9 @@ export function useInfinitePrograms(institutionId?: string, limit: number = 10) 
     queryKey: ['programs-infinite', institutionId],
     enabled: !!institutionId,
     initialPageParam: null as string | null,
-    queryFn: async ({ pageParam }) => {
-      const res = await programsAPI.list(institutionId!, pageParam, limit);
+    queryFn: async () => {
+      // programsAPI.list only takes institutionId - pagination handled client-side
+      const res = await programsAPI.list(institutionId!);
       return res;
     },
     getNextPageParam: (lastPage: any) => {

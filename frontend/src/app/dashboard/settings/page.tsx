@@ -6,7 +6,7 @@ import { authAPI } from "@/lib/api";
 import { dashboardAPI } from "@/lib/dashboard_api";
 import { toast } from 'react-toastify';
 import axios from 'axios';
-import { useDashboardHealth } from "@/lib/hooks/dashboard-hooks";
+import { useInstitution, useProgramsList } from "@/lib/hooks/dashboard-hooks";
 import { useQueryClient } from "@tanstack/react-query";
 import L2DialogBox from "@/components/auth/L2DialogBox";
 import AppSelect from "@/components/ui/AppSelect";
@@ -55,37 +55,37 @@ const SettingsPage: React.FC = () => {
     const searchParams = useSearchParams();
     const [activeTab, setActiveTab] = useState<"admin" | "course">("admin");
     const [showPasswords, setShowPasswords] = useState({ new: false, confirm: false });
-    
+
     const [pageLoading, setPageLoading] = useState(true);
     const [verificationLoading, setVerificationLoading] = useState(false);
     const [passwordSaveLoading, setPasswordSaveLoading] = useState(false);
-    
+
     const [userName, setUserName] = useState("User");
     const [isVerificationSent, setIsVerificationSent] = useState(false);
     const [isEmailVerified, setIsEmailVerified] = useState(false);
     const [otp, setOtp] = useState("");
     const [otpError, setOtpError] = useState("");
     const [formData, setFormData] = useState<AdminFormData>({ currentEmail: "", newPassword: "", confirmPassword: "" });
-    
+
     // Course editing state
     const [selectedCourse, setSelectedCourse] = useState<Record<string, unknown> | null>(null);
     const [courseError, setCourseError] = useState("");
     const queryClient = useQueryClient();
 
-    // Use unified dashboard health hook - fetches all data once and caches it
-    const { data: dashboardHealth, isLoading: healthLoading, error: healthError } = useDashboardHealth();
-    
-    // Extract courses and institution data from dashboard health
-    const allCourses = dashboardHealth?.branchesWithCourses.flatMap((b: Record<string, unknown>) => 
-        (b.courses as Record<string, unknown>[]) || []
-    ) || [];
-    const institutionData = dashboardHealth?.institution || null;
+    // Use existing hooks instead of useDashboardHealth
+    const { data: institutionData, isLoading: institutionLoading } = useInstitution();
+    const { data: programsList, isLoading: programsLoading, error: programsError } = useProgramsList();
+
+    // Extract courses from programs list
+    const allCourses = programsList || [];
+    const healthLoading = institutionLoading || programsLoading;
+    const healthError = programsError;
 
     // Handle editProgram query parameter
     useEffect(() => {
         const editProgramId = searchParams.get('editProgram');
         if (editProgramId && allCourses.length > 0) {
-            const courseToEdit = allCourses.find(course => course._id === editProgramId);
+            const courseToEdit = allCourses.find((course: Record<string, unknown>) => course._id === editProgramId);
             if (courseToEdit) {
                 setSelectedCourse(courseToEdit);
                 setActiveTab("course");
@@ -139,7 +139,7 @@ const SettingsPage: React.FC = () => {
         // Invalidate dashboard health cache to trigger refetch
         queryClient.invalidateQueries({ queryKey: ['dashboard-health'] });
     };
-    
+
     // --- ACTION HANDLERS (SAVE, OTP, etc.) ---
 
     const handleSendVerification = async () => {
@@ -294,7 +294,7 @@ const SettingsPage: React.FC = () => {
                                             )}
                                         </div>
                                     ) : (
-                                         <div className="p-4 border border-green-200 dark:border-green-900/50 bg-green-50 dark:bg-green-950 rounded-lg flex items-center space-x-3">
+                                        <div className="p-4 border border-green-200 dark:border-green-900/50 bg-green-50 dark:bg-green-950 rounded-lg flex items-center space-x-3">
                                             <CheckCircle className="h-6 w-6 text-green-500 flex-shrink-0" />
                                             <div>
                                                 <h4 className="font-semibold text-green-800 dark:text-green-300">Email Verified</h4>
@@ -315,13 +315,13 @@ const SettingsPage: React.FC = () => {
                             </div>
                         </div>
                     )}
-                    
+
                     {activeTab === "course" && (
                         <div className="space-y-6">
                             <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-6">
                                 <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-50 mb-4">Edit Program Details</h3>
 
-                            {courseError && <p className="text-red-600 text-sm mb-4">{courseError}</p>}
+                                {courseError && <p className="text-red-600 text-sm mb-4">{courseError}</p>}
 
                                 {allCourses.length === 0 ? (
                                     <div className="text-center py-8">
@@ -334,9 +334,9 @@ const SettingsPage: React.FC = () => {
                                             <AppSelect
                                                 value={String(selectedCourse?._id || "")}
                                                 onChange={handleCourseSelect}
-                                                options={allCourses.map(course => ({
-                                                value: String(course._id),
-                                                label: String(course.courseName || course.hallName || course.subject || "Unnamed Program")
+                                                options={allCourses.map((course) => ({
+                                                    value: String(course._id),
+                                                    label: String(course.courseName || course.programName || "Unnamed Program")
                                                 }))}
                                                 placeholder="Choose a Program to Edit"
                                                 variant="white"
@@ -359,8 +359,8 @@ const SettingsPage: React.FC = () => {
                                             </div>
                                         )}
                                     </>
-                                    )}
-                                </div>
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>

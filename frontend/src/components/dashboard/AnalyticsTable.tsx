@@ -68,8 +68,8 @@ const AnalyticsTable = <T,>({
                 <th className="text-left font-medium py-3 px-4">S.No</th>
                 <th className="text-left font-medium py-3 px-4">{nameHeaderOverride || "Course Name"}</th>
                 <th className="text-left font-medium py-3 px-4">Status</th>
-                <th className="text-left font-medium py-3 px-4">Views</th>
-                <th className="text-left font-medium py-3 px-4">Leads</th>
+                {/* <th className="text-left font-medium py-3 px-4">Views</th> */}
+                {/* <th className="text-left font-medium py-3 px-4">Leads</th> */}
                 <th className="text-left font-medium py-3 px-4">Action</th>
               </tr>
             </thead>
@@ -81,8 +81,8 @@ const AnalyticsTable = <T,>({
                     <div className="text-gray-900 dark:text-gray-100 font-medium">{r.name}</div>
                   </td>
                   <td className="p-4 align-middle"><StatusPill status={r.status} /></td>
-                  <td className="p-4 text-gray-900 dark:text-gray-100 align-middle">{r.views.toLocaleString()}</td>
-                  <td className="p-4 text-gray-900 dark:text-gray-100 align-middle">{r.leads}</td>
+                  {/* <td className="p-4 text-gray-900 dark:text-gray-100 align-middle">{r.views.toLocaleString()}</td> */}
+                  {/* <td className="p-4 text-gray-900 dark:text-gray-100 align-middle">{r.leads}</td> */}
                   <td className="p-4 align-middle">
                     <Button onClick={onAddCourse} variant="ghost" size="sm" className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 h-8 w-8 p-0 flex items-center justify-center">
                       <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="mr-0 h-3.5 w-3.5" />

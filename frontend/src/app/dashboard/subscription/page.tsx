@@ -601,9 +601,8 @@ function ProgramsPage() {
                     <div className="flex items-center justify-center py-5">
                       <Button variant="outline" onClick={() => setVisibleCount((c) => c + 10)} className="rounded-full">View more ▾</Button>
                     </div>
-                }
-              />
-            </div>
+                  )}
+              </div>
           )}
 
           {/* Program Details table */}

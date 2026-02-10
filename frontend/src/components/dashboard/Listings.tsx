@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth-context";
 import { useInfiniteBranches, useInfinitePrograms, useInstitution, useProgramsList } from "@/lib/hooks/dashboard-hooks";
 import { programsAPI, getMyInstitution, branchAPI } from "@/lib/api";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus, faPhone, faMapMarkerAlt, faLink, faLocationArrow, faTrashAlt, faEdit } from "@fortawesome/free-solid-svg-icons";
@@ -113,6 +114,20 @@ export function Listings() {
   const { data: inst } = useInstitution();
   const queryClient = useQueryClient();
 
+  // --- Router & URL State ---
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // "view" query param controls the toggle (default: 'branch')
+  const viewToggle = (searchParams.get("view") as "branch" | "course") || "branch";
+
+  const setViewToggle = (view: "branch" | "course") => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("view", view);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
   const {
     data: branchPages,
     fetchNextPage: fetchNextBranches,
@@ -135,11 +150,14 @@ export function Listings() {
   ) || [];
 
   const allProgramsRaw = programPages?.pages.flatMap((page: any) => {
+    if (page?.data?.programs && Array.isArray(page.data.programs)) {
+      return page.data.programs;
+    }
     return Array.isArray(page?.data) ? page.data : [];
   }) || [];
 
   const [addInlineMode, setAddInlineMode] = useState<'none' | 'course' | 'branch'>('none');
-  const [viewToggle, setViewToggle] = useState<'branch' | 'course'>('branch');
+  // const [viewToggle, setViewToggle] = useState<'branch' | 'course'>('branch'); // Replaced by URL state
   const [viewModal, setViewModal] = useState<ViewModalState>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<BranchDetail | null>(null);

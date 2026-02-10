@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, Suspense, useEffect } from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { _Card, _CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,6 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus, faPhone, faMapMarkerAlt, faLink, faLocationArrow, faTrashAlt, faEdit } from "@fortawesome/free-solid-svg-icons";
 import L2DialogBox from "@/components/auth/L2DialogBox";
 import { toast } from "react-toastify";
-import { useSearchParams, usePathname, useRouter } from "next/navigation";
 
 
 
@@ -109,40 +108,10 @@ const DetailRow = ({ label, value, isLink }: { label: string; value: string; isL
   </div>
 );
 
-function ListingsContent() {
+export function Listings() {
   const { user, loading } = useAuth();
   const { data: inst } = useInstitution();
   const queryClient = useQueryClient();
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  // Get values from URL query params with defaults
-  const viewFromUrl = (searchParams.get('view') as 'branch' | 'course') || 'course';
-  const modeFromUrl = (searchParams.get('mode') as 'none' | 'course' | 'branch') || 'none';
-  const editProgramId = searchParams.get('edit') || null;
-
-  // Helper function to update URL params
-  const updateUrlParams = (params: { view?: string; mode?: string }) => {
-    const newParams = new URLSearchParams(searchParams.toString());
-    Object.entries(params).forEach(([key, value]) => {
-      if (key === 'view') {
-        // Always set view param explicitly (course or branch)
-        if (value) {
-          newParams.set(key, value);
-        }
-      } else if (key === 'mode') {
-        // For mode, only set if it's not 'none' (default)
-        if (value && value !== 'none') {
-          newParams.set(key, value);
-        } else {
-          newParams.delete(key);
-        }
-      }
-    });
-    const newUrl = newParams.toString() ? `${pathname}?${newParams.toString()}` : pathname;
-    router.push(newUrl, { scroll: false });
-  };
 
   const {
     data: branchPages,
@@ -169,7 +138,8 @@ function ListingsContent() {
     return Array.isArray(page?.data) ? page.data : [];
   }) || [];
 
-  // Use URL-based state for view toggle and add mode
+  const [addInlineMode, setAddInlineMode] = useState<'none' | 'course' | 'branch'>('none');
+  const [viewToggle, setViewToggle] = useState<'branch' | 'course'>('branch');
   const [viewModal, setViewModal] = useState<ViewModalState>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<BranchDetail | null>(null);
@@ -223,22 +193,6 @@ function ListingsContent() {
 
   console.log("Final Branch Count:", allBranches.length);
   console.log("Final Course Count:", normalizedPrograms.length);
-
-  // Auto-open edit modal when editProgramId is in URL
-  useEffect(() => {
-    if (editProgramId && normalizedPrograms.length > 0) {
-      const programToEdit = normalizedPrograms.find(p => p._id === editProgramId);
-      if (programToEdit) {
-        setViewModal({ type: 'course', data: programToEdit });
-        setIsEditing(true);
-        // Clear the edit param from URL after opening modal
-        const newParams = new URLSearchParams(searchParams.toString());
-        newParams.delete('edit');
-        const newUrl = newParams.toString() ? `${pathname}?${newParams.toString()}` : pathname;
-        router.replace(newUrl, { scroll: false });
-      }
-    }
-  }, [editProgramId, normalizedPrograms, searchParams, pathname, router]);
 
   if (loading || !user) return null;
 
@@ -309,23 +263,23 @@ function ListingsContent() {
       {/* 2. Listing Buttons */}
       <_Card className="border-none shadow-sm rounded-3xl bg-gray-50 dark:bg-gray-900/50 p-8">
         <h2 className="text-lg font-bold mb-6">Create New Listing</h2>
-        {modeFromUrl === 'none' ? (
+        {addInlineMode === 'none' ? (
           <div className="flex gap-6 justify-center">
-            <button onClick={() => updateUrlParams({ mode: 'branch' })} className="flex flex-col items-center justify-center gap-2 bg-white dark:bg-gray-800 w-36 h-28 rounded-2xl shadow-sm hover:bg-indigo-50 transition-colors">
+            <button onClick={() => setAddInlineMode('branch')} className="flex flex-col items-center justify-center gap-2 bg-white dark:bg-gray-800 w-36 h-28 rounded-2xl shadow-sm hover:bg-indigo-50 transition-colors">
               <FontAwesomeIcon icon={faPlus} className="text-indigo-600" />
               <span className="text-xs font-semibold">Add Branch</span>
             </button>
-            <button onClick={() => updateUrlParams({ mode: 'course' })} className="flex flex-col items-center justify-center gap-2 bg-white dark:bg-gray-800 w-36 h-28 rounded-2xl shadow-sm hover:bg-indigo-50 transition-colors">
+            <button onClick={() => setAddInlineMode('course')} className="flex flex-col items-center justify-center gap-2 bg-white dark:bg-gray-800 w-36 h-28 rounded-2xl shadow-sm hover:bg-indigo-50 transition-colors">
               <FontAwesomeIcon icon={faPlus} className="text-indigo-600" />
               <span className="text-xs font-semibold">Add Course</span>
             </button>
           </div>
         ) : (
           <div className="space-y-4">
-            <Button variant="ghost" onClick={() => updateUrlParams({ mode: 'none' })}>← Back to Dashboard</Button>
+            <Button variant="ghost" onClick={() => setAddInlineMode('none')}>← Back to Dashboard</Button>
             <L2DialogBox
               renderMode="inline"
-              initialSection={modeFromUrl === 'course' ? 'course' : 'branch'}
+              initialSection={addInlineMode === 'course' ? 'course' : 'branch'}
               institutionId={inst?._id}
               institutionType={rawInst?.instituteType}
               mode="subscriptionProgram"
@@ -333,7 +287,7 @@ function ListingsContent() {
               onSuccess={() => {
                 queryClient.invalidateQueries({ queryKey: ['programs-list'] });
                 queryClient.invalidateQueries({ queryKey: ['programs-page-branches'] });
-                updateUrlParams({ mode: 'none' });
+                setAddInlineMode('none');
               }}
             />
           </div>
@@ -342,13 +296,13 @@ function ListingsContent() {
 
       {/* 3. Toggle */}
       <div className="flex justify-end gap-2 bg-gray-100 dark:bg-gray-800 w-fit ml-auto p-1 rounded-full">
-        <button onClick={() => updateUrlParams({ view: 'branch' })} className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${viewFromUrl === 'branch' ? "bg-white shadow-sm text-blue-600" : "text-gray-500"}`}>Branches</button>
-        <button onClick={() => updateUrlParams({ view: 'course' })} className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${viewFromUrl === 'course' ? "bg-white shadow-sm text-blue-600" : "text-gray-500"}`}>Courses</button>
+        <button onClick={() => setViewToggle('branch')} className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${viewToggle === 'branch' ? "bg-white shadow-sm text-blue-600" : "text-gray-500"}`}>Branches</button>
+        <button onClick={() => setViewToggle('course')} className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${viewToggle === 'course' ? "bg-white shadow-sm text-blue-600" : "text-gray-500"}`}>Courses</button>
       </div>
 
       {/* 4. Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {viewFromUrl === 'branch' ? (
+        {viewToggle === 'branch' ? (
           allBranches.map((branch) => {
             // 🛡️ Guard Clause: Skip if branch data is missing
             if (!branch || !branch._id) return null;
@@ -506,7 +460,7 @@ function ListingsContent() {
 
       {/* 6. Pagination UI (Optional but recommended) */}
       <div className="flex justify-center pt-8">
-        {viewFromUrl === 'branch' && hasMoreBranches && (
+        {viewToggle === 'branch' && hasMoreBranches && (
           <Button
             onClick={() => fetchNextBranches()}
             variant="outline"
@@ -515,7 +469,7 @@ function ListingsContent() {
             Load More Branches
           </Button>
         )}
-        {viewFromUrl === 'course' && hasMorePrograms && (
+        {viewToggle === 'course' && hasMorePrograms && (
           <Button
             onClick={() => fetchNextPrograms()}
             variant="outline"
@@ -529,11 +483,6 @@ function ListingsContent() {
   );
 }
 
-// Export wrapped component with Suspense for useSearchParams
-export function Listings() {
-  return (
-    <Suspense fallback={<div className="p-6 text-center">Loading...</div>}>
-      <ListingsContent />
-    </Suspense>
-  );
-}
+
+
+

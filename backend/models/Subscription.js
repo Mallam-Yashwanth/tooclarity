@@ -8,28 +8,23 @@ const subscriptionSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    planType: {
-      type: String,
-      enum: ["monthly", "yearly"],
-      required: true,
-    },
+
     status: {
       type: String,
       enum: ["active", "expired", "pending"],
       default: "pending",
       index: true,
     },
-    // Add time
-    startDate: {
-      type: Date,
+
+    planType: {
+      type: String,
+      enum: ["monthly", "yearly", "free"],
+      default: "yearly",
     },
-    endDate: {
-      type: Date,
-      index: true,
-    },
+
     razorpayOrderId: {
       type: String,
-      // index: true,
+
     },
     razorpayPaymentId: {
       type: String,
@@ -37,7 +32,8 @@ const subscriptionSchema = new mongoose.Schema(
     amount: {
       type: Number,
       required: true,
-    }
+    },
+
   },
   { timestamps: true }
 );

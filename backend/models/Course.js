@@ -32,6 +32,12 @@ const courseSchema = new mongoose.Schema(
     courseSubscriptionStartDate: { type: Date },
     courseSubscriptionEndDate: { type: Date },
 
+
+    listingType: {
+      type: String,
+      enum: ['free', 'paid'],
+      default: 'paid'
+    },
     // Location A: The specific campus/town where the course is held
     state: { type: String, trim: true, maxlength: 100 },
     district: { type: String, trim: true, maxlength: 100 },
@@ -197,7 +203,8 @@ courseSchema.post('save', async function (doc) {
       await esClient.delete({
         index: 'courses_index',
         id: doc._id.toString(),
-      }).catch(() => {});
+      }).catch(() => { });
+      console.log(`🗑️ Removed inactive course ${doc._id} from Elasticsearch`);
     }
   } catch (err) {
     console.error('❌ ES Save Error:', err.message);
@@ -219,7 +226,8 @@ courseSchema.post('findOneAndUpdate', async function (doc) {
       await esClient.delete({
         index: 'courses_index',
         id: doc._id.toString(),
-      }).catch(() => {});
+      }).catch(() => { });
+      console.log(`🗑️ Removed inactive course ${doc._id} from Elasticsearch`);
     }
   } catch (err) {
     console.error('❌ ES Update Error:', err.message);

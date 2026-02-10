@@ -12,7 +12,7 @@ export interface SignUpData {
   contactNumber: string;
   designation?: string;
   linkedin?: string;
-  password: string;
+  password?: string;
   type?: "admin" | "institution" | "student";
 }
 
@@ -27,6 +27,7 @@ export interface OTPData {
   email?: string;
   contactNumber?: string;
   otp: string;
+  isLogin?: boolean 
 }
 
 export interface resendOtpData {
@@ -310,6 +311,7 @@ export interface PaymentInitPayload {
   planType?: string; // e.g., "yearly" | "monthly"
   couponCode?: string | null;
   courseIds?: string[];
+  noOfMonths?: number;
   // institutionId: string;
 }
 
@@ -428,7 +430,7 @@ export const authAPI = {
   resendOTP: async (resendOtpData: resendOtpData): Promise<ApiResponse> => {
     return apiRequest("/v1/auth/resend-otp", {
       method: "POST",
-      body: JSON.stringify( resendOtpData),
+      body: JSON.stringify(resendOtpData),
     });
   },
 
@@ -469,7 +471,7 @@ export const authAPI = {
       body: JSON.stringify(passwordData),
     });
   },
-  
+
 };
 
 // Institution API methods
@@ -691,7 +693,7 @@ export const courseAPI = {
   updateCourse: async (
     courseId: number,
     courseData: Partial<CourseData>
-  ): Promise<ApiResponse> => {  
+  ): Promise<ApiResponse> => {
     const formData = new FormData();
 
     Object.entries(courseData).forEach(([key, value]) => {
@@ -866,7 +868,7 @@ export const getMyInstitution = async (forceRefresh = false): Promise<unknown> =
     if (!forceRefresh && __myInstitutionCache && (Date.now() - __myInstitutionCacheAt) < CACHE_DURATION) {
       return __myInstitutionCache;
     }
-    
+
     const res = await apiRequest<unknown>("/v1/institutions/me", { method: "GET" });
     const payload = res as { data?: unknown };
     const data = payload?.data || payload;
@@ -917,6 +919,18 @@ export const analyticsAPI = {
   },
   getSummaryPrevious: async (range: TimeRangeParam = "weekly"): Promise<ApiResponse> => {
     return apiRequest(`/v1/analytics/summary?range=${range}&compare=prev`, { method: "GET" });
+  },
+  // Unified analytics endpoint using AnalyticsDaily model
+  getInstitutionAnalytics: async (
+    metric: 'views' | 'comparisons' | 'leads',
+    type: 'weekly' | 'monthly' | 'yearly'
+  ): Promise<ApiResponse> => {
+    // Note: Using POST method as GET requests cannot have a body in fetch API
+    // Backend route should be changed from GET to POST to match this
+    return apiRequest(`/v1/analytics/institution`, {
+      method: "POST",
+      body: JSON.stringify({ metric, type }),
+    });
   }
 };
 
@@ -925,83 +939,83 @@ const metricsCache = new Map<string, { data: unknown; timestamp: number }>();
 const METRICS_CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
 
 export const metricsAPI = {
-  increment: async (institutionId: string, courseId: string, metric: 'views'|'comparisons'): Promise<ApiResponse> => {
+  increment: async (institutionId: string, courseId: string, metric: 'views' | 'comparisons'): Promise<ApiResponse> => {
     return apiRequest(`/v1/institutions/${institutionId}/courses/${courseId}/metrics?metric=${metric}`, { method: "POST" });
   },
   // Accept optional institutionId; if missing, resolve via getMyInstitution()
-  getInstitutionAdminSummary: async (metric: 'views'|'comparisons', institutionId?: string): Promise<ApiResponse> => {
+  getInstitutionAdminSummary: async (metric: 'views' | 'comparisons', institutionId?: string): Promise<ApiResponse> => {
     let iid = institutionId;
     if (!iid) {
-      try { 
+      try {
         const inst = await getMyInstitution() as { _id?: string; data?: { _id?: string } };
-        iid = inst?._id || inst?.data?._id; 
-      } catch (err) { 
-        if (process.env.NODE_ENV === 'development') console.error('metricsAPI.getInstitutionAdminSummary: resolve institution failed', err); 
+        iid = inst?._id || inst?.data?._id;
+      } catch (err) {
+        if (process.env.NODE_ENV === 'development') console.error('metricsAPI.getInstitutionAdminSummary: resolve institution failed', err);
       }
     }
     if (!iid) throw new Error('institutionId not available');
     return apiRequest(`/v1/institutions/${iid}/courses/summary/metrics/institution-admin?metric=${metric}`, { method: "GET" });
   },
   getInstitutionAdminByRange: async (
-    metric: 'views'|'comparisons'|'leads' | string,
-    range: 'weekly'|'monthly'|'yearly',
+    metric: 'views' | 'comparisons' | 'leads' | string,
+    range: 'weekly' | 'monthly' | 'yearly',
     institutionId?: string
   ): Promise<ApiResponse> => {
     let iid = institutionId as string | undefined;
     if (!iid) {
-      try { 
+      try {
         const inst = await getMyInstitution() as { _id?: string; data?: { _id?: string } };
-        iid = inst?._id || inst?.data?._id; 
-      } catch (err) { 
-        if (process.env.NODE_ENV === 'development') console.error('metricsAPI.getInstitutionAdminByRange: resolve institution failed', err); 
+        iid = inst?._id || inst?.data?._id;
+      } catch (err) {
+        if (process.env.NODE_ENV === 'development') console.error('metricsAPI.getInstitutionAdminByRange: resolve institution failed', err);
       }
     }
     if (!iid) throw new Error('institutionId not available');
-    
+
     // Check cache first
     const cacheKey = `range_${iid}_${metric}_${range}`;
     const cached = metricsCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < METRICS_CACHE_DURATION) {
       return cached.data as ApiResponse<unknown>;
     }
-    
+
     const response = await apiRequest(`/v1/institutions/${iid}/courses/summary/metrics/institution-admin/range?metric=${metric}&range=${range}`, { method: "GET" });
-    
+
     // Cache the response
     metricsCache.set(cacheKey, { data: response, timestamp: Date.now() });
-    
+
     return response;
   },
   getInstitutionAdminSeries: async (
-    metric: 'views'|'comparisons'|'leads',
+    metric: 'views' | 'comparisons' | 'leads',
     year?: number,
     institutionId?: string
   ): Promise<ApiResponse> => {
     const currentYear = year || new Date().getFullYear();
     let iid = institutionId;
     if (!iid) {
-      try { 
+      try {
         const inst = await getMyInstitution() as { _id?: string; data?: { _id?: string } };
-        iid = inst?._id || inst?.data?._id; 
-      } catch (err) { 
-        if (process.env.NODE_ENV === 'development') console.error('metricsAPI.getInstitutionAdminSeries: resolve institution failed', err); 
+        iid = inst?._id || inst?.data?._id;
+      } catch (err) {
+        if (process.env.NODE_ENV === 'development') console.error('metricsAPI.getInstitutionAdminSeries: resolve institution failed', err);
       }
     }
     if (!iid) throw new Error('institutionId not available');
-    
+
     // Check cache first
     const cacheKey = `series_${iid}_${metric}_${currentYear}`;
     const cached = metricsCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < METRICS_CACHE_DURATION) {
       return cached.data as ApiResponse<unknown>;
     }
-    
+
     const q = [`metric=${metric}`, `year=${currentYear}`];
     const response = await apiRequest(`/v1/institutions/${iid}/courses/summary/metrics/institution-admin/series?${q.join('&')}`, { method: "GET" });
-    
+
     // Cache the response
     metricsCache.set(cacheKey, { data: response, timestamp: Date.now() });
-    
+
     return response;
   }
 };
@@ -1017,7 +1031,7 @@ export const enquiriesAPI = {
     if (cached && (Date.now() - cached.timestamp) < ENQUIRIES_CACHE_DURATION) {
       return cached.data;
     }
-    
+
     const response = await apiRequest(`/v1/enquiries/summary/leads`, { method: "GET" });
     enquiriesCache.set(cacheKey, { data: response, timestamp: Date.now() });
     return response;
@@ -1029,7 +1043,7 @@ export const enquiriesAPI = {
     if (cached && (Date.now() - cached.timestamp) < ENQUIRIES_CACHE_DURATION) {
       return cached.data;
     }
-    
+
     const yearParam = year ? `?year=${year}` : "";
     const response = await apiRequest(`/v1/enquiries/chart${yearParam}`, { method: "GET" });
     enquiriesCache.set(cacheKey, { data: response, timestamp: Date.now() });
@@ -1041,7 +1055,7 @@ export const enquiriesAPI = {
     if (cached && (Date.now() - cached.timestamp) < ENQUIRIES_CACHE_DURATION) {
       return cached.data;
     }
-    
+
     const response = await apiRequest(`/v1/enquiries/recent`, { method: "GET" });
     enquiriesCache.set(cacheKey, { data: response, timestamp: Date.now() });
     return response;
@@ -1060,18 +1074,18 @@ export const enquiriesAPI = {
     const q = [`offset=${Math.max(0, offset)}`, `limit=${Math.max(1, Math.min(100, limit))}`].join('&');
     return apiRequest(`/v1/enquiries/students/by-enquiry/${encodeURIComponent(enquiryId)}?${q}`, { method: 'GET' });
   },
-  getTypeSummary: async (range: 'weekly'|'monthly'|'yearly'): Promise<ApiResponse> => {
+  getTypeSummary: async (range: 'weekly' | 'monthly' | 'yearly'): Promise<ApiResponse> => {
     const cacheKey = `type_summary_${range}`;
     const cached = enquiriesCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < ENQUIRIES_CACHE_DURATION) {
       return cached.data;
     }
-    
+
     const response = await apiRequest(`/v1/enquiries/summary/types?range=${range}`, { method: "GET" });
     enquiriesCache.set(cacheKey, { data: response, timestamp: Date.now() });
     return response;
   },
-  getTypeSummaryRollups: async (range: 'weekly'|'monthly'|'yearly', type?: 'callback'|'demo'): Promise<ApiResponse> => {
+  getTypeSummaryRollups: async (range: 'weekly' | 'monthly' | 'yearly', type?: 'callback' | 'demo'): Promise<ApiResponse> => {
     const q = [`range=${range}`];
     if (type) q.push(`type=${type}`);
     const cacheKey = `type_rollups_${range}_${type || 'all'}`;
@@ -1079,7 +1093,7 @@ export const enquiriesAPI = {
     if (cached && (Date.now() - cached.timestamp) < ENQUIRIES_CACHE_DURATION) {
       return cached.data;
     }
-    
+
     const response = await apiRequest(`/v1/enquiries/summary/types/range?${q.join('&')}`, { method: "GET" });
     enquiriesCache.set(cacheKey, { data: response, timestamp: Date.now() });
     return response;
@@ -1090,7 +1104,7 @@ export const enquiriesAPI = {
     programInterest: string;
     enquiryType: string;
   }): Promise<ApiResponse> => {
-    return apiRequest(`/v1/enquiries/createEnquiry`, { 
+    return apiRequest(`/v1/enquiries/createEnquiry`, {
       method: "POST",
       body: JSON.stringify(enquiryData)
     });
@@ -1118,15 +1132,19 @@ export const programsAPI = {
     const wrapper = { totalCourses: 1, courses: [normalized] };
     return apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses`, { method: 'POST', body: JSON.stringify(wrapper) });
   },
- list: async (institutionId: string, cursor?: string | null, limit: number = 10): Promise<ApiResponse> => {
-    const params = new URLSearchParams({
-      limit: String(limit),
-      ...(cursor && { cursor }),
-    });
-    return apiRequest(`/v1/institutions/${institutionId}/courses?${params.toString()}`, { 
-      method: 'GET' 
-    });
-},
+  list: async (institutionId: string): Promise<ApiResponse> => {
+    const cacheKey = `programs_${institutionId}`;
+    const cached = programsCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < PROGRAMS_CACHE_DURATION) return cached.data as ApiResponse<unknown>;
+    const res = await apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses`, { method: 'GET' });
+    const payload = res as { data?: unknown; courses?: unknown };
+    const raw = payload?.data || payload?.courses || [];
+    const arr = Array.isArray(raw) ? raw : Array.isArray((raw as { data?: unknown })?.data) ? (raw as { data: unknown[] }).data : [];
+    const programs = arr.map((c: Record<string, unknown>) => ({ ...c, programName: c.programName || c.courseName || c.selectBranch }));
+    const shaped = { success: true, data: { programs } } as ApiResponse;
+    programsCache.set(cacheKey, { data: shaped, timestamp: Date.now() });
+    return shaped;
+  },
   listForInstitutionAdmin: async (institutionId: string): Promise<ApiResponse> => {
     return programsAPI.list(institutionId);
   },
@@ -1160,7 +1178,7 @@ export const programsAPI = {
     const qs = new URLSearchParams({ metric: 'views' }).toString();
     return apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses/${encodeURIComponent(programId)}/metrics?${qs}`, { method: 'POST' });
   },
-  summaryViews: async (institutionId: string, range: 'weekly'|'monthly'|'yearly'): Promise<ApiResponse> => {
+  summaryViews: async (institutionId: string, range: 'weekly' | 'monthly' | 'yearly'): Promise<ApiResponse> => {
     const cacheKey = `program_summary_${institutionId}_${range}`;
     const cached = programsCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < PROGRAMS_CACHE_DURATION) return cached.data as ApiResponse<unknown>;
@@ -1169,7 +1187,7 @@ export const programsAPI = {
     programsCache.set(cacheKey, { data: res, timestamp: Date.now() });
     return res;
   },
-  summaryComparisons: async (institutionId: string, range: 'weekly'|'monthly'|'yearly'): Promise<ApiResponse> => {
+  summaryComparisons: async (institutionId: string, range: 'weekly' | 'monthly' | 'yearly'): Promise<ApiResponse> => {
     const cacheKey = `program_cmp_${institutionId}_${range}`;
     const cached = programsCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < PROGRAMS_CACHE_DURATION) return cached.data as ApiResponse<unknown>;
@@ -1220,7 +1238,7 @@ export const programsAPI = {
 // Notifications API helpers
 export const notificationsAPI = {
   list: async (params: {
-    scope?: 'student'|'institution'|'branch'|'admin';
+    scope?: 'student' | 'institution' | 'branch' | 'admin';
     studentId?: string;
     institutionId?: string;
     branchId?: string;
@@ -1239,7 +1257,7 @@ export const notificationsAPI = {
     return apiRequest(`/v1/notifications${qs}`, { method: 'GET' });
   },
   listCursor: async (params: {
-    scope?: 'student'|'institution'|'branch'|'admin';
+    scope?: 'student' | 'institution' | 'branch' | 'admin';
     studentId?: string;
     institutionId?: string;
     branchId?: string;
@@ -1260,7 +1278,7 @@ export const notificationsAPI = {
     title: string;
     description?: string;
     category?: string;
-    recipientType: 'STUDENT'|'INSTITUTION'|'BRANCH'|'ADMIN'|'SYSTEM';
+    recipientType: 'STUDENT' | 'INSTITUTION' | 'BRANCH' | 'ADMIN' | 'SYSTEM';
     student?: string;
     institution?: string;
     branch?: string;
@@ -1274,6 +1292,14 @@ export const notificationsAPI = {
   },
   remove: async (ids: string[]): Promise<ApiResponse> => {
     return apiRequest(`/v1/notifications`, { method: 'DELETE', body: JSON.stringify({ ids }) });
+  },
+  // Get count of unread notifications for current user
+  getUnreadCount: async (): Promise<ApiResponse<{ count: number }>> => {
+    return apiRequest(`/v1/notifications/unread-count`, { method: 'GET' });
+  },
+  // Mark all notifications as read for current user
+  markAllRead: async (): Promise<ApiResponse<{ modifiedCount: number }>> => {
+    return apiRequest(`/v1/notifications/mark-all-read`, { method: 'PATCH' });
   }
 };
 
@@ -1314,6 +1340,25 @@ export const paymentAPI = {
     return apiRequest("/v1/payment/create-order", {
       method: "POST",
       body: JSON.stringify(payload),
+    });
+  },
+
+  /**
+   * Initiate a FREE listing (₹0 payment) for selected courses
+   * - Creates a Razorpay order with amount 0
+   * - Courses will be activated with limited features
+   */
+  initiateFreeListing: async (
+    payload: { courseIds: string[] }
+  ): Promise<ApiResponse> => {
+    return apiRequest("/v1/payment/create-order", {
+      method: "POST",
+      body: JSON.stringify({
+        amount: 0,
+        planType: "free",
+        courseIds: payload.courseIds,
+        listingType: "free", // Backend will use this to mark courses as limited
+      }),
     });
   },
 

@@ -270,7 +270,7 @@ exports.register = async (req, res, next, options = {}) => {
 
 exports.verifyEmailOtp = async (req, res, next) => {
   try {
-    const { email, otp, contactNumber } = req.body;
+    const { email, otp, contactNumber, isLogin } = req.body;
 
     if (!otp || (!email && !contactNumber)) {
       return res.status(400).json({
@@ -297,6 +297,10 @@ exports.verifyEmailOtp = async (req, res, next) => {
       return res
         .status(404)
         .json({ status: "fail", message: "User not found." });
+    }
+
+    if( isLogin && contactNumber){
+      return sendTokens(user, res, "Login successfully.");
     }
 
     if (email) {
@@ -409,20 +413,18 @@ exports.login = async (req, res, next, options = {}) => {
         });
       }
     } else if (type === "student") {
-      user = await InstituteAdmin.findOne({ contactNumber }).select(
-        "+password"
-      );
-      const invalid = !user || !(await user.comparePassword(password));
+      user = await InstituteAdmin.findOne({ contactNumber });
+      const invalid = !user;
 
       if (invalid) {
         if (options.returnTokens) {
-          const err = new Error("Incorrect contact number or password.");
+          const err = new Error("Incorrect contact number");
           err.code = "INVALID_CREDENTIALS";
           throw err;
         }
         return res.status(401).json({
           status: "fail",
-          message: "Incorrect contact number or password.",
+          message: "Incorrect contact number",
         });
       }
 
@@ -438,6 +440,13 @@ exports.login = async (req, res, next, options = {}) => {
           message: errMsg,
         });
       }
+
+      await otpService.sendVerificationTokenSMS(contactNumber);
+
+      return res.status(200).json({
+        status: "success",
+        message: "OTP sent successfully to your registered mobile number.",
+      });
     } else {
       return res.status(400).json({
         status: "fail",
@@ -624,20 +633,20 @@ exports.updatePhoneNumber = async (req, res, next) => {
 
     // Prepare update data based on what's provided
     const updateData = {};
-    let updateType = '';
-    let otpRecipient = '';
-    let successMessage = '';
+    let updateType = "";
+    let otpRecipient = "";
+    let successMessage = "";
 
     if (contactNumber) {
       updateData.contactNumber = contactNumber;
       updateData.isPhoneVerified = false;
-      updateType = 'contactNumber';
+      updateType = "contactNumber";
       otpRecipient = contactNumber;
       successMessage = "Phone number updated successfully";
     } else if (email) {
       updateData.email = email;
       updateData.isEmailVerified = false;
-      updateType = 'email';
+      updateType = "email";
       otpRecipient = email;
       successMessage = "Email updated successfully";
     }
@@ -656,7 +665,7 @@ exports.updatePhoneNumber = async (req, res, next) => {
     if (contactNumber) {
       const existingUserWithPhone = await InstituteAdmin.findOne({
         contactNumber: contactNumber,
-        _id: { $ne: userId } // Exclude current user
+        _id: { $ne: userId }, // Exclude current user
       });
 
       if (existingUserWithPhone) {
@@ -668,7 +677,7 @@ exports.updatePhoneNumber = async (req, res, next) => {
     } else if (email) {
       const existingUserWithEmail = await InstituteAdmin.findOne({
         email: email,
-        _id: { $ne: userId } // Exclude current user
+        _id: { $ne: userId }, // Exclude current user
       });
 
       if (existingUserWithEmail) {
@@ -698,7 +707,10 @@ exports.updatePhoneNumber = async (req, res, next) => {
       if (contactNumber) {
         await otpService.sendVerificationTokenSMS(contactNumber);
       } else if (email) {
-        await otpService.sendVerificationToken(email, userName || updatedUser.name);
+        await otpService.sendVerificationToken(
+          email,
+          userName || updatedUser.name
+        );
       }
     } catch (otpError) {
       // Revert database changes if OTP sending fails

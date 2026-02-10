@@ -250,14 +250,13 @@ function AnalyticsPage() {
 				// Fix: Ensure program name is never empty
 				// The programsList hook maps api response to { programName, courseName, ... }
 				// If programName is missing, try courseName, then selectBranch, then fallback.
-				const program = pg as Record<string, unknown>;
-				const name = String(program.programName || program.courseName || program.selectBranch || `Program ${idx + 1}`);
+				const name = pg.programName || pg.courseName || pg.selectBranch || `Program ${idx + 1}`;
 				const views = viewsMap.get(name) || 0;
 				const lead = leadCounts.get(name) || { leads: 0, lastTs: null };
 
 				// Normalize to simple "Active"/"Inactive" status
 				// PRIORITY: Use backend status field first (set when payment is successful)
-				const backendStatus = String(program.status || '').toLowerCase();
+				const backendStatus = String(pg.status || '').toLowerCase();
 				let status: 'Active' | 'Inactive' = 'Inactive';
 
 				if (backendStatus === 'active') {
@@ -268,7 +267,7 @@ function AnalyticsPage() {
 					status = 'Inactive';
 				} else {
 					// Fallback: use date-based calculation if backend status is missing
-					const programStatus = getProgramStatus(String(program.startDate || ''), String(program.endDate || ''));
+					const programStatus = getProgramStatus(pg.startDate || '', pg.endDate || '');
 					if (programStatus.status === 'active') {
 						status = 'Active';
 					} else if (lead.leads > 0 && (lead.lastTs || 0) >= (NOW - WINDOW_MS)) {

@@ -4,16 +4,37 @@ import {
   enquiriesAPI,
   getMyInstitution,
   branchAPI,
+  apiRequest,
+  //ApiResponse 
 } from '../api';
 import { programsAPI } from '../api';
 import {
   DashboardStatsCache as DashboardStats,
   DashboardStudentCache as StudentItem,
   DashboardInstitutionCache as Institution,
+  saveDashboardStatsCache as saveDashboardStats,
+  getDashboardStatsCache as getDashboardStats,
+  saveDashboardStudentsCache as saveStudents,
+  getDashboardStudentsCache as getStudents,
+  saveDashboardChartCache as saveChartData,
+  getDashboardChartCache as getChartData,
+  saveDashboardInstitutionCache as saveInstitution,
+  getDashboardInstitutionCache as getInstitution,
+  UnifiedAnalyticsCache,
   AllUnifiedAnalyticsCache,
+  saveUnifiedAnalyticsCache,
+  getUnifiedAnalyticsCache,
+  saveAllUnifiedAnalyticsCache,
+  getAllUnifiedAnalyticsCache,
+  DashboardHealthCache,
+  saveDashboardHealthCache,
+  getDashboardHealthCache,
+  CACHE_DURATION,
   replaceDashboardStudentsWithLatestTen,
   prependAndTrimDashboardStudents
 } from '../localDb';
+import { analyticsAPI } from '../api';
+import { dashboardAPI } from '../dashboard_api';
 
 // Query keys
 export const QUERY_KEYS = {
@@ -33,7 +54,13 @@ export function useInstitution() {
   return useQuery({
     queryKey: QUERY_KEYS.INSTITUTION(),
     queryFn: async (): Promise<Institution> => {
-      // Fetch directly from API (IndexedDB caching disabled)
+      // Try cache first
+      const cached = await getInstitution('current');
+      if (cached && Date.now() - cached.lastUpdated < CACHE_DURATION.INSTITUTION) {
+        return cached;
+      }
+
+      // Fetch from API
       const response = await getMyInstitution();
       if (!response || !(response as { _id?: string })._id) {
         throw new Error('No institution found');
@@ -46,12 +73,15 @@ export function useInstitution() {
         lastUpdated: Date.now()
       } as Institution;
 
+      // Save to cache
+      await saveInstitution(institution);
+
       return institution;
     },
-    staleTime: 60 * 1000, // 1 minute in-memory cache
+    staleTime: CACHE_DURATION.INSTITUTION,
     retry: 2,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchOnWindowFocus: false, // Prevent refetch on window focus
+    refetchOnMount: false, // Prevent refetch on component mount if data exists
   });
 }
 
@@ -66,7 +96,13 @@ export function useDashboardStats(timeRange: 'weekly' | 'monthly' | 'yearly' = '
         throw new Error('Institution not available');
       }
 
-      // Fetch directly from API (IndexedDB caching disabled)
+      // Try cache first
+      const cached = await getDashboardStats(timeRange, institution._id);
+      if (cached && Date.now() - cached.lastUpdated < CACHE_DURATION.STATS) {
+        return cached;
+      }
+
+      // Fetch from API
       const [viewsData, comparisonsData, leadsData, programCmp, programViews] = await Promise.all([
         metricsAPI.getInstitutionAdminByRange('views', timeRange),
         metricsAPI.getInstitutionAdminByRange('comparisons', timeRange),
@@ -89,95 +125,16 @@ export function useDashboardStats(timeRange: 'weekly' | 'monthly' | 'yearly' = '
         lastUpdated: Date.now()
       } as DashboardStats;
 
+      // Save to cache
+      await saveDashboardStats(stats);
+
       return stats;
     },
     enabled: !!institution?._id,
-    staleTime: 60 * 1000, // 1 minute in-memory cache
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-  });
-}
-
-// Unified analytics hook for analytics page (views, leads, callbacks, demos)
-export function useAllUnifiedAnalytics(timeRange: 'weekly' | 'monthly' | 'yearly' = 'monthly') {
-  const { data: institution } = useInstitution();
-
-  return useQuery<AllUnifiedAnalyticsCache | null>({
-    queryKey: ['all-unified-analytics', timeRange, institution?._id],
-    queryFn: async (): Promise<AllUnifiedAnalyticsCache | null> => {
-      if (!institution?._id) {
-        return null;
-      }
-
-      // Fetch all metrics in parallel
-      const [viewsRes, leadsRes] = await Promise.all([
-        programsAPI.summaryViews(String(institution._id), timeRange),
-        metricsAPI.getInstitutionAdminByRange('leads', timeRange),
-      ]);
-
-      // Calculate totals from program views
-      const viewsPrograms = Array.isArray((viewsRes as { data?: { programs?: unknown[] } })?.data?.programs)
-        ? (viewsRes as { data: { programs: Record<string, unknown>[] } }).data.programs
-        : [];
-      const viewsTotal = viewsPrograms.reduce((sum, p) => sum + (Number(p.inRangeViews) || 0), 0);
-
-      const leadsTotal = (leadsRes as { data?: { totalLeads?: number } })?.data?.totalLeads || 0;
-
-      const now = new Date();
-      const dateRange = { from: now.toISOString(), to: now.toISOString() };
-
-      // Build unified analytics structure
-      const result: AllUnifiedAnalyticsCache = {
-        type: timeRange,
-        institutionId: institution._id,
-        views: {
-          metric: 'views',
-          type: timeRange,
-          institutionId: institution._id,
-          totalCount: viewsTotal,
-          analytics: viewsPrograms.map(p => ({
-            label: String(p.programName || ''),
-            count: Number(p.inRangeViews) || 0
-          })),
-          dateRange,
-          lastUpdated: Date.now()
-        },
-        leads: {
-          metric: 'leads',
-          type: timeRange,
-          institutionId: institution._id,
-          totalCount: leadsTotal,
-          analytics: [],
-          dateRange,
-          lastUpdated: Date.now()
-        },
-        callbackRequest: {
-          metric: 'callbackRequest',
-          type: timeRange,
-          institutionId: institution._id,
-          totalCount: 0, // Placeholder - fetch from appropriate API if available
-          analytics: [],
-          dateRange,
-          lastUpdated: Date.now()
-        },
-        bookDemoRequest: {
-          metric: 'bookDemoRequest',
-          type: timeRange,
-          institutionId: institution._id,
-          totalCount: 0, // Placeholder - fetch from appropriate API if available
-          analytics: [],
-          dateRange,
-          lastUpdated: Date.now()
-        },
-        lastUpdated: Date.now()
-      };
-
-      return result;
-    },
-    enabled: !!institution?._id,
-    staleTime: 60 * 1000, // 1 minute in-memory cache
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    staleTime: CACHE_DURATION.STATS,
+    refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes when active
+    refetchOnWindowFocus: false, // Prevent refetch on window focus
+    refetchOnMount: false, // Prevent refetch on component mount if data exists
   });
 }
 
@@ -212,6 +169,8 @@ export function useProgramsList() {
         courseName?: string;
         branch?: Record<string, unknown>;
         branchName?: string;
+        selectBranch?: string;
+        status?: string;
       }>;
     },
     staleTime: 60 * 1000,
@@ -245,7 +204,13 @@ export function useRecentStudents() {
         throw new Error('Institution not available');
       }
 
-      // Fetch directly from API (IndexedDB caching disabled)
+      // Try cache first
+      const cached = await getStudents(institution._id);
+      if (cached.length > 0 && cached[0] && Date.now() - cached[0].lastUpdated < CACHE_DURATION.STUDENTS) {
+        return cached.slice(0, 4); // Return only recent 4
+      }
+
+      // Fetch from API
       const response = await enquiriesAPI.getRecentEnquiries();
 
       if (!(response as { success?: boolean; data?: { enquiries?: unknown[] } })?.success || !Array.isArray((response as { success?: boolean; data?: { enquiries?: unknown[] } }).data?.enquiries)) {
@@ -266,12 +231,16 @@ export function useRecentStudents() {
         lastUpdated: Date.now()
       }));
 
+      // Save to cache
+      await saveStudents(students);
+
       return students.slice(0, 4);
     },
     enabled: !!institution?._id,
-    staleTime: 60 * 1000, // 1 minute in-memory cache
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    staleTime: CACHE_DURATION.STUDENTS,
+    refetchInterval: 10 * 60 * 1000, // Refetch every 10 minutes when active
+    refetchOnWindowFocus: false, // Prevent refetch on window focus
+    refetchOnMount: false, // Prevent refetch on component mount if data exists
   });
 }
 
@@ -291,7 +260,13 @@ export function useChartData(
         throw new Error('Institution not available');
       }
 
-      // Fetch directly from API (IndexedDB caching disabled)
+      // Try cache first
+      const cached = await getChartData(type, currentYear, institution._id);
+      if (cached && Date.now() - cached.lastUpdated < CACHE_DURATION.CHART) {
+        return cached.series;
+      }
+
+      // Fetch from API
       const response = type === 'views'
         ? await programsAPI.viewsSeries(String(institution._id), currentYear)
         : await metricsAPI.getInstitutionAdminSeries(type, currentYear, institution._id);
@@ -317,12 +292,22 @@ export function useChartData(
         }
       });
 
+      // Save to cache
+      await saveChartData({
+        type,
+        year: currentYear,
+        series: chartSeries,
+        institutionId: institution._id,
+        lastUpdated: Date.now()
+      });
+
       return chartSeries;
     },
     enabled: !!institution?._id,
-    staleTime: 60 * 1000, // 1 minute in-memory cache
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    staleTime: CACHE_DURATION.CHART,
+    refetchInterval: 30 * 60 * 1000, // Refetch every 30 minutes when active
+    refetchOnWindowFocus: false, // Prevent refetch on window focus
+    refetchOnMount: false, // Prevent refetch on component mount if data exists
   });
 }
 
@@ -345,9 +330,10 @@ export function useInfinitePrograms(institutionId?: string, limit: number = 10) 
     queryKey: ['programs-infinite', institutionId],
     enabled: !!institutionId,
     initialPageParam: null as string | null,
-    queryFn: async () => {
-      // programsAPI.list only takes institutionId - pagination handled client-side
-      const res = await programsAPI.list(institutionId!);
+    queryFn: async ({ pageParam }) => {
+      const res = await programsAPI.list(institutionId!, 
+        // pageParam, limit
+      );
       return res;
     },
     getNextPageParam: (lastPage: any) => {
@@ -437,5 +423,247 @@ export function useOnlineStatus() {
     staleTime: 0,
     refetchInterval: 5000, // Check every 5 seconds
     refetchIntervalInBackground: true,
+  });
+}
+
+// Dashboard health/details hook - fetches all institution data (institution, branches, courses) in one call
+// This is called once per institution admin and cached
+export function useDashboardHealth() {
+  const { data: institution } = useInstitution();
+
+  return useQuery({
+    queryKey: ['dashboard-health', institution?._id],
+    queryFn: async (): Promise<DashboardHealthCache> => {
+      if (!institution?._id) {
+        throw new Error('Institution not available');
+      }
+
+      // Try cache first (5 minute cache for dashboard health)
+      const cached = await getDashboardHealthCache(institution._id);
+      if (cached) {
+        return cached;
+      }
+
+      // Fetch from API
+      const response = await dashboardAPI.getFullDashboardDetailsAsJSON();
+
+      if (!response.success || !response.data) {
+        throw new Error(response.message || 'Failed to fetch dashboard health');
+      }
+
+      const data = response.data as {
+        institution: Record<string, unknown>;
+        branchesWithCourses: Array<Record<string, unknown>>;
+        exportedAt: string;
+      };
+
+      const healthCache: DashboardHealthCache = {
+        institutionId: institution._id,
+        institution: data.institution,
+        branchesWithCourses: data.branchesWithCourses,
+        exportedAt: data.exportedAt,
+        lastUpdated: Date.now()
+      };
+
+      // Save to cache
+      await saveDashboardHealthCache(healthCache);
+
+      return healthCache;
+    },
+    enabled: !!institution?._id,
+    // Cache for 5 minutes, but do not poll or refetch automatically;
+    // dashboard health changes rarely and can be refreshed by navigation or manual invalidation.
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  });
+}
+
+// Unified analytics hook using AnalyticsDaily model - fetches single metric
+export function useUnifiedAnalytics(
+  metric: 'views' | 'comparisons' | 'leads',
+  type: 'weekly' | 'monthly' | 'yearly' = 'weekly'
+) {
+  const { data: institution } = useInstitution();
+
+  return useQuery({
+    queryKey: ['unified-analytics', metric, type, institution?._id],
+    queryFn: async (): Promise<UnifiedAnalyticsCache> => {
+      if (!institution?._id) {
+        throw new Error('Institution not available');
+      }
+
+      // Try cache first (30 second cache for real-time updates)
+      const cached = await getUnifiedAnalyticsCache(metric, type, institution._id);
+      if (cached) {
+        return cached;
+      }
+
+      // Fetch from API
+      const response = await analyticsAPI.getInstitutionAnalytics(metric, type);
+
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to fetch analytics');
+      }
+
+      // Backend returns data at top level: { success: true, metric, type, totalCount, analytics, dateRange }
+      // apiRequest may wrap it in data property, so check both
+      const responseData = (response as { data?: unknown }).data || response;
+      const data = responseData as {
+        success?: boolean;
+        metric?: 'views' | 'comparisons' | 'leads' | 'callbackRequest' | 'bookDemoRequest';
+        type?: 'weekly' | 'monthly' | 'yearly';
+        totalCount?: number;
+        analytics?: Array<{ label: string; count: number }>;
+        dateRange?: { from: string; to: string };
+      };
+
+      // Extract data with fallbacks
+      const analyticsCache: UnifiedAnalyticsCache = {
+        metric: (data.metric || metric) as 'views' | 'comparisons' | 'leads' | 'callbackRequest' | 'bookDemoRequest',
+        type: (data.type || type) as 'weekly' | 'monthly' | 'yearly',
+        institutionId: institution._id,
+        totalCount: data.totalCount ?? 0,
+        analytics: data.analytics || [],
+        dateRange: data.dateRange || {
+          from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          to: new Date().toISOString().split('T')[0]
+        },
+        lastUpdated: Date.now()
+      };
+
+      // Save to cache
+      await saveUnifiedAnalyticsCache(analyticsCache);
+
+      return analyticsCache;
+    },
+    enabled: !!institution?._id,
+    staleTime: 30 * 1000, // 30 seconds for real-time updates
+    refetchInterval: 30 * 1000, // Refetch every 30 seconds for real-time data
+    refetchOnWindowFocus: true, // Refetch when user returns to tab
+    refetchOnMount: true, // Always refetch on mount to get latest data
+  });
+}
+
+// Unified hook that fetches ALL metrics (views, comparisons, leads) in one batch
+// This is the preferred hook for pages - calls API once and gets all metrics
+export function useAllUnifiedAnalytics(
+  type: 'weekly' | 'monthly' | 'yearly' = 'weekly'
+) {
+  const { data: institution } = useInstitution();
+
+  return useQuery({
+    queryKey: ['all-unified-analytics', type, institution?._id],
+    queryFn: async (): Promise<AllUnifiedAnalyticsCache> => {
+      if (!institution?._id) {
+        throw new Error('Institution not available');
+      }
+
+      // Try cache first (30 second cache for real-time updates)
+      // Try cache first (30 second cache for real-time updates)
+      // const cached = await getAllUnifiedAnalyticsCache(type, institution._id);
+      // if (cached) {
+      //   return cached;
+      // }
+
+      // Single unified backend API: returns all metrics in one response
+      const response = await apiRequest<unknown>(`/v1/analytics/institution`, {
+        method: 'POST',
+        body: JSON.stringify({
+          type,
+          views: true,
+          leads: true,
+          callbackRequest: true,
+          bookDemoRequest: true,
+        }),
+      });
+
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to fetch unified analytics');
+      }
+
+      // Backend may return payload either at top-level or inside data
+      const payload = ((response as { data?: unknown }).data || response) as {
+        success?: boolean;
+        type?: 'weekly' | 'monthly' | 'yearly';
+        dateRange?: { from: string; to: string };
+        totals?: {
+          views?: number;
+          leads?: number;
+          callbackRequest?: number;
+          bookDemoRequest?: number;
+        };
+        timelines?: {
+          views?: Array<{ label: string; count: number }>;
+          leads?: Array<{ label: string; count: number }>;
+          callbackRequest?: Array<{ label: string; count: number }>;
+          bookDemoRequest?: Array<{ label: string; count: number }>;
+        };
+      };
+
+      const dateRange = payload.dateRange || {
+        from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        to: new Date().toISOString().split('T')[0],
+      };
+
+      const makeMetric = (
+        metric: UnifiedAnalyticsCache['metric'],
+        total: number | undefined,
+        timeline: Array<{ label: string; count: number }> | undefined
+      ): UnifiedAnalyticsCache => ({
+        metric,
+        type: (payload.type || type) as 'weekly' | 'monthly' | 'yearly',
+        institutionId: institution._id,
+        totalCount: Number(total || 0),
+        analytics: Array.isArray(timeline) ? timeline : [],
+        dateRange,
+        lastUpdated: Date.now(),
+      });
+
+      const views = makeMetric(
+        'views',
+        payload.totals?.views,
+        payload.timelines?.views
+      );
+
+      const leads = makeMetric(
+        'leads',
+        payload.totals?.leads,
+        payload.timelines?.leads
+      );
+
+      const callbackRequest = makeMetric(
+        'callbackRequest',
+        payload.totals?.callbackRequest,
+        payload.timelines?.callbackRequest
+      );
+
+      const bookDemoRequest = makeMetric(
+        'bookDemoRequest',
+        payload.totals?.bookDemoRequest,
+        payload.timelines?.bookDemoRequest
+      );
+
+      const allAnalytics: AllUnifiedAnalyticsCache = {
+        type,
+        institutionId: institution._id,
+        views,
+        leads,
+        callbackRequest,
+        bookDemoRequest,
+        lastUpdated: Date.now()
+      };
+
+      // Save all metrics to cache
+      await saveAllUnifiedAnalyticsCache(allAnalytics);
+
+      return allAnalytics;
+    },
+    enabled: !!institution?._id,
+    // Keep data "fresh" for 5 minutes; socket events will invalidate when backend updates
+    staleTime: 5 * 60 * 1000,
+    // No interval polling; rely on socket-based invalidation and manual navigation
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 } 

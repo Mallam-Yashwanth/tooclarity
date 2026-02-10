@@ -4,22 +4,12 @@ import {
   enquiriesAPI,
   getMyInstitution,
   branchAPI,
-  //ApiResponse 
 } from '../api';
 import { programsAPI } from '../api';
 import {
   DashboardStatsCache as DashboardStats,
   DashboardStudentCache as StudentItem,
   DashboardInstitutionCache as Institution,
-  saveDashboardStatsCache as saveDashboardStats,
-  getDashboardStatsCache as getDashboardStats,
-  saveDashboardStudentsCache as saveStudents,
-  getDashboardStudentsCache as getStudents,
-  saveDashboardChartCache as saveChartData,
-  getDashboardChartCache as getChartData,
-  saveDashboardInstitutionCache as saveInstitution,
-  getDashboardInstitutionCache as getInstitution,
-  CACHE_DURATION,
   replaceDashboardStudentsWithLatestTen,
   prependAndTrimDashboardStudents
 } from '../localDb';
@@ -42,13 +32,7 @@ export function useInstitution() {
   return useQuery({
     queryKey: QUERY_KEYS.INSTITUTION(),
     queryFn: async (): Promise<Institution> => {
-      // Try cache first
-      const cached = await getInstitution('current');
-      if (cached && Date.now() - cached.lastUpdated < CACHE_DURATION.INSTITUTION) {
-        return cached;
-      }
-
-      // Fetch from API
+      // Fetch directly from API (IndexedDB caching disabled)
       const response = await getMyInstitution();
       if (!response || !(response as { _id?: string })._id) {
         throw new Error('No institution found');
@@ -61,15 +45,12 @@ export function useInstitution() {
         lastUpdated: Date.now()
       } as Institution;
 
-      // Save to cache
-      await saveInstitution(institution);
-
       return institution;
     },
-    staleTime: CACHE_DURATION.INSTITUTION,
+    staleTime: 60 * 1000, // 1 minute in-memory cache
     retry: 2,
-    refetchOnWindowFocus: false, // Prevent refetch on window focus
-    refetchOnMount: false, // Prevent refetch on component mount if data exists
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 }
 
@@ -84,13 +65,7 @@ export function useDashboardStats(timeRange: 'weekly' | 'monthly' | 'yearly' = '
         throw new Error('Institution not available');
       }
 
-      // Try cache first
-      const cached = await getDashboardStats(timeRange, institution._id);
-      if (cached && Date.now() - cached.lastUpdated < CACHE_DURATION.STATS) {
-        return cached;
-      }
-
-      // Fetch from API
+      // Fetch directly from API (IndexedDB caching disabled)
       const [viewsData, comparisonsData, leadsData, programCmp, programViews] = await Promise.all([
         metricsAPI.getInstitutionAdminByRange('views', timeRange),
         metricsAPI.getInstitutionAdminByRange('comparisons', timeRange),
@@ -113,16 +88,12 @@ export function useDashboardStats(timeRange: 'weekly' | 'monthly' | 'yearly' = '
         lastUpdated: Date.now()
       } as DashboardStats;
 
-      // Save to cache
-      await saveDashboardStats(stats);
-
       return stats;
     },
     enabled: !!institution?._id,
-    staleTime: CACHE_DURATION.STATS,
-    refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes when active
-    refetchOnWindowFocus: false, // Prevent refetch on window focus
-    refetchOnMount: false, // Prevent refetch on component mount if data exists
+    staleTime: 60 * 1000, // 1 minute in-memory cache
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 }
 
@@ -190,13 +161,7 @@ export function useRecentStudents() {
         throw new Error('Institution not available');
       }
 
-      // Try cache first
-      const cached = await getStudents(institution._id);
-      if (cached.length > 0 && cached[0] && Date.now() - cached[0].lastUpdated < CACHE_DURATION.STUDENTS) {
-        return cached.slice(0, 4); // Return only recent 4
-      }
-
-      // Fetch from API
+      // Fetch directly from API (IndexedDB caching disabled)
       const response = await enquiriesAPI.getRecentEnquiries();
 
       if (!(response as { success?: boolean; data?: { enquiries?: unknown[] } })?.success || !Array.isArray((response as { success?: boolean; data?: { enquiries?: unknown[] } }).data?.enquiries)) {
@@ -217,16 +182,12 @@ export function useRecentStudents() {
         lastUpdated: Date.now()
       }));
 
-      // Save to cache
-      await saveStudents(students);
-
       return students.slice(0, 4);
     },
     enabled: !!institution?._id,
-    staleTime: CACHE_DURATION.STUDENTS,
-    refetchInterval: 10 * 60 * 1000, // Refetch every 10 minutes when active
-    refetchOnWindowFocus: false, // Prevent refetch on window focus
-    refetchOnMount: false, // Prevent refetch on component mount if data exists
+    staleTime: 60 * 1000, // 1 minute in-memory cache
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 }
 
@@ -246,13 +207,7 @@ export function useChartData(
         throw new Error('Institution not available');
       }
 
-      // Try cache first
-      const cached = await getChartData(type, currentYear, institution._id);
-      if (cached && Date.now() - cached.lastUpdated < CACHE_DURATION.CHART) {
-        return cached.series;
-      }
-
-      // Fetch from API
+      // Fetch directly from API (IndexedDB caching disabled)
       const response = type === 'views'
         ? await programsAPI.viewsSeries(String(institution._id), currentYear)
         : await metricsAPI.getInstitutionAdminSeries(type, currentYear, institution._id);
@@ -278,22 +233,12 @@ export function useChartData(
         }
       });
 
-      // Save to cache
-      await saveChartData({
-        type,
-        year: currentYear,
-        series: chartSeries,
-        institutionId: institution._id,
-        lastUpdated: Date.now()
-      });
-
       return chartSeries;
     },
     enabled: !!institution?._id,
-    staleTime: CACHE_DURATION.CHART,
-    refetchInterval: 30 * 60 * 1000, // Refetch every 30 minutes when active
-    refetchOnWindowFocus: false, // Prevent refetch on window focus
-    refetchOnMount: false, // Prevent refetch on component mount if data exists
+    staleTime: 60 * 1000, // 1 minute in-memory cache
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 }
 

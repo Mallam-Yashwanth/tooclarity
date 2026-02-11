@@ -12,7 +12,7 @@ import Image from "next/image";
 import AppSelect from "@/components/ui/AppSelect";
 import L2DialogBox from "@/components/auth/L2DialogBox";
 import { getProgramStatus, formatDate } from "@/lib/utility";
-import {useSearchParams, usePathname, useRouter } from "next/navigation";
+import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import AnalyticsTable from "@/components/dashboard/AnalyticsTable";
 import { loadRazorpayScript } from "@/lib/razorpay";
 import { useUserStore } from "@/lib/user-store";
@@ -83,7 +83,7 @@ function ProgramsPage() {
   const [search, setSearch] = useState("");
   const [branchFilter, setBranchFilter] = useState<string>("");
   const [addInlineMode, setAddInlineMode] = useState<'none' | 'course' | 'branch'>('none');
-  const [visibleCount, setVisibleCount] = useState<number>(10);
+  const [visibleCount, setVisibleCount] = useState<number>(5);
   const [selectedInactive, setSelectedInactive] = useState<Record<string, boolean>>({});
   const [isPaying, setIsPaying] = useState(false);
   const [, setPaymentProcessing] = useState<{ paymentId?: string | null; orderId?: string | null } | null>(null);
@@ -141,9 +141,9 @@ function ProgramsPage() {
   }, [invoices]);
 
   const onL2Success = () => {
-  queryClient.invalidateQueries({ queryKey: ['programs-page-list-institution-admin'] });
-  handleTabChange('details'); 
-};
+    queryClient.invalidateQueries({ queryKey: ['programs-page-list-institution-admin'] });
+    handleTabChange('details');
+  };
 
   // Navigation function for edit button
   const handleEditProgram = (programId: string) => {
@@ -168,7 +168,7 @@ function ProgramsPage() {
   }, [branchList]);
 
   // Reset visible count when filters change
-  React.useEffect(() => { setVisibleCount(10); }, [search, branchFilter, activeTab]);
+  React.useEffect(() => { setVisibleCount(5); }, [search, branchFilter, activeTab]);
 
   const filteredPrograms = (Array.isArray(programs) ? programs : []).filter((p: Record<string, unknown>) => {
     const q = search.trim().toLowerCase();
@@ -366,22 +366,22 @@ function ProgramsPage() {
                 <div className="text-2xl font-semibold">Your Listed Programs</div>
               </div>
 
-          {/* Tabs header */}
-          <div className="flex items-center gap-6 border-b border-gray-200 dark:border-gray-800 mb-4 text-gray-900 dark:text-gray-100">
-            <button
-              onClick={() => handleTabChange('details')}
-              className={`py-2 px-1 ${activeTab === 'details' ? 'border-b-2 border-blue-600 font-medium' : 'text-gray-500'}`}
-            >
-              Program Details
-            </button>
+              {/* Tabs header */}
+              <div className="flex items-center gap-6 border-b border-gray-200 dark:border-gray-800 mb-4 text-gray-900 dark:text-gray-100">
+                <button
+                  onClick={() => handleTabChange('details')}
+                  className={`py-2 px-1 ${activeTab === 'details' ? 'border-b-2 border-blue-600 font-medium' : 'text-gray-500'}`}
+                >
+                  Program Details
+                </button>
 
-            <button
-              onClick={() => handleTabChange('inactive')}
-              className={`py-2 px-1 ${activeTab === 'inactive' ? 'border-b-2 border-blue-600 font-medium' : 'text-gray-500'}`}
-            >
-              Inactive Courses
-            </button>
-          </div>
+                <button
+                  onClick={() => handleTabChange('inactive')}
+                  className={`py-2 px-1 ${activeTab === 'inactive' ? 'border-b-2 border-blue-600 font-medium' : 'text-gray-500'}`}
+                >
+                  Inactive Courses
+                </button>
+              </div>
 
               {/* Utilities row: search + filter */}
               {activeTab === 'details' && (
@@ -410,8 +410,10 @@ function ProgramsPage() {
                   <AnalyticsTable<InactiveCourseRow>
                     variant="embedded"
                     hideDefaultCta
-                    rows={inactiveCourses}
+                    rows={inactiveCourses.slice(0, visibleCount)}
                     titleOverride="Inactive Courses"
+                    hasMore={visibleCount < inactiveCourses.length}
+                    onLoadMore={() => setVisibleCount((prev) => prev + 5)}
                     renderTable={(rows) => (
                       <div className="space-y-4">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -424,7 +426,7 @@ function ProgramsPage() {
                             />
                             Select all
                           </label>
-                          <span className="text-sm text-gray-500">{rows.length} inactive course{rows.length === 1 ? '' : 's'}</span>
+                          <span className="text-sm text-gray-500">{inactiveCourses.length} inactive course{inactiveCourses.length === 1 ? '' : 's'}</span>
                         </div>
                         {rows.length === 0 ? (
                           <div className="py-8 text-center text-gray-500 bg-white dark:bg-gray-900 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
@@ -599,7 +601,7 @@ function ProgramsPage() {
                   )}
                   {Array.isArray(filteredPrograms) && filteredPrograms.length > visibleCount && (
                     <div className="flex items-center justify-center py-5">
-                      <Button variant="outline" onClick={() => setVisibleCount((c) => c + 10)} className="rounded-full">View more ▾</Button>
+                      <Button variant="outline" onClick={() => setVisibleCount((c) => c + 5)} className="rounded-full">View more ▾</Button>
                     </div>
                   )}
                 </div>

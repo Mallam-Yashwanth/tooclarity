@@ -63,6 +63,13 @@ function AnalyticsPage() {
 	const router = useRouter();
 	const { user } = useAuth();
 
+	// Pagination state
+	const [visibleCount, setVisibleCount] = useState<number>(5);
+
+	const handleLoadMore = () => {
+		setVisibleCount((prev) => prev + 5);
+	};
+
 	// Use shared analytics context (fetched once at layout level)
 	const { weekly, monthly, yearly, isLoading: analyticsLoading } = useAnalyticsContext();
 	const analyticsRangeLower = analyticsRange.toLowerCase() as 'weekly' | 'monthly' | 'yearly';
@@ -449,7 +456,14 @@ function AnalyticsPage() {
 						<Loading size="md" text="Loading program performance..." />
 					</div>
 				) : null}
-				<AnalyticsTable rows={coursePerformance} titleOverride="Program Performance" nameHeaderOverride="Program name" onAddCourse={handleAnalyticsAction} />
+				<AnalyticsTable
+					rows={coursePerformance.slice(0, visibleCount)}
+					titleOverride="Program Performance"
+					nameHeaderOverride="Program name"
+					onAddCourse={handleAnalyticsAction}
+					hasMore={visibleCount < coursePerformance.length}
+					onLoadMore={handleLoadMore}
+				/>
 			</div>
 
 			{/* View & Lead Trends with inner loading */}

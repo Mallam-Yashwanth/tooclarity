@@ -25,6 +25,8 @@ interface AnalyticsTableProps<T = CoursePerformanceRow> {
   variant?: "standalone" | "embedded";
   className?: string;
   contentClassName?: string;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 const StatusPill: React.FC<{ status: CoursePerformanceRow["status"] }> = ({ status }) => {
@@ -52,6 +54,8 @@ const AnalyticsTable = <T,>({
   variant = "standalone",
   className = "",
   contentClassName = "",
+  hasMore,
+  onLoadMore,
 }: AnalyticsTableProps<T>) => {
   const defaultRows = rows as unknown as CoursePerformanceRow[];
 
@@ -94,6 +98,15 @@ const AnalyticsTable = <T,>({
           </table>
         </div>
       )}
+
+      {hasMore && onLoadMore && (
+        <div className="flex justify-center mt-4">
+          <Button onClick={onLoadMore} variant="outline" className="text-gray-500 hover:text-gray-900 px-6 py-2 rounded-full border-gray-200 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+            Load More Courses
+          </Button>
+        </div>
+      )}
+
       {!hideDefaultCta && (
         <div className="flex justify-center mt-6">
           <Button onClick={onAddCourse} variant="secondary" className="text-gray-600 border border-gray-200 rounded-full bg-white p-5 dark:bg-indigo-50 dark:hover:bg-indigo-100">

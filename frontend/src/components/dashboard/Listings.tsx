@@ -6,7 +6,7 @@ import { _Card, _CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth-context";
-import { useInfiniteBranches, useInfinitePrograms, useInstitution, useProgramsList } from "@/lib/hooks/dashboard-hooks";
+import { useInstitution } from "@/lib/hooks/dashboard-hooks";
 import { programsAPI, getMyInstitution, branchAPI } from "@/lib/api";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -128,33 +128,40 @@ export function Listings() {
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
+  // Client-side pagination state
+  const [visibleBranchesCount, setVisibleBranchesCount] = useState<number>(5);
+  const [visibleProgramsCount, setVisibleProgramsCount] = useState<number>(5);
+
   const {
-    data: branchPages,
-    fetchNextPage: fetchNextBranches,
-    hasNextPage: hasMoreBranches,
+    data: branchesList = [],
     isLoading: isBranchesLoading
-  } = useInfiniteBranches(inst?._id);
+  } = useQuery({
+    queryKey: ['programs-page-branches', inst?._id],
+    enabled: !!inst?._id,
+    queryFn: async () => {
+      const res = await programsAPI.listBranchesForInstitutionAdmin(String(inst?._id)) as { data?: { branches?: Record<string, unknown>[] } };
+      return (res?.data?.branches || []) as unknown as BranchDetail[];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
   const {
-    data: programPages,
-    fetchNextPage: fetchNextPrograms,
-    hasNextPage: hasMorePrograms,
+    data: programsList = [],
     isLoading: isProgramsLoading
-  } = useInfinitePrograms(inst?._id);
+  } = useQuery({
+    queryKey: ['programs-page-list-institution-admin', inst?._id],
+    enabled: !!inst?._id,
+    queryFn: async () => {
+      const res = await programsAPI.listForInstitutionAdminWithMetrics(String(inst?._id)) as { data?: { programs?: Record<string, unknown>[] } };
+      return (res?.data?.programs || []) as unknown as ExtendedProgram[];
+    },
+    staleTime: 60 * 1000,
+  });
 
-  console.log("Branch Pages Raw:", branchPages);
-  console.log("Program Pages Raw:", programPages);
+  const allBranches = branchesList;
+  const allProgramsRaw = programsList;
 
-  const allBranches = branchPages?.pages.flatMap((page: any) =>
-    Array.isArray(page?.data) ? page.data : []
-  ) || [];
 
-  const allProgramsRaw = programPages?.pages.flatMap((page: any) => {
-    if (page?.data?.programs && Array.isArray(page.data.programs)) {
-      return page.data.programs;
-    }
-    return Array.isArray(page?.data) ? page.data : [];
-  }) || [];
 
   const [addInlineMode, setAddInlineMode] = useState<'none' | 'course' | 'branch'>('none');
   // const [viewToggle, setViewToggle] = useState<'branch' | 'course'>('branch'); // Replaced by URL state
@@ -174,13 +181,14 @@ export function Listings() {
   });
 
   const normalizedPrograms = allProgramsRaw.map(p => {
-    if (!p || (!p._id && !p.id)) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (!p || (!p._id && !(p as any).id)) return null;
 
     const normalized: ExtendedProgram = { ...p };
 
     // Safety check for the 'courses' array in your JSON
-    const hasSubItems = Array.isArray(p.courses) && p.courses.length > 0;
-    const firstSub = hasSubItems ? p.courses[0] : null;
+    const hasSubItems = Array.isArray(p.courses) && (p.courses?.length || 0) > 0;
+    const firstSub = hasSubItems && p.courses ? p.courses[0] : null;
 
     let resolvedTitle: string = "";
     if (p.selectBranch) {
@@ -321,7 +329,7 @@ export function Listings() {
       {/* 4. Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {viewToggle === 'branch' ? (
-          allBranches.map((branch) => {
+          allBranches.slice(0, visibleBranchesCount).map((branch) => {
             // 🛡️ Guard Clause: Skip if branch data is missing
             if (!branch || !branch._id) return null;
 
@@ -353,7 +361,7 @@ export function Listings() {
             );
           })
         ) : (
-          normalizedPrograms.map((p) => (
+          normalizedPrograms.slice(0, visibleProgramsCount).map((p) => (
             <_Card key={p._id} className="border-none shadow-sm rounded-[32px] bg-white dark:bg-gray-900 p-8">
               <div className="flex justify-between items-start mb-6">
                 <div>
@@ -476,20 +484,19 @@ export function Listings() {
         </div>
       )}
 
-      {/* 6. Pagination UI (Optional but recommended) */}
       <div className="flex justify-center pt-8">
-        {viewToggle === 'branch' && hasMoreBranches && (
+        {viewToggle === 'branch' && visibleBranchesCount < allBranches.length && (
           <Button
-            onClick={() => fetchNextBranches()}
+            onClick={() => setVisibleBranchesCount((prev) => prev + 5)}
             variant="outline"
             className="rounded-xl px-10"
           >
             Load More Branches
           </Button>
         )}
-        {viewToggle === 'course' && hasMorePrograms && (
+        {viewToggle === 'course' && visibleProgramsCount < normalizedPrograms.length && (
           <Button
-            onClick={() => fetchNextPrograms()}
+            onClick={() => setVisibleProgramsCount((prev) => prev + 5)}
             variant="outline"
             className="rounded-xl px-10"
           >

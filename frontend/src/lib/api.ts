@@ -27,7 +27,7 @@ export interface OTPData {
   email?: string;
   contactNumber?: string;
   otp: string;
-  isLogin?: boolean 
+  isLogin?: boolean
 }
 
 export interface resendOtpData {
@@ -235,7 +235,7 @@ export interface CourseData {
   intermediateImagePreviewUrl: string;
   intermediateImageUrl?: string;
   year: string;
-  studyMaterial:string;
+  studyMaterial: string;
 }
 
 export interface BranchData {
@@ -678,7 +678,7 @@ export const courseAPI = {
     coursesData: CourseData[],
   ): Promise<ApiResponse> => {
     const response = {
-      courses : coursesData
+      courses: coursesData
     }
     return apiRequest(`/v1/course/create`, {
       method: "POST",
@@ -783,7 +783,7 @@ export const branchAPI = {
   updateBranch: async (
     branchId: string,
     branchData: Partial<BranchData>,
-    institutionId : string,
+    institutionId: string,
   ): Promise<ApiResponse> => {
     return apiRequest(`/v1/institutions/${institutionId}/branches/${branchId}`, {
       method: "PUT",
@@ -811,7 +811,7 @@ export const branchAPI = {
   // Delete branch
   deleteBranch: async (
     branchId: number,
-    institutionId :string
+    institutionId: string
   ): Promise<ApiResponse> => {
     return apiRequest(`/v1/institutions/${institutionId}/branches/${branchId}`, {
       method: "DELETE",
@@ -1103,6 +1103,8 @@ export const enquiriesAPI = {
     institution: string;
     programInterest: string;
     enquiryType: string;
+    courseId?: string;
+    listingType?: "paid" | "free";
   }): Promise<ApiResponse> => {
     return apiRequest(`/v1/enquiries/createEnquiry`, {
       method: "POST",

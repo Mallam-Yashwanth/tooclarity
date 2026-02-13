@@ -43,6 +43,7 @@ interface BaseCourse {
   hallName?: string;
   totalSeats?: string;
   isWishlisted?: boolean;
+  listingType?: string;
   features?: {
     recognized?: boolean;
     activities?: boolean;
@@ -150,6 +151,7 @@ export const InstituteCoursePage: React.FC<InstituteCoursePageProps> = ({
           institutionId: course.institutionId,
           type: "callRequest",
           courseId: course.id,
+          listingType: course.listingType,
         });
 
         // if (user?.callRequestCount !== undefined) {
@@ -222,6 +224,7 @@ export const InstituteCoursePage: React.FC<InstituteCoursePageProps> = ({
         date: data.date,
         timeSlot: data.timeSlot,
         courseId: course.id,
+        listingType: course.listingType,
       });
 
       // if (user?.requestDemoCount !== undefined) {

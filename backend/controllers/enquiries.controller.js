@@ -8,13 +8,13 @@ async function getInstitutionAdminLeadsTotal(institutionAdminId) {
   const institutions = await Institution.find({ institutionAdmin: institutionAdminId }).select("_id");
   const ids = institutions.map(i => i._id);
   if (ids.length === 0) return 0;
-  
+
   // Count ONLY enquiries that are leads (callback/demo) across the institutionAdmin's institutions
   const count = await Enquiries.countDocuments({
     institution: { $in: ids },
     enquiryType: { $in: [/^callback$/i, /^demo$/i] }
   });
-  
+
   return count;
 }
 
@@ -22,21 +22,21 @@ async function getInstitutionAdminEnquiriesMonthly(institutionAdminId, year) {
   const institutions = await Institution.find({ institutionAdmin: institutionAdminId }).select("_id");
   const ids = institutions.map(i => i._id);
   if (ids.length === 0) return [];
-  
+
   const monthlyData = [];
   for (let month = 1; month <= 12; month++) {
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0);
-    
+
     const count = await Enquiries.countDocuments({
       institution: { $in: ids },
       createdAt: { $gte: startDate, $lte: endDate },
       enquiryType: { $in: [/^callback$/i, /^demo$/i] }
     });
-    
+
     monthlyData.push({ month, count });
   }
-  
+
   return monthlyData;
 }
 
@@ -70,18 +70,18 @@ async function countByTypeInRange(institutionAdminId, startDate, endDate) {
 
 exports.getInstitutionAdminLeadsSummary = asyncHandler(async (req, res, next) => {
   const totalLeads = await getInstitutionAdminLeadsTotal(req.userId);
-  res.status(200).json({ 
-    success: true, 
-    data: { totalLeads } 
+  res.status(200).json({
+    success: true,
+    data: { totalLeads }
   });
 });
 
 exports.getInstitutionAdminEnquiriesForChart = asyncHandler(async (req, res, next) => {
   const year = parseInt(req.query.year) || new Date().getFullYear();
   const data = await getInstitutionAdminEnquiriesMonthly(req.userId, year);
-  res.status(200).json({ 
-    success: true, 
-    data: { enquiriesData: data } 
+  res.status(200).json({
+    success: true,
+    data: { enquiriesData: data }
   });
 });
 
@@ -95,20 +95,21 @@ exports.getInstitutionAdminRecentEnquiries = asyncHandler(async (req, res, next)
 
   // Fetch enquiries directly from Enquiries collection for these institutions
   const enquiries = await Enquiries.find({
-    institution: { $in: ids }
+    institution: { $in: ids },
+    listingType: "paid"
   })
-  .sort({ createdAt: -1 })
-  .skip(offset)
-  .limit(limit)
-  .populate('institution', 'institutionName headquartersAddress locationURL')
-  .populate({
-    path: 'student',
-    select: 'name email contactNumber address role',
-    match: { role: 'STUDENT' }
-  });
+    .sort({ createdAt: -1 })
+    .skip(offset)
+    .limit(limit)
+    .populate('institution', 'institutionName headquartersAddress locationURL')
+    .populate({
+      path: 'student',
+      select: 'name email contactNumber address role',
+      match: { role: 'STUDENT' }
+    });
 
   console.log(`[DEBUG] getInstitutionAdminRecentEnquiries (direct): offset: ${offset}, limit: ${limit}, found: ${enquiries.length}`);
-  
+
   // Debug: Log first enquiry to see populated student data
   if (enquiries.length > 0) {
     console.log(`[DEBUG] First enquiry student data:`, {
@@ -119,8 +120,8 @@ exports.getInstitutionAdminRecentEnquiries = asyncHandler(async (req, res, next)
     });
   }
 
-  res.status(200).json({ 
-    success: true, 
+  res.status(200).json({
+    success: true,
     data: { enquiries }
   });
 });
@@ -138,10 +139,10 @@ exports.getInstitutionAdminStudents = asyncHandler(async (req, res, next) => {
     institution: { $in: ids },
     role: 'STUDENT'
   })
-  .select('name email contactNumber address createdAt')
-  .sort({ createdAt: -1 })
-  .skip(offset)
-  .limit(limit);
+    .select('name email contactNumber address createdAt')
+    .sort({ createdAt: -1 })
+    .skip(offset)
+    .limit(limit);
 
   return res.status(200).json({ success: true, data: { students } });
 });
@@ -167,10 +168,10 @@ exports.getStudentsByEnquiryInstitution = asyncHandler(async (req, res, next) =>
     institution: enquiry.institution,
     role: 'STUDENT'
   })
-  .select('name email contactNumber address createdAt')
-  .sort({ createdAt: -1 })
-  .skip(offset)
-  .limit(limit);
+    .select('name email contactNumber address createdAt')
+    .sort({ createdAt: -1 })
+    .skip(offset)
+    .limit(limit);
 
   return res.status(200).json({ success: true, data: { students } });
 });
@@ -188,7 +189,7 @@ exports.updateEnquiryStatus = asyncHandler(async (req, res, next) => {
     "Requested for callback",
     "Requested for demo",
     // Progressed statuses by institution admin
-    "Contacted", 
+    "Contacted",
     "Interested",
     "Demo Scheduled",
     "Follow Up Required",
@@ -230,7 +231,7 @@ exports.updateEnquiryStatus = asyncHandler(async (req, res, next) => {
   // Update status and add to history
   const oldStatus = enquiry.status;
   enquiry.status = status;
-  
+
   // Add to status history
   enquiry.statusHistory.push({
     status: status,
@@ -247,14 +248,14 @@ exports.updateEnquiryStatus = asyncHandler(async (req, res, next) => {
   try {
     const io = req.app.get("io");
     if (io) {
-      io.to(`institution:${enquiry.institution._id}`).emit("enquiryStatusUpdated", { 
+      io.to(`institution:${enquiry.institution._id}`).emit("enquiryStatusUpdated", {
         enquiryId: enquiry._id,
         oldStatus,
         newStatus: status,
         updatedBy: userId,
         student: enquiry.student
       });
-      
+
       // Notify institution admin
       if (enquiry.institution.institutionAdmin) {
         io.to(`institutionAdmin:${enquiry.institution.institutionAdmin}`).emit("enquiryStatusUpdated", {
@@ -283,8 +284,8 @@ exports.updateEnquiryStatus = asyncHandler(async (req, res, next) => {
 });
 
 exports.createEnquiry = asyncHandler(async (req, res, next) => {
-  const { institution, programInterest, enquiryType } = req.body;
-  
+  const { institution, programInterest, enquiryType, courseId, listingType } = req.body;
+
   // If the caller is an authenticated student, always use their id
   let studentId = req.body.student;
   if (req.userRole === 'STUDENT') {
@@ -305,6 +306,9 @@ exports.createEnquiry = asyncHandler(async (req, res, next) => {
     institution,
     programInterest,
     enquiryType,
+    // Add new fields
+    courseId,
+    listingType: listingType || 'paid', // Default to paid if not provided
     status: enquiryType, // Set initial status from enquiryType
     statusHistory: [{
       status: enquiryType,
@@ -315,12 +319,12 @@ exports.createEnquiry = asyncHandler(async (req, res, next) => {
   });
 
   // No longer push enquiry into student's enquiries array (field removed)
-  
+
   try {
     const io = req.app.get("io");
     if (io) {
       io.to(`institution:${institution}`).emit("enquiryCreated", { enquiry });
-      
+
       // Update Institution rollups for callback/demo
       try {
         const { Institution } = require("../models/Institution");
@@ -353,11 +357,16 @@ exports.createEnquiry = asyncHandler(async (req, res, next) => {
       } catch (err) {
         console.error('EnquiriesController: update institution rollups failed', err?.message || err);
       }
-      
+
       const inst = await Institution.findById(institution).select("institutionAdmin");
       if (inst?.institutionAdmin) {
         const adminId = String(inst.institutionAdmin);
-        io.to(`institutionAdmin:${adminId}`).emit("enquiryCreated", { enquiry });
+        io.to(`institutionAdmin:${adminId}`).emit("enquiryCreated", {
+          enquiry,
+          // Include new fields for realtime clients
+          courseId: enquiry.courseId,
+          listingType: enquiry.listingType
+        });
         // Notify institution admin via notifications channel
         try {
           const { addNotificationJob } = require('../jobs/notification.job');
@@ -367,10 +376,15 @@ exports.createEnquiry = asyncHandler(async (req, res, next) => {
             category: 'user',
             recipientType: 'ADMIN',
             institutionAdmin: adminId,
-            metadata: { enquiryId: String(enquiry._id), institution: String(institution) }
+            metadata: {
+              enquiryId: String(enquiry._id),
+              institution: String(institution),
+              courseId: enquiry.courseId ? String(enquiry.courseId) : undefined,
+              listingType: enquiry.listingType
+            }
           });
-        } catch (_) {}
-        
+        } catch (_) { }
+
         // Emit updated leads total (based on students now)
         const totalLeads = await getInstitutionAdminLeadsTotal(adminId);
         io.to(`institutionAdmin:${adminId}`).emit("institutionAdminTotalLeads", { totalLeads });
@@ -379,7 +393,7 @@ exports.createEnquiry = asyncHandler(async (req, res, next) => {
   } catch (err) {
     console.error('EnquiriesController: create enquiry handler failed', err?.message || err);
   }
-  
+
   res.status(201).json({
     success: true,
     data: enquiry
@@ -398,7 +412,7 @@ exports.getInstitutionAdminEnquiryTypeSummary = asyncHandler(async (req, res, ne
 exports.getInstitutionAdminEnquiryTypeByRangeRollups = asyncHandler(async (req, res, next) => {
   const range = (req.query.range || 'weekly').toString().toLowerCase();
   const type = (req.query.type || '').toString().toLowerCase();
-  if (type && !['callback','demo'].includes(type)) return next(new AppError('Invalid type. Use type=callback|demo', 400));
+  if (type && !['callback', 'demo'].includes(type)) return next(new AppError('Invalid type. Use type=callback|demo', 400));
   const { startDate, endDate } = getPeriod(range);
   const startKey = startDate.toISOString().split('T')[0];
   const endKey = endDate.toISOString().split('T')[0];

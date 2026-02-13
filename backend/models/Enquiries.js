@@ -4,6 +4,14 @@ const enquirySchema = new mongoose.Schema({
   institution: { type: mongoose.Schema.Types.ObjectId, ref: "Institution", required: true, index: true },
 
   programInterest: { type: String, trim: true },
+
+  // Track specific course and its listing type (free vs paid)
+  courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course", index: true },
+  listingType: {
+    type: String,
+    enum: ["paid", "free"],
+    default: "paid"
+  },
   enquiryType: {
     type: String,
     enum: ["Requested for callback", "Requested for demo"],
@@ -20,7 +28,7 @@ const enquirySchema = new mongoose.Schema({
       "Requested for callback",
       "Requested for demo",
       // Progressed statuses by institution admin
-      "Contacted", 
+      "Contacted",
       "Interested",
       "Demo Scheduled",
       "Follow Up Required",
@@ -40,7 +48,7 @@ const enquirySchema = new mongoose.Schema({
         "Requested for callback",
         "Requested for demo",
         // Progressed statuses by institution admin
-        "Contacted", 
+        "Contacted",
         "Interested",
         "Demo Scheduled",
         "Follow Up Required",

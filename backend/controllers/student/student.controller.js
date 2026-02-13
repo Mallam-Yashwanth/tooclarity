@@ -176,8 +176,34 @@ const updateAcademicProfile = async (req, res) => {
   }
 };
 
+// ✅ Skip Onboarding — simplified
+const skipOnboarding = async (req, res) => {
+  try {
+    const student = await InstituteAdmin.findOneAndUpdate(
+      { _id: req.userId, role: "STUDENT" },
+      { $set: { isProfileCompleted: true } },
+      { new: true }
+    );
+
+    if (!student) {
+      return res.status(404).json({ error: "Student not found." });
+    }
+
+    return res.json({
+      success: true,
+      message: "Onboarding skipped",
+    });
+
+  } catch (error) {
+    return res.status(500).json({ error: "Failed to skip onboarding" });
+  }
+};
+
+
+
 module.exports = {
   getStudentById,
   updateStudentDetails,
   updateAcademicProfile,
+  skipOnboarding,
 };

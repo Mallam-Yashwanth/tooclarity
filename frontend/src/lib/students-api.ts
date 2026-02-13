@@ -321,6 +321,11 @@ export const studentOnboardingAPI = {
       body: JSON.stringify(payload),
     });
   },
+  skipOnboarding: async (): Promise<StudentApiResponse<unknown>> => {
+    return studentApiRequest(`/v1/students/onboarding-skip`, {
+      method: "POST",
+    });
+  },
 };
 
 // ===== Student Authentication API =====

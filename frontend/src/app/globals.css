@@ -187,3 +187,14 @@ html::-webkit-scrollbar {
   font-weight: 750;
   font-style: normal;
 }
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.animate-slideUp {
+  animation: slideUp .28s ease-out;
+}
+
+

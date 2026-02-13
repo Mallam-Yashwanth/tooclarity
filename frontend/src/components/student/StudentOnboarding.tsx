@@ -29,7 +29,11 @@ const inputIdle =
   "border-gray-200 bg-white focus:border-[#3B82F6] text-gray-900 placeholder:text-gray-500";
 const inputError = "border-red-400 bg-white";
 const buttonCls =
-  "w-full h-[48px] rounded-[12px] text-white text-[16px] font-medium bg-[#0A46E4] disabled:bg-gray-200 disabled:text-gray-500";
+  "w-full h-[48px] rounded-[12px] text-white text-[16px] font-medium \
+   bg-[#0A46E4] hover:bg-[#0839BE] active:scale-[0.99] transition \
+   disabled:bg-gray-200 disabled:text-gray-500 \
+   flex items-center justify-center shrink-0";
+
 
 // Advanced validation helpers
 const NAME_REGEX = /^[A-Za-z][A-Za-z ]{0,78}[A-Za-z]$/; // letters and spaces only
@@ -113,6 +117,18 @@ const interests = [
   },
 ];
 
+const interestImageMap: Record<string, string> = {
+  KINDERGARTEN: "/CRKindergarten.png",
+  SCHOOL: "/CRSchool.png",
+  INTERMEDIATE: "/CRIntermediate.png",
+  GRADUATION: "/CRGraduation.png",
+  COACHING_CENTER: "/CRUpskilling.png",
+  STUDY_HALLS: "/CRExamPreparation.png",
+  TUITION_CENTER: "/CRTutionCentre.png",
+  STUDY_ABROAD: "/CRStudyAbroad.png",
+};
+
+
 const StudentonBoarding: React.FC = () => {
   const router = useRouter();
   const setProfileCompleted = useUserStore((s) => s.setProfileCompleted);
@@ -160,6 +176,9 @@ const StudentonBoarding: React.FC = () => {
   // Study Abroad step 2: country picker UI state
   const [showAllCountries, setShowAllCountries] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
+  
+  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+
   const topDestinations = [
     "USA",
     "Australia",
@@ -293,6 +312,18 @@ const StudentonBoarding: React.FC = () => {
     if (user.address) setLocation(user.address);
     if (user.birthday && !birthday) setBirthday(normalizedBirthday);
   }, [user, fullName, birthday]);
+  
+  useEffect(() => {
+    if (step >= 6) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [step]);
+
 
   const progressPct = useMemo(() => {
     // Step 1-4: Personal info (12%)
@@ -468,7 +499,7 @@ const StudentonBoarding: React.FC = () => {
       //   return;
       // }
 
-      if (selectedInterest === "study_halls") {
+      if (selectedInterest === "STUDY_HALLS") {
         try {
           setSubmitting(true);
           if (!studentId) {
@@ -731,67 +762,23 @@ const StudentonBoarding: React.FC = () => {
     }
   };
 
-  const renderProgress = (
-    <div className="w-full h-[4px] bg-[#E9ECF4] rounded-full">
-      <div
-        className="h-[4px] bg-[#0A46E4] rounded-full transition-all"
-        style={{ width: `${progressPct}%` }}
-      />
-    </div>
-  );
+  const handleSkipOnboarding = async () => {
+    try {
+      setSubmitting(true);
+      await studentOnboardingAPI.skipOnboarding();
+      setProfileCompleted(true);
+      router.replace("/dashboard");
 
-  const avatar = (
-    <div className="flex flex-col items-center gap-4 mt-6">
-      <div className="relative w-[120px] h-[120px] rounded-full bg-gray-200 overflow-hidden shadow-sm">
-        {avatarUrl ? (
-          <Image
-            src={avatarUrl}
-            alt="avatar"
-            width={40}
-            height={40}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div
-            className="w-full h-full flex items-center justify-center text-white"
-            style={{ background: "linear-gradient(135deg,#4F46E5,#2563EB)" }}
-          >
-            <span className="text-3xl font-semibold select-none">
-              {(fullName || "")
-                .trim()
-                .split(" ")
-                .slice(0, 2)
-                .map((w) => w[0])
-                .filter(Boolean)
-                .join("") || ""}
-            </span>
-          </div>
-        )}
-        <button
-          onClick={onPickAvatar}
-          className="absolute bottom-1 right-1 w-8 h-8 rounded-full bg-[#0A46E4] text-white grid place-items-center shadow"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M12 5l7 7-7 7-7-7 7-7z" />
-          </svg>
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={onAvatarChange}
-        />
-      </div>
-    </div>
-  );
+    } catch (e) {
+      console.error("Skip onboarding failed:", e);
+      router.replace("/dashboard");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+
+
 
   // const field = (
   //   name: "fullName" | "birthday" | "location",
@@ -975,7 +962,7 @@ const StudentonBoarding: React.FC = () => {
 
       case "INTERMEDIATE":
         return (
-          <div className="flex flex-col gap-4 mt-6">
+          <div className="flex flex-col gap-3 mt-6">
             <div className="transition">
               <span className={labelCls}>Academic Status</span>
               <Dropdown
@@ -1407,7 +1394,7 @@ const StudentonBoarding: React.FC = () => {
 
       <div className="transition">
         <span className={labelCls}>What is your budget per year?</span>
-        <Dropdown
+        <Dropdown 
           label="Select budget range"
           value={budgetPerYear}
           onChange={setBudgetPerYear}
@@ -1475,7 +1462,7 @@ const StudentonBoarding: React.FC = () => {
                       alt={`${country} flag`}
                       width={40}
                       height={40}
-                      className="w-[40px] h-[40px] rounded-full object-cover"
+                      className="w-10 h-10 rounded-full object-cover"
                       onError={(e) => {
                         (e.currentTarget as HTMLImageElement).src =
                           "/globe.svg";
@@ -1683,288 +1670,195 @@ const StudentonBoarding: React.FC = () => {
   };
 
   return (
-    <main className="min-h-screen bg-[#F5F6F9] flex items-start justify-center p-0 sm:p-6 overflow-hidden">
-      <section className="w-full max-w-md bg-white rounded-none sm:rounded-[20px] shadow-sm p-5 flex flex-col h-[100vh] sm:h-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        <button
-          className="w-8 h-8 grid place-items-center rounded-full hover:bg-gray-100"
-          onClick={() => {
-            if (showAllCountries) {
-              setShowAllCountries(false);
-            } else {
-              setStep((s) => (s > 1 ? ((s - 1) as Step) : s));
-            }
-          }}
-          aria-label="Back"
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#111827"
-            strokeWidth="2"
-          >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
+    <>
+    {/* TOP NAVBAR */}
+    
+    <div className="hidden lg:flex w-full h-[72px] items-center px-10 border-b border-gray-200 bg-white">
 
-        <div className="mt-3">{renderProgress}</div>
+      <div className="flex items-center gap-2">
+        <Image
+          src="/TCNewLogo.jpg" // <-- your logo file
+          alt="Tooclarity"
+          width={32}
+          height={32}
+        />
+        <span className="text-[30px] font-bold text-[#0A46E4]">
+          Tooclarity
+        </span>
+      </div>
+    </div>
 
-        <h2 className="mt-4 text-[18px] font-semibold text-[#111827]">
-          {step === 5
-            ? "Academic Interests"
-            : step === 6
-            ? "Your Academic Profile"
-            : step === 7
-            ? showAllCountries
-              ? "Select country"
-              : "Your Study Goals"
-            : "Tell us about you"}
-        </h2>
+   <div className="flex flex-1 min-h-[calc(100vh-64px)] bg-[#ffffff] overflow-hidden ">
 
-        {step <= 4 && avatar}
+    {/* LEFT SIDE — IMAGE */}
+    <div className="hidden lg:flex w-1/2 items-center justify-center h-full bg-white p-10">
+      <div className="max-w-xl w-full flex flex-col ">
 
-        {/* Personal form */}
-        {step <= 4 && personalForm}
+        {/* TEXT */}
+        <h1 className="text-[28px] font-semibold text-[#0A46E4]">
+          Discover the world of education
+        </h1>
 
-        {/* Interests (no scroll; fit viewport) */}
-        {step === 5 && (
-          <div className="mt-2 flex-1 flex flex-col overflow-hidden">
-            <div
-              className="grid grid-cols-2 gap-3 pt-2 pb-3"
-              style={
-                {
-                  // ensure the grid itself does not create scroll; we keep items compact
-                }
-              }
-            >
-              {interests.map((c) => (
-                <button
-                  key={c.key}
-                  onClick={() => setSelectedInterest(c.key)}
-                  className={`h-[88px] rounded-[16px] text-left px-4 py-3 shadow-sm border ${
-                    selectedInterest === c.key
-                      ? "ring-2 ring-[#0A46E4]"
-                      : "border-transparent"
-                  }`}
-                  style={{ background: c.color, color: "#ffffff" }}
-                >
-                  <div className="flex h-full w-full items-center justify-between">
-                    <div className="whitespace-pre-line text-[13px] font-medium leading-tight pr-2">
-                      {c.label}
-                    </div>
-                    <div className="w-[56px] h-[56px] shrink-0 opacity-95">
-                      {/* simple inline illustration per category */}
-                      {(() => {
-                        switch (c.key) {
-                          case "SCHOOL":
-                            return (
-                              <svg
-                                viewBox="0 0 64 64"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="w-full h-full"
-                              >
-                                <rect
-                                  x="6"
-                                  y="24"
-                                  width="52"
-                                  height="30"
-                                  rx="4"
-                                  fill="white"
-                                  opacity="0.9"
-                                />
-                                <path
-                                  d="M8 24l24-12 24 12"
-                                  stroke="#fff"
-                                  strokeWidth="4"
-                                  strokeLinecap="round"
-                                />
-                                <rect
-                                  x="26"
-                                  y="36"
-                                  width="12"
-                                  height="18"
-                                  fill="#fff"
-                                />
-                              </svg>
-                            );
-                          case "KINDERGARTEN":
-                            return (
-                              <svg
-                                viewBox="0 0 64 64"
-                                className="w-full h-full"
-                                xmlns="http://www.w3.org/2000/svg"
-                              >
-                                <circle cx="20" cy="44" r="12" fill="#fff" />
-                                <rect
-                                  x="32"
-                                  y="20"
-                                  width="12"
-                                  height="24"
-                                  fill="#fff"
-                                />
-                                <rect
-                                  x="10"
-                                  y="20"
-                                  width="12"
-                                  height="18"
-                                  fill="#fff"
-                                />
-                              </svg>
-                            );
-                          case "INTERMEDIATE":
-                            return (
-                              <svg
-                                viewBox="0 0 64 64"
-                                className="w-full h-full"
-                                xmlns="http://www.w3.org/2000/svg"
-                              >
-                                <circle cx="24" cy="40" r="16" fill="#fff" />
-                                <rect
-                                  x="36"
-                                  y="20"
-                                  width="18"
-                                  height="10"
-                                  fill="#fff"
-                                />
-                              </svg>
-                            );
-                          case "GRADUATION":
-                            return (
-                              <svg
-                                viewBox="0 0 64 64"
-                                className="w-full h-full"
-                                xmlns="http://www.w3.org/2000/svg"
-                              >
-                                <path
-                                  d="M6 26l26-10 26 10-26 10L6 26z"
-                                  fill="#fff"
-                                />
-                                <rect
-                                  x="20"
-                                  y="32"
-                                  width="24"
-                                  height="10"
-                                  fill="#fff"
-                                />
-                              </svg>
-                            );
-                          case "COACHING_CENTER":
-                            return (
-                              <svg
-                                viewBox="0 0 64 64"
-                                className="w-full h-full"
-                                xmlns="http://www.w3.org/2000/svg"
-                              >
-                                <circle
-                                  cx="40"
-                                  cy="32"
-                                  r="16"
-                                  stroke="#fff"
-                                  strokeWidth="6"
-                                  fill="none"
-                                />
-                                <circle cx="40" cy="32" r="6" fill="#fff" />
-                              </svg>
-                            );
-                          case "STUDY_HALLS":
-                            return (
-                              <svg
-                                viewBox="0 0 64 64"
-                                className="w-full h-full"
-                                xmlns="http://www.w3.org/2000/svg"
-                              >
-                                <rect
-                                  x="10"
-                                  y="36"
-                                  width="44"
-                                  height="10"
-                                  fill="#fff"
-                                />
-                                <rect
-                                  x="14"
-                                  y="24"
-                                  width="12"
-                                  height="10"
-                                  fill="#fff"
-                                />
-                                <rect
-                                  x="38"
-                                  y="24"
-                                  width="12"
-                                  height="10"
-                                  fill="#fff"
-                                />
-                              </svg>
-                            );
-                          case "TUITION_CENTER":
-                            return (
-                              <svg
-                                viewBox="0 0 64 64"
-                                className="w-full h-full"
-                                xmlns="http://www.w3.org/2000/svg"
-                              >
-                                <rect
-                                  x="10"
-                                  y="20"
-                                  width="44"
-                                  height="28"
-                                  rx="4"
-                                  fill="#fff"
-                                />
-                                <rect
-                                  x="16"
-                                  y="26"
-                                  width="20"
-                                  height="6"
-                                  fill="#CCC"
-                                />
-                              </svg>
-                            );
-                          case "STUDY_ABROAD":
-                            return (
-                              <svg
-                                viewBox="0 0 64 64"
-                                className="w-full h-full"
-                                xmlns="http://www.w3.org/2000/svg"
-                              >
-                                <path
-                                  d="M8 40l48-16-10 12 8 8-10 2-8-8-28 2z"
-                                  fill="#fff"
-                                />
-                              </svg>
-                            );
-                          default:
-                            return null;
-                        }
-                      })()}
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
+        <p className="text-[25px] text-[#0A46E4]">
+          All in one place
+        </p>
+
+        {/* IMAGE */}
+        <Image
+          src="/Onboard.png"
+          alt="Education"
+          width={450}
+          height={500}
+          className=" h-auto object-contain"
+          priority
+        />
+ 
+      </div>
+    </div>
+
+    {/* RIGHT SIDE*/}
+    <main className="flex w-full lg:w-1/2  h-full items-center justify-center p-0 sm:p-6 overflow-hidden">
+      <section className="w-full max-w-md p-5 flex flex-col overflow-y-auto sm:h-auto">
+        {/* MOBILE BLUE HEADER — step < 6 */}
+        {step < 6 && (
+          <div className="lg:hidden top-0 z-10 -mx-5 -mt-5 mb-4  bg-[#0000d5] rounded-b-[28px] text-white">
+
+            {/* PERSONAL FORM — step 1–4 → blue only */}
+            {step <= 4 && (
+              <div className="h-[140px]" />
+            )}
+
+            {step === 5 && (
+              <div className="px-6 pt-14 pb-8">
+                <div className="text-[25px] font-bold opacity-90">
+                  Hi
+                </div>
+
+                <div className="text-[24px] font-semibold leading-tight mt-1">
+                  {user?.name?.split(" ")[0] || "Student"}
+                </div>
+              </div>
+            )}
+
           </div>
         )}
 
+
+
+        {step<6 && (
+          <>
+            <div className="flex items-center gap-3 mt-4">
+              {/* Back button — ONLY from step 5 onward */}
+              {step >= 5 && (
+                <button
+                  className="w-8 h-8 grid place-items-center rounded-full hover:bg-gray-100"
+                  onClick={() => {
+                    if (showAllCountries) {
+                      setShowAllCountries(false);
+                    } else {
+                      setStep((s) => (s > 1 ? ((s - 1) as Step) : s));
+                    }
+                  }}
+                  aria-label="Back"
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#111827"
+                    strokeWidth="2"
+                  >
+                    <path d="M15 18l-6-6 6-6" />
+                  </svg>
+                </button>
+              )}
+
+              <h2 className="text-[18px] font-semibold">
+                {step === 5 ? "Academic Interests" : "Tell us about you"}
+              </h2>
+            </div>
+
+
+            {/* Personal form */}
+            {step <= 4 && personalForm}
+
+            {/* Interests (no scroll; fit viewport) */}
+            {step === 5 && (
+              <div className="mt-4 grid grid-cols-2 gap-6 pb-24">
+
+                {interests.map((c) => {
+                  const selected = selectedInterest === c.key;
+
+                  return (
+                    <button
+                      key={c.key}
+                      onClick={() => {
+                        setSelectedInterest(c.key);
+
+                        if (c.key === "STUDY_HALLS") {
+                          handleContinue(); 
+                        } else {
+                          setStep(6);
+                        }
+                      }}
+
+                      className={`
+                        h-[120px] rounded-md border bg-white
+                        flex flex-col items-center justify-center gap-3
+                        transition-all
+                        ${selected
+                          ? "border-[#0A46E4] ring-2 ring-[#0A46E4]/20"
+                          : "border-gray-200 hover:border-[#0A46E4]/40"}
+                      `}
+                    >
+
+                      {/* ICON */}
+                      <div className="w-[72px] h-[72px] relative">
+                        <Image
+                          src={interestImageMap[c.key]}
+                          alt={c.label}
+                          fill
+                          className="object-contain"
+                        />
+                      </div>
+
+                      {/* LABEL */}
+                      <div className="text-[12px] font-semibold text-[#0A46E4] text-center whitespace-pre-line">
+                        {c.label}
+                      </div>
+
+                    </button>
+                  );
+                })}
+
+              </div>
+            )}
+          </>
+        )}
+        
+        
+
+
+
         {/* Academic Forms */}
-        {step === 6 && renderAcademicForm()}
+        {/* {step === 6 && renderAcademicForm()} */}
 
         {/* Additional Forms for complex interests */}
-        {step === 7 && (
+        {/* {step === 7 && (
           <div className="flex-1 overflow-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-            {/* Heading removed to avoid duplication; main header above handles titles */}
+          
             {showAllCountries
               ? renderCountryPickerFull()
               : renderStudyAbroadStep2()}
           </div>
-        )}
+        )} */}
 
         {errors.submit && (
           <div className="mt-3 text-[12px] text-red-600">{errors.submit}</div>
         )}
 
-        {!showAllCountries && (
+        {!showAllCountries && step < 6 && step !== 5 &&  (
           <div className="mt-auto pt-2">
             <button
               className={buttonCls}
@@ -1980,9 +1874,163 @@ const StudentonBoarding: React.FC = () => {
                 : "Continue"}
             </button>
           </div>
+        )}  
+        {/* CENTER MODAL FOR INTEREST FORMS */}
+        {step >= 6 && (
+          <div className="fixed inset-0 z-40 bg-black/50">
+
+            {/* DESKTOP — centered modal */}
+            <div className="hidden lg:flex h-full w-full items-center justify-center p-6">
+              <div className="
+                w-full max-w-xl
+                bg-white rounded-md shadow-lg border
+                flex flex-col max-h-[85vh]
+              ">
+
+                {/* header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b">
+                  <h3 className="text-[18px] font-semibold">
+                    {step === 6 ? "Your Academic Profile" : "Additional Details"}
+                  </h3>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      className="text-sm text-gray-500 hover:text-gray-800"
+                      onClick={() => setShowSkipConfirm(true)}
+                    >
+                      Skip
+                    </button>
+
+                    <button onClick={() => setStep(5)}>✕</button>
+                  </div>
+
+                </div>
+
+                {/* body */}
+                <div className="px-6 py-6 overflow-y-auto flex-1">
+                  {step === 6 && renderAcademicForm()}
+                  {step === 7 &&
+                    (showAllCountries
+                      ? renderCountryPickerFull()
+                      : renderStudyAbroadStep2())
+                  }
+                </div>
+
+                {/* footer */}
+                <div className="px-6 py-4 border-t">
+                  <button
+                    className={buttonCls}
+                    onClick={handleContinue}
+                    disabled={submitting || showSkipConfirm}
+                  >
+                    {submitting ? "Saving..." : "Continue"}
+                  </button>
+                </div>
+
+              </div>
+            </div>
+
+            {/* MOBILE — bottom sheet */}
+            <div className="
+                lg:hidden
+                fixed inset-x-0 bottom-0
+              bg-white
+                rounded-t-3xl
+                shadow-2xl
+                animate-slideUp
+                flex flex-col
+                h-[75vh]        /* 👈 key line */
+                max-h-[90vh]
+            ">
+
+              {/* grab bar */}
+              <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mt-3 mb-2" />
+
+              {/* header */}
+              <div className="flex items-center justify-between px-5 py-3 border-b">
+                <h3 className="text-[16px] font-semibold">
+                  {step === 6 ? "Academic Profile" : "Additional Details"}
+                </h3>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    className="text-sm text-gray-500"
+                    onClick={() => setShowSkipConfirm(true)}
+                  >
+                    Skip
+                  </button>
+
+                  <button
+                    onClick={() => setStep(5)}
+                    className="text-gray-500 text-lg"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+              </div>
+
+              {/* scroll body */}
+              <div className="px-5 py-4 overflow-y-auto flex-1">
+                {step === 6 && renderAcademicForm()}
+                {step === 7 &&
+                  (showAllCountries
+                    ? renderCountryPickerFull()
+                    : renderStudyAbroadStep2())
+                }
+              </div>
+
+              {/* fixed bottom button */}
+              <div className="p-4 border-t bg-white">
+                <button
+                  className={buttonCls}
+                  onClick={handleContinue}
+                  disabled={submitting || showSkipConfirm}
+                >
+                  {submitting ? "Saving..." : "Continue"}
+                </button>
+              </div>
+
+            </div>
+          </div>
         )}
+        
+        {showSkipConfirm && (
+          <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6">
+            <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
+
+              <h3 className="text-lg font-semibold mb-3">
+                Skip Academic Details?
+              </h3>
+
+              <p className="text-sm text-gray-600 mb-6">
+                We won’t be able to personalize your experience without your
+                academic preferences. You will be redirected to dashboard immediately.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  className="flex-1 h-11 rounded-xl border border-gray-300 font-semibold"
+                  onClick={() => setShowSkipConfirm(false)}
+                >
+                  Previous
+                </button>
+
+                <button
+                  className="flex-1 h-11 rounded-xl bg-[#0A46E4] text-white font-semibold"
+                  onClick={handleSkipOnboarding}
+                >
+                  Skip & Continue
+                </button>
+              </div>
+            </div>
+          </div>
+        )}        
+
       </section>
     </main>
+  </div>
+</>
   );
 };
 

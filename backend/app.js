@@ -95,7 +95,7 @@ const requireAdmin = [authorizeRoles(["ADMIN"])];
 const requireStudent = [authorizeRoles(["STUDENT"])];
 
 app.use("/api/v1/auth", authProtectedRoutes);
-app.use("/api/v1/students", studentRoutes, requireStudent); 
+app.use("/api/v1/students", requireStudent, studentRoutes); 
 
 app.use("/api/v1/public", requireStudent, publicRoutes);
 

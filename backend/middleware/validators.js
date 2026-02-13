@@ -353,7 +353,7 @@ const l2CoachingCourseRules = [
   body("emioptions").isIn(["Yes", "No"]).withMessage("A selection for EMI Options is required."),
   body("priceOfCourse").notEmpty().withMessage("Price is required."),
   // Conditional fields based on UI logic
-  body("classTimings").if(body("categoriesType").equals("Upskilling")).notEmpty().withMessage("Class timings are required."),
+  body("classTiming").if(body("categoriesType").equals("Upskilling")).notEmpty().withMessage("Class timings are required."),
   body("courselanguage").if(body("categoriesType").equals("Upskilling")).isIn(["English", "Hindi", "Telugu"]).withMessage("Select language."),
   body("classlanguage").if(body("categoriesType").equals("Exam Preparation")).notEmpty().withMessage("Class language is required."),
   body("classSize").if(body("categoriesType").equals("Exam Preparation")).notEmpty().withMessage("Class size is required."),

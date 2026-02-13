@@ -95,7 +95,8 @@ exports.getInstitutionAdminRecentEnquiries = asyncHandler(async (req, res, next)
 
   // Fetch enquiries directly from Enquiries collection for these institutions
   const enquiries = await Enquiries.find({
-    institution: { $in: ids }
+    institution: { $in: ids },
+    listingType: "paid"
   })
     .sort({ createdAt: -1 })
     .skip(offset)

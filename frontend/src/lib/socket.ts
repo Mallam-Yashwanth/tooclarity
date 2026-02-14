@@ -9,38 +9,89 @@ type IOSocket = {
 };
 
 let socketInstance: IOSocket | null = null;
+let socketPromise: Promise<IOSocket | null> | null = null;
+let healthChecked = false;
 
 export async function getSocket(origin?: string) {
-  // Disable Socket.IO in development if backend is not available
-  if (process.env.NODE_ENV === 'development') {
+  // Disable Socket.IO in development if backend is not available.
+  // Run /health check at most once per tab to avoid spamming the server.
+  if (process.env.NODE_ENV === 'development' && !healthChecked) {
+    healthChecked = true;
     try {
-      const backendUrl =  process.env.NEXT_PUBLIC_API_URL|| 'http://localhost:3001/api';
-      const response = await fetch(`${backendUrl}/health`, { 
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const response = await fetch(`${backendUrl}/health`, {
         method: 'GET',
-        signal: AbortSignal.timeout(2000)
+        signal: AbortSignal.timeout(2000),
       });
       if (!response.ok) {
-        if (process.env.NODE_ENV === 'development') console.error('Backend not available, skipping Socket.IO connection');
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Backend not available, skipping Socket.IO connection');
+        }
         return null;
       }
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') console.error('Backend not available, skipping Socket.IO connection');
-      if (process.env.NODE_ENV === 'development') console.error('Error: ', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Backend not available, skipping Socket.IO connection');
+        console.error('Error: ', error);
+      }
       return null;
     }
   }
 
-  if (socketInstance && socketInstance.connected) return socketInstance;
-  const { io } = await import('socket.io-client');
-  const url = origin || process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3001';
-  socketInstance = io(url, { 
-    withCredentials: true, 
-    transports: ['websocket'],
-    timeout: 5000,
-    forceNew: true
-  });
-  return socketInstance;
-} 
+  // Reuse existing live socket if available
+  if (socketInstance && socketInstance.connected) {
+    return socketInstance;
+  }
+
+  // If a socket is currently being created, await the same promise
+  if (socketPromise) {
+    return socketPromise;
+  }
+
+  socketPromise = (async () => {
+    const { io } = await import('socket.io-client');
+    let url = origin;
+    if (!url) {
+      const envUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (envUrl) {
+        try {
+          url = new URL(envUrl).origin;
+        } catch {
+          url = envUrl.replace(/\/api\/?$/, '');
+        }
+      } else {
+        url = 'http://localhost:3001';
+      }
+    }
+
+    const s = io(url, {
+      withCredentials: true,
+      transports: ['websocket'],
+      timeout: 5000,
+      // allow reuse of a single connection across callers
+      forceNew: false,
+    });
+
+    socketInstance = s;
+
+    // Once connected or errored, clear the construction promise so future
+    // calls can re-attempt if needed.
+    s.on('connect', () => {
+      socketPromise = null;
+    });
+    s.on('connect_error', () => {
+      socketPromise = null;
+    });
+    s.on('disconnect', () => {
+      // keep socketInstance for possible reconnection logic in socketManager;
+      // creation promise is already cleared above.
+    });
+
+    return s;
+  })();
+
+  return socketPromise;
+}
 
 // ------- Production-grade Socket Manager -------
 
@@ -67,7 +118,7 @@ class SocketManager {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      this.origin = process.env.NEXT_PUBLIC_API_URL|| 'http://localhost:3001';
+      this.origin = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
       window.addEventListener('online', this.onOnline);
       window.addEventListener('offline', this.onOffline);
       document.addEventListener('visibilitychange', this.onVisibility);

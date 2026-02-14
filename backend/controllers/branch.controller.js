@@ -11,7 +11,7 @@ const checkOwnership = async (institutionId, userId) => {
   if (institution.institutionAdmin.toString() !== userId) {
     throw new AppError(
       "You are not authorized to perform this action for this institution",
-      403
+      403,
     );
   }
   return institution;
@@ -33,7 +33,7 @@ exports.createBranch = asyncHandler(async (req, res, next) => {
     if (!institution) {
       console.warn(
         "🚫 Unauthorized access attempt:",
-        JSON.stringify({ institutionId, userId }, null, 2)
+        JSON.stringify({ institutionId, userId }, null, 2),
       );
       return next(new AppError("Institution not found or unauthorized", 403));
     }
@@ -48,7 +48,7 @@ exports.createBranch = asyncHandler(async (req, res, next) => {
 
     console.log(
       "📥 Incoming branches payload:",
-      JSON.stringify(branches, null, 2)
+      JSON.stringify(branches, null, 2),
     );
 
     // 3️⃣ Add institution reference to each branch
@@ -59,7 +59,7 @@ exports.createBranch = asyncHandler(async (req, res, next) => {
 
     console.log(
       "🔗 Branches after attaching institutionId:",
-      JSON.stringify(branchesWithInstitution, null, 2)
+      JSON.stringify(branchesWithInstitution, null, 2),
     );
 
     // 4️⃣ Bulk create branches
@@ -74,8 +74,8 @@ exports.createBranch = asyncHandler(async (req, res, next) => {
           institution: b.institution,
         })),
         null,
-        2
-      )
+        2,
+      ),
     );
 
     // 5️⃣ Send response
@@ -93,18 +93,27 @@ exports.createBranch = asyncHandler(async (req, res, next) => {
   }
 });
 
-
 exports.getAllBranchesForInstitution = asyncHandler(async (req, res, next) => {
   const { institutionId } = req.params;
-
+  const limit = parseInt(req.query.limit, 10) || 10;
+  const cursor = req.query.cursor;
   await checkOwnership(institutionId, req.userId);
+  const query = { institution: institutionId };
+  if (cursor) {
+    query._id = { $lt: cursor };
+  }
+  const branches = await Branch.find(query)
+    .sort({ _id: -1 })
+    .limit(limit + 1);
 
-  const branches = await Branch.find({ institution: institutionId });
-
+  const hasNextPage = branches.length > limit;
+  const data = hasNextPage ? branches.slice(0, limit) : branches;
+  const nextCursor = hasNextPage ? data[data.length - 1]._id : null;
   res.status(200).json({
     success: true,
-    count: branches.length,
-    data: branches,
+    count: data.length,
+    data: data,
+    nextCursor,
   });
 });
 
@@ -119,8 +128,8 @@ exports.getBranchById = asyncHandler(async (req, res, next) => {
     return next(
       new AppError(
         "Branch not found or does not belong to this institution",
-        404
-      )
+        404,
+      ),
     );
   }
 
@@ -133,7 +142,7 @@ exports.getBranchById = asyncHandler(async (req, res, next) => {
 exports.updateBranch = asyncHandler(async (req, res, next) => {
   const { institutionId, branchId } = req.params;
 
-  await checkOwnership(institutionId, req.user.id);
+  await checkOwnership(institutionId, req.userId);
 
   let branch = await Branch.findById(branchId);
 
@@ -141,8 +150,8 @@ exports.updateBranch = asyncHandler(async (req, res, next) => {
     return next(
       new AppError(
         "Branch not found or does not belong to this institution",
-        404
-      )
+        404,
+      ),
     );
   }
 
@@ -164,7 +173,7 @@ exports.deleteBranch = asyncHandler(async (req, res, next) => {
   const { institutionId, branchId } = req.params;
 
   // Authorization Check
-  await checkOwnership(institutionId, req.user.id);
+  await checkOwnership(institutionId, req.userId);
 
   const branch = await Branch.findById(branchId);
 
@@ -172,12 +181,12 @@ exports.deleteBranch = asyncHandler(async (req, res, next) => {
     return next(
       new AppError(
         "Branch not found or does not belong to this institution",
-        404
-      )
+        404,
+      ),
     );
   }
 
-  await branch.remove();
+  await branch.deleteOne();
 
   res.status(204).json({
     success: true,

@@ -1,8 +1,10 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
-import { 
-  metricsAPI, 
-  enquiriesAPI, 
+import {
+  metricsAPI,
+  enquiriesAPI,
   getMyInstitution,
+  branchAPI,
+  apiRequest,
   //ApiResponse 
 } from '../api';
 import { programsAPI } from '../api';
@@ -18,21 +20,32 @@ import {
   getDashboardChartCache as getChartData,
   saveDashboardInstitutionCache as saveInstitution,
   getDashboardInstitutionCache as getInstitution,
+  UnifiedAnalyticsCache,
+  AllUnifiedAnalyticsCache,
+  saveUnifiedAnalyticsCache,
+  getUnifiedAnalyticsCache,
+  saveAllUnifiedAnalyticsCache,
+  getAllUnifiedAnalyticsCache,
+  DashboardHealthCache,
+  saveDashboardHealthCache,
+  getDashboardHealthCache,
   CACHE_DURATION,
   replaceDashboardStudentsWithLatestTen,
   prependAndTrimDashboardStudents
 } from '../localDb';
+import { analyticsAPI } from '../api';
+import { dashboardAPI } from '../dashboard_api';
 
 // Query keys
 export const QUERY_KEYS = {
   INSTITUTION: (id?: string) => ['institution', id],
-  DASHBOARD_STATS: (timeRange: string, institutionId?: string) => 
+  DASHBOARD_STATS: (timeRange: string, institutionId?: string) =>
     ['dashboard-stats', timeRange, institutionId],
   STUDENTS: (institutionId?: string) => ['students', institutionId],
-  CHART_DATA: (type: string, year: number, institutionId?: string) => 
+  CHART_DATA: (type: string, year: number, institutionId?: string) =>
     ['chart-data', type, year, institutionId],
   RECENT_ENQUIRIES: (institutionId?: string) => ['recent-enquiries', institutionId],
-  METRICS: (metric: string, range: string, institutionId?: string) => 
+  METRICS: (metric: string, range: string, institutionId?: string) =>
     ['metrics', metric, range, institutionId],
 } as const;
 
@@ -62,7 +75,7 @@ export function useInstitution() {
 
       // Save to cache
       await saveInstitution(institution);
-      
+
       return institution;
     },
     staleTime: CACHE_DURATION.INSTITUTION,
@@ -75,7 +88,7 @@ export function useInstitution() {
 // Dashboard stats hook
 export function useDashboardStats(timeRange: 'weekly' | 'monthly' | 'yearly' = 'monthly') {
   const { data: institution } = useInstitution();
-  
+
   return useQuery({
     queryKey: QUERY_KEYS.DASHBOARD_STATS(timeRange, institution?._id),
     queryFn: async (): Promise<DashboardStats> => {
@@ -98,8 +111,8 @@ export function useDashboardStats(timeRange: 'weekly' | 'monthly' | 'yearly' = '
         programsAPI.summaryViews(String(institution._id), timeRange)
       ]);
 
-      const programCmpSum = Array.isArray((programCmp as { data?: { programs?: unknown[] } })?.data?.programs) ? (programCmp as { data: { programs: Record<string, unknown>[] } }).data.programs.reduce((s:number, p:Record<string, unknown>)=> s + (Number(p.inRangeComparisons)||0), 0) : 0;
-      const programViewsSum = Array.isArray((programViews as { data?: { programs?: unknown[] } })?.data?.programs) ? (programViews as { data: { programs: Record<string, unknown>[] } }).data.programs.reduce((s:number, p:Record<string, unknown>)=> s + (Number(p.inRangeViews)||0), 0) : 0;
+      const programCmpSum = Array.isArray((programCmp as { data?: { programs?: unknown[] } })?.data?.programs) ? (programCmp as { data: { programs: Record<string, unknown>[] } }).data.programs.reduce((s: number, p: Record<string, unknown>) => s + (Number(p.inRangeComparisons) || 0), 0) : 0;
+      const programViewsSum = Array.isArray((programViews as { data?: { programs?: unknown[] } })?.data?.programs) ? (programViews as { data: { programs: Record<string, unknown>[] } }).data.programs.reduce((s: number, p: Record<string, unknown>) => s + (Number(p.inRangeViews) || 0), 0) : 0;
       const stats: DashboardStats = {
         courseViews: programViewsSum,
         courseComparisons: programCmpSum,
@@ -114,7 +127,7 @@ export function useDashboardStats(timeRange: 'weekly' | 'monthly' | 'yearly' = '
 
       // Save to cache
       await saveDashboardStats(stats);
-      
+
       return stats;
     },
     enabled: !!institution?._id,
@@ -126,7 +139,7 @@ export function useDashboardStats(timeRange: 'weekly' | 'monthly' | 'yearly' = '
 }
 
 // Program analytics hook with caching and realtime refresh triggers
-export function useProgramViews(range: 'weekly'|'monthly'|'yearly' = 'weekly') {
+export function useProgramViews(range: 'weekly' | 'monthly' | 'yearly' = 'weekly') {
   const { data: institution } = useInstitution();
   return useQuery({
     queryKey: ['program-views', institution?._id, range],
@@ -148,14 +161,16 @@ export function useProgramsList() {
     enabled: !!institution?._id,
     queryFn: async () => {
       const res = await programsAPI.list(String(institution?._id)) as { data?: { programs?: Array<Record<string, unknown>> } };
-      return (res?.data?.programs || []) as Array<{ 
-        _id: string; 
-        programName: string; 
-        startDate?: string; 
+      return (res?.data?.programs || []) as Array<{
+        _id: string;
+        programName: string;
+        startDate?: string;
         endDate?: string;
         courseName?: string;
         branch?: Record<string, unknown>;
         branchName?: string;
+        selectBranch?: string;
+        status?: string;
       }>;
     },
     staleTime: 60 * 1000,
@@ -181,7 +196,7 @@ export function useRecentEnquiriesAll() {
 // Recent students/enquiries hook
 export function useRecentStudents() {
   const { data: institution } = useInstitution();
-  
+
   return useQuery({
     queryKey: QUERY_KEYS.STUDENTS(institution?._id),
     queryFn: async (): Promise<StudentItem[]> => {
@@ -197,7 +212,7 @@ export function useRecentStudents() {
 
       // Fetch from API
       const response = await enquiriesAPI.getRecentEnquiries();
-      
+
       if (!(response as { success?: boolean; data?: { enquiries?: unknown[] } })?.success || !Array.isArray((response as { success?: boolean; data?: { enquiries?: unknown[] } }).data?.enquiries)) {
         return [];
       }
@@ -218,7 +233,7 @@ export function useRecentStudents() {
 
       // Save to cache
       await saveStudents(students);
-      
+
       return students.slice(0, 4);
     },
     enabled: !!institution?._id,
@@ -237,7 +252,7 @@ export function useChartData(
 ) {
   const { data: institution } = useInstitution();
   const currentYear = year || new Date().getFullYear();
-  
+
   return useQuery({
     queryKey: [...QUERY_KEYS.CHART_DATA(type, currentYear, institution?._id), options?.fallbackToCourseIfEmpty ? 'fallback' : 'nofallback'],
     queryFn: async (): Promise<number[]> => {
@@ -255,7 +270,7 @@ export function useChartData(
       const response = type === 'views'
         ? await programsAPI.viewsSeries(String(institution._id), currentYear)
         : await metricsAPI.getInstitutionAdminSeries(type, currentYear, institution._id);
-      
+
       if (!(response as { success?: boolean; data?: { series?: unknown[] } })?.success || !Array.isArray((response as { success?: boolean; data?: { series?: unknown[] } }).data?.series)) {
         return new Array(12).fill(0);
       }
@@ -285,7 +300,7 @@ export function useChartData(
         institutionId: institution._id,
         lastUpdated: Date.now()
       });
-      
+
       return chartSeries;
     },
     enabled: !!institution?._id,
@@ -293,6 +308,37 @@ export function useChartData(
     refetchInterval: 30 * 60 * 1000, // Refetch every 30 minutes when active
     refetchOnWindowFocus: false, // Prevent refetch on window focus
     refetchOnMount: false, // Prevent refetch on component mount if data exists
+  });
+}
+
+
+
+export function useInfiniteBranches(institutionId?: string, limit: number = 10) {
+  return useInfiniteQuery({
+    queryKey: ['branches-infinite', institutionId],
+    enabled: !!institutionId,
+    initialPageParam: null as string | null,
+    queryFn: async ({ pageParam }) => {
+      return await branchAPI.getBranchesWithCursor(institutionId!, pageParam, limit);
+    },
+    getNextPageParam: (lastPage: any) => lastPage?.nextCursor ?? undefined,
+  });
+}
+
+export function useInfinitePrograms(institutionId?: string, limit: number = 10) {
+  return useInfiniteQuery({
+    queryKey: ['programs-infinite', institutionId],
+    enabled: !!institutionId,
+    initialPageParam: null as string | null,
+    queryFn: async ({ pageParam }) => {
+      const res = await programsAPI.list(institutionId!, 
+        // pageParam, limit
+      );
+      return res;
+    },
+    getNextPageParam: (lastPage: any) => {
+      return lastPage?.nextCursor || undefined;
+    },
   });
 }
 
@@ -310,12 +356,12 @@ export function useInfiniteLeads(pageSize: number = 10) {
     queryFn: async ({ pageParam }): Promise<StudentItem[]> => {
       const pageIndex = pageParam as number;
       const offset = pageIndex * pageSize;
-      
+
       // Fetch enquiries list for the institution admin's institutions (use /recent for all pages including index 1)
       const response = await enquiriesAPI.getRecentEnquiriesWithOffset(offset, pageSize) as { data?: { enquiries?: Record<string, unknown>[] } };
       const list = (response?.data?.enquiries || []) as Record<string, unknown>[];
 
-      
+
 
 
       const mapped = list.map((enquiry: Record<string, unknown>, idx: number) => ({
@@ -331,7 +377,7 @@ export function useInfiniteLeads(pageSize: number = 10) {
         institutionId: institution?._id,
         lastUpdated: Date.now()
       }));
-      
+
       // Only cache the first page to avoid stale data issues
       if (pageIndex === 0) {
         try {
@@ -340,7 +386,7 @@ export function useInfiniteLeads(pageSize: number = 10) {
           console.warn('Failed to cache leads data:', error);
         }
       }
-      
+
       return mapped as StudentItem[];
     }
   });
@@ -353,7 +399,7 @@ export async function appendNewLeadToCache(newLead: StudentItem) {
 // Mutation for refreshing all data
 export function useRefreshDashboard() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async () => {
       // Invalidate all queries to force refresh
@@ -377,5 +423,247 @@ export function useOnlineStatus() {
     staleTime: 0,
     refetchInterval: 5000, // Check every 5 seconds
     refetchIntervalInBackground: true,
+  });
+}
+
+// Dashboard health/details hook - fetches all institution data (institution, branches, courses) in one call
+// This is called once per institution admin and cached
+export function useDashboardHealth() {
+  const { data: institution } = useInstitution();
+
+  return useQuery({
+    queryKey: ['dashboard-health', institution?._id],
+    queryFn: async (): Promise<DashboardHealthCache> => {
+      if (!institution?._id) {
+        throw new Error('Institution not available');
+      }
+
+      // Try cache first (5 minute cache for dashboard health)
+      const cached = await getDashboardHealthCache(institution._id);
+      if (cached) {
+        return cached;
+      }
+
+      // Fetch from API
+      const response = await dashboardAPI.getFullDashboardDetailsAsJSON();
+
+      if (!response.success || !response.data) {
+        throw new Error(response.message || 'Failed to fetch dashboard health');
+      }
+
+      const data = response.data as {
+        institution: Record<string, unknown>;
+        branchesWithCourses: Array<Record<string, unknown>>;
+        exportedAt: string;
+      };
+
+      const healthCache: DashboardHealthCache = {
+        institutionId: institution._id,
+        institution: data.institution,
+        branchesWithCourses: data.branchesWithCourses,
+        exportedAt: data.exportedAt,
+        lastUpdated: Date.now()
+      };
+
+      // Save to cache
+      await saveDashboardHealthCache(healthCache);
+
+      return healthCache;
+    },
+    enabled: !!institution?._id,
+    // Cache for 5 minutes, but do not poll or refetch automatically;
+    // dashboard health changes rarely and can be refreshed by navigation or manual invalidation.
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  });
+}
+
+// Unified analytics hook using AnalyticsDaily model - fetches single metric
+export function useUnifiedAnalytics(
+  metric: 'views' | 'comparisons' | 'leads',
+  type: 'weekly' | 'monthly' | 'yearly' = 'weekly'
+) {
+  const { data: institution } = useInstitution();
+
+  return useQuery({
+    queryKey: ['unified-analytics', metric, type, institution?._id],
+    queryFn: async (): Promise<UnifiedAnalyticsCache> => {
+      if (!institution?._id) {
+        throw new Error('Institution not available');
+      }
+
+      // Try cache first (30 second cache for real-time updates)
+      const cached = await getUnifiedAnalyticsCache(metric, type, institution._id);
+      if (cached) {
+        return cached;
+      }
+
+      // Fetch from API
+      const response = await analyticsAPI.getInstitutionAnalytics(metric, type);
+
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to fetch analytics');
+      }
+
+      // Backend returns data at top level: { success: true, metric, type, totalCount, analytics, dateRange }
+      // apiRequest may wrap it in data property, so check both
+      const responseData = (response as { data?: unknown }).data || response;
+      const data = responseData as {
+        success?: boolean;
+        metric?: 'views' | 'comparisons' | 'leads' | 'callbackRequest' | 'bookDemoRequest';
+        type?: 'weekly' | 'monthly' | 'yearly';
+        totalCount?: number;
+        analytics?: Array<{ label: string; count: number }>;
+        dateRange?: { from: string; to: string };
+      };
+
+      // Extract data with fallbacks
+      const analyticsCache: UnifiedAnalyticsCache = {
+        metric: (data.metric || metric) as 'views' | 'comparisons' | 'leads' | 'callbackRequest' | 'bookDemoRequest',
+        type: (data.type || type) as 'weekly' | 'monthly' | 'yearly',
+        institutionId: institution._id,
+        totalCount: data.totalCount ?? 0,
+        analytics: data.analytics || [],
+        dateRange: data.dateRange || {
+          from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          to: new Date().toISOString().split('T')[0]
+        },
+        lastUpdated: Date.now()
+      };
+
+      // Save to cache
+      await saveUnifiedAnalyticsCache(analyticsCache);
+
+      return analyticsCache;
+    },
+    enabled: !!institution?._id,
+    staleTime: 30 * 1000, // 30 seconds for real-time updates
+    refetchInterval: 30 * 1000, // Refetch every 30 seconds for real-time data
+    refetchOnWindowFocus: true, // Refetch when user returns to tab
+    refetchOnMount: true, // Always refetch on mount to get latest data
+  });
+}
+
+// Unified hook that fetches ALL metrics (views, comparisons, leads) in one batch
+// This is the preferred hook for pages - calls API once and gets all metrics
+export function useAllUnifiedAnalytics(
+  type: 'weekly' | 'monthly' | 'yearly' = 'weekly'
+) {
+  const { data: institution } = useInstitution();
+
+  return useQuery({
+    queryKey: ['all-unified-analytics', type, institution?._id],
+    queryFn: async (): Promise<AllUnifiedAnalyticsCache> => {
+      if (!institution?._id) {
+        throw new Error('Institution not available');
+      }
+
+      // Try cache first (30 second cache for real-time updates)
+      // Try cache first (30 second cache for real-time updates)
+      // const cached = await getAllUnifiedAnalyticsCache(type, institution._id);
+      // if (cached) {
+      //   return cached;
+      // }
+
+      // Single unified backend API: returns all metrics in one response
+      const response = await apiRequest<unknown>(`/v1/analytics/institution`, {
+        method: 'POST',
+        body: JSON.stringify({
+          type,
+          views: true,
+          leads: true,
+          callbackRequest: true,
+          bookDemoRequest: true,
+        }),
+      });
+
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to fetch unified analytics');
+      }
+
+      // Backend may return payload either at top-level or inside data
+      const payload = ((response as { data?: unknown }).data || response) as {
+        success?: boolean;
+        type?: 'weekly' | 'monthly' | 'yearly';
+        dateRange?: { from: string; to: string };
+        totals?: {
+          views?: number;
+          leads?: number;
+          callbackRequest?: number;
+          bookDemoRequest?: number;
+        };
+        timelines?: {
+          views?: Array<{ label: string; count: number }>;
+          leads?: Array<{ label: string; count: number }>;
+          callbackRequest?: Array<{ label: string; count: number }>;
+          bookDemoRequest?: Array<{ label: string; count: number }>;
+        };
+      };
+
+      const dateRange = payload.dateRange || {
+        from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        to: new Date().toISOString().split('T')[0],
+      };
+
+      const makeMetric = (
+        metric: UnifiedAnalyticsCache['metric'],
+        total: number | undefined,
+        timeline: Array<{ label: string; count: number }> | undefined
+      ): UnifiedAnalyticsCache => ({
+        metric,
+        type: (payload.type || type) as 'weekly' | 'monthly' | 'yearly',
+        institutionId: institution._id,
+        totalCount: Number(total || 0),
+        analytics: Array.isArray(timeline) ? timeline : [],
+        dateRange,
+        lastUpdated: Date.now(),
+      });
+
+      const views = makeMetric(
+        'views',
+        payload.totals?.views,
+        payload.timelines?.views
+      );
+
+      const leads = makeMetric(
+        'leads',
+        payload.totals?.leads,
+        payload.timelines?.leads
+      );
+
+      const callbackRequest = makeMetric(
+        'callbackRequest',
+        payload.totals?.callbackRequest,
+        payload.timelines?.callbackRequest
+      );
+
+      const bookDemoRequest = makeMetric(
+        'bookDemoRequest',
+        payload.totals?.bookDemoRequest,
+        payload.timelines?.bookDemoRequest
+      );
+
+      const allAnalytics: AllUnifiedAnalyticsCache = {
+        type,
+        institutionId: institution._id,
+        views,
+        leads,
+        callbackRequest,
+        bookDemoRequest,
+        lastUpdated: Date.now()
+      };
+
+      // Save all metrics to cache
+      await saveAllUnifiedAnalyticsCache(allAnalytics);
+
+      return allAnalytics;
+    },
+    enabled: !!institution?._id,
+    // Keep data "fresh" for 5 minutes; socket events will invalidate when backend updates
+    staleTime: 5 * 60 * 1000,
+    // No interval polling; rely on socket-based invalidation and manual navigation
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 } 

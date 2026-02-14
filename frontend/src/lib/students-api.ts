@@ -269,6 +269,7 @@ export const studentDashboardAPI = {
     date?: string;
     timeSlot?: string;
     courseId?: string;
+    listingType?: string;
   }): Promise<StudentApiResponse<unknown>> => {
     return studentApiRequest("/v1/student/course/enquiry", {
       method: "POST",

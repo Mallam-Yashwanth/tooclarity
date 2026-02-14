@@ -5,6 +5,7 @@ const {
   getStudentById,
   updateStudentDetails,
   updateAcademicProfile,
+  skipOnboarding,
 } = require("../../controllers/student/student.controller");
 
 const router = Router();
@@ -97,5 +98,11 @@ router.put(
   handleValidationErrors,
   updateAcademicProfile
 );
+
+router.post(
+  "/onboarding-skip",
+  skipOnboarding
+);
+
 
 module.exports = router;

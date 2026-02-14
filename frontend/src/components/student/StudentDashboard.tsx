@@ -1,15 +1,17 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import HomeHeader from "./home/HomeHeader";
+//import HomeHeader from "./home/HomeHeader";
+import StudentNavbar from "./home/StudentNavbar";
+import CategoryRow from "./home/CategoryRow";
 import CourseCard from "./home/CourseCard";
 import FilterSidebar from "./home/FilterSidebar";
 import FooterNav from "./home/FooterNav";
-import styles from "./StudentDashboard.module.css";
+//import styles from "./StudentDashboard.module.css";
 import { DashboardCourse, studentDashboardAPI } from "@/lib/students-api";
 import { useAuth } from "@/lib/auth-context";
 import { useNotifications } from "@/lib/hooks/notifications-hooks";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {ActiveFilters} from './home/FilterSidebar'
 import NotificationPane from "./notificationpane/NotificationPane";
 
@@ -39,6 +41,18 @@ interface Course {
   // Store original API data for detailed view
   apiData: DashboardCourse;
 }
+
+
+const CATEGORY_TO_INSTITUTE: Record<string, string> = {
+  Kindergarten: "Kindergarten",
+  School: "School's",
+  Intermediate: "Intermediate",
+  Graduation: "Graduation",
+  Upskilling: "Coaching",
+  "Exam Preparation": "Coaching",
+  "Tuition Center": "Tuition Center's",
+  "Study Abroad": "Study Abroad",
+};
 
 /**
  * Get price range category based on price
@@ -76,10 +90,6 @@ const transformApiCourse = (apiCourse: DashboardCourse): Course => {
   instituteType: "Kindergarten", // Default to Kindergarten
   boardType: "CBSE", // Default board type for schools
 
-
-
-
-
   // Graduation-specific fields with defaults
   // graduationType: "Under Graduation", // Default graduation type
   // streamType: "Engineering and Technology (B.E./B.Tech.)", // Default stream
@@ -95,10 +105,30 @@ const transformApiCourse = (apiCourse: DashboardCourse): Course => {
 };
 
 const StudentDashboard: React.FC = () => {
+  const searchParams = useSearchParams();
+  const INSTITUTE_TO_CATEGORY: Record<string, string> = {
+  Kindergarten: "Kindergarten",
+  "School's": "School",
+  Intermediate: "Intermediate",
+  Graduation: "Graduation",
+  Coaching: "Upskilling",
+  "Exam Preparation": "Coaching",
+  "Tuition Center's": "Tuition Center",
+  "Study Abroad": "Study Abroad",
+};
+const instituteTypeFromURL = searchParams.get("instituteType");
+
+const activeCategory = instituteTypeFromURL
+  ? INSTITUTE_TO_CATEGORY[instituteTypeFromURL] ?? null
+  : null;
+
+
+
   const { user } = useAuth();
   const router = useRouter();
   const [courses, setCourses] = useState<Course[]>([]);
   const [filteredCourses, setFilteredCourses] = useState<Course[]>([]);
+
   const [, setSearchResults] = useState<Course[] | null>(null);
   const [displayedCourses, setDisplayedCourses] = useState<Course[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -107,31 +137,70 @@ const StudentDashboard: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeFilters, setActiveFilters] = useState({
-    instituteType: "" as string,
-    kindergartenLevels: [] as string[],
-    schoolLevels: [] as string[],
-    modes: [] as string[],
-    ageGroup: [] as string[],
-    programDuration: [] as string[],
-    priceRange: [] as string[],
-    boardType: [] as string[],
-    graduationType: [] as string[],
-    streamType: [] as string[],
-    levels: [] as string[],
-    classSize: [] as string[],
-    seatingType: [] as string[],
-    operatingHours: [] as string[],
-    duration: [] as string[],
-    subjects: [] as string[],
-    educationType: [] as string[],
-  });
+  
   const [activePane, setActivePane] = useState<"notifications" | "wishlist" | null>(null);
   const [isFilterBottomSheetOpen, setIsFilterBottomSheetOpen] = useState(false);
 
   const notificationsQuery = useNotifications();
   const notifications = notificationsQuery.data ?? [];
   const notificationsLoading = notificationsQuery.isLoading;
+  
+  
+  const getFiltersFromURL = useCallback((): ActiveFilters => {
+  const filters: ActiveFilters = {};
+
+  searchParams.forEach((value, key) => {
+    const values = value.includes(",") ? value.split(",") : [value];
+
+    (filters as any)[key] = values.length === 1 ? values[0] : values;
+  });
+
+  return filters;
+}, [searchParams]);
+
+
+useEffect(() => {
+  const fetchFilteredCourses = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const filters = getFiltersFromURL();
+
+      // If no filters → show all courses
+      if (Object.keys(filters).length === 0) {
+        setFilteredCourses(courses);
+        setDisplayedCourses(courses.slice(0, COURSES_PER_PAGE));
+        setCurrentPage(1);
+        return;
+      }
+
+      const response =
+        await studentDashboardAPI.filterInstitutionCourses(filters);
+
+      if (!response.success || !response.data) {
+        setFilteredCourses([]);
+        setDisplayedCourses([]);
+        return;
+      }
+
+      const transformed = (response.data as DashboardCourse[]).map(
+        transformApiCourse
+      );
+
+      setFilteredCourses(transformed);
+      setDisplayedCourses(transformed.slice(0, COURSES_PER_PAGE));
+      setCurrentPage(1);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to apply filters");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchFilteredCourses();
+}, [searchParams, courses, getFiltersFromURL]);
 
   useEffect(() => {
     const fetchCourses = async () => {
@@ -206,7 +275,6 @@ const StudentDashboard: React.FC = () => {
 
     window.addEventListener("scroll", handleScroll, { passive: true });
 
-    // Check immediately on mount
     handleScroll();
 
     return () => window.removeEventListener("scroll", handleScroll);
@@ -255,124 +323,56 @@ const StudentDashboard: React.FC = () => {
     router.push(`/dashboard/${courseId}`);
   };
 
-  const filterCourses = useCallback((query: string, filters: typeof activeFilters, sourceCourses: Course[]) => {
-    let result = sourceCourses;
-    if (query) {
-      result = result.filter(
-        (course) =>
-          course.title.toLowerCase().includes(query.toLowerCase()) ||
-          course.institution.toLowerCase().includes(query.toLowerCase())
-      );
-    }
-    if (filters.instituteType) {
-      result = result.filter((course) => course.instituteType === filters.instituteType);
-    }
-    if (filters.kindergartenLevels.length > 0) {
-      result = result.filter((course) => filters.kindergartenLevels.includes(course.level));
-    }
-    if (filters.schoolLevels.length > 0) {
-      result = result.filter((course) => filters.schoolLevels.includes(course.level));
-    }
-    if (filters.modes.length > 0) {
-      result = result.filter((course) => filters.modes.includes(course.mode));
-    }
-    if (filters.ageGroup.length > 0) {
-      result = result.filter((course) => filters.ageGroup.includes(course.ageGroup || "3 - 4 Yrs"));
-    }
-    if (filters.programDuration.length > 0) {
-      result = result.filter((course) => filters.programDuration.includes(course.programDuration || "Academic Year"));
-    }
-    if (filters.priceRange.length > 0) {
-      result = result.filter((course) => filters.priceRange.includes(course.priceRange || ""));
-    }
-    if (filters.boardType.length > 0) {
-      result = result.filter((course) => filters.boardType.includes(course.boardType || "CBSE"));
-    }
-    if (filters.graduationType.length > 0) {
-      result = result.filter((course) => filters.graduationType.includes(course.graduationType || "Under Graduation"));
-    }
-    if (filters.streamType.length > 0) {
-      result = result.filter((course) => filters.streamType.includes(course.streamType || "Engineering and Technology (B.E./B.Tech.)"));
-    }
-    if (filters.educationType.length > 0) {
-      result = result.filter((course) => filters.educationType.includes(course.educationType || "Full time"));
-    }
-    setFilteredCourses(result);
-  }, []);
 
   const handleSearchChange = useCallback((value: string) => {
-    setSearchQuery(value);
-    if (!value.trim()) {
-      setSearchResults(null);
-      filterCourses("", activeFilters, courses);
-    }
-  }, [activeFilters, courses, filterCourses]);
+  setSearchQuery(value);
 
-  const handleSearchResults = useCallback((query: string, results: DashboardCourse[] | null) => {
-  const trimmedQuery = query.trim();
-
-  if (!trimmedQuery) {
+  if (!value.trim()) {
     setSearchResults(null);
-    filterCourses("", activeFilters, courses);
+    setFilteredCourses(courses);
     setDisplayedCourses(courses.slice(0, COURSES_PER_PAGE));
-    return;
   }
-
-  if (!results || results.length === 0) {
-    setSearchResults([]);
-    setFilteredCourses([]);
-    setDisplayedCourses([]);
-    return;
-  }
-
-  const transformed = results.map((course) =>
-    transformApiCourse(course)
-  );
-
-  setSearchResults(transformed);
-  setFilteredCourses(transformed);
-  setDisplayedCourses(transformed.slice(0, COURSES_PER_PAGE));
-}, [activeFilters, courses, filterCourses]);
+}, [courses]);
 
 
-  const handleFilterChange = (filterType: string, value: string, isChecked: boolean) => {
-    const updatedFilters = { ...activeFilters };
-    if (filterType === "instituteType") {
-      if (isChecked) {
-        updatedFilters.instituteType = value;
-        updatedFilters.kindergartenLevels = [];
-        updatedFilters.schoolLevels = [];
-        updatedFilters.boardType = [];
-        updatedFilters.programDuration = [];
-        updatedFilters.ageGroup = [];
-        updatedFilters.graduationType = [];
-        updatedFilters.streamType = [];
-        updatedFilters.educationType = [];
-      } else {
-        updatedFilters.instituteType = "";
-        updatedFilters.kindergartenLevels = [];
-        updatedFilters.schoolLevels = [];
-        updatedFilters.boardType = [];
-        updatedFilters.programDuration = [];
-        updatedFilters.ageGroup = [];
-        updatedFilters.graduationType = [];
-        updatedFilters.streamType = [];
-        updatedFilters.educationType = [];
+  const handleSearchResults = useCallback(
+    (query: string, results: DashboardCourse[] | null) => {
+      const trimmedQuery = query.trim();
+
+      if (!trimmedQuery) {
+        setSearchResults(null);
+        setFilteredCourses(courses);
+        setDisplayedCourses(courses.slice(0, COURSES_PER_PAGE));
+        return;
       }
-    } else {
-      const filterKey = filterType as keyof typeof updatedFilters;
-      const filterArray = updatedFilters[filterKey] as string[];
-      if (isChecked) {
-        filterArray.push(value);
-      } else {
-        const index = filterArray.indexOf(value);
-        if (index > -1) {
-          filterArray.splice(index, 1);
-        }
+
+      if (!results || results.length === 0) {
+        setSearchResults([]);
+        setFilteredCourses([]);
+        setDisplayedCourses([]);
+        return;
       }
-    }
-    setActiveFilters(updatedFilters);
+
+      const transformed = results.map(transformApiCourse);
+
+        setSearchResults(transformed);
+        setFilteredCourses(transformed);
+        setDisplayedCourses(transformed.slice(0, COURSES_PER_PAGE));
+      },
+      [courses]
+    );
+
+
+  const handleCategorySelect = (categoryKey: string) => {
+    const instituteType = CATEGORY_TO_INSTITUTE[categoryKey];
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("instituteType", instituteType);
+
+    router.replace(`?${params.toString()}`);
   };
+
+
 
 
   const handleWishlistToggle = (courseId: string) => {
@@ -410,79 +410,7 @@ const StudentDashboard: React.FC = () => {
     setIsFilterBottomSheetOpen(!isFilterBottomSheetOpen);
   };
 
-  const clearAllFilters = () => {
-    const clearedFilters = {
-      instituteType: "" as string,
-      kindergartenLevels: [] as string[],
-      schoolLevels: [] as string[],
-      modes: [] as string[],
-      ageGroup: [] as string[],
-      programDuration: [] as string[],
-      priceRange: [] as string[],
-      boardType: [] as string[],
-      graduationType: [] as string[],
-      streamType: [] as string[],
-      levels: [] as string[],
-      classSize: [] as string[],
-      seatingType: [] as string[],
-      operatingHours: [] as string[],
-      duration: [] as string[],
-      subjects: [] as string[],
-      educationType: [] as string[],
-    };
-    setActiveFilters(clearedFilters);
-  };
 
-
-  const handleApplyFilters = async (filters: ActiveFilters) => {
-  try {
-    setLoading(true);
-    setError(null);
-
-    const response = await studentDashboardAPI.filterInstitutionCourses(filters);
-
-    if (!response.success && response.message === "No course found") {
-      setFilteredCourses([]);
-      setDisplayedCourses([]);
-      setSearchResults([]);
-      setCurrentPage(1);
-      return; 
-    }
-
-    if (!response.success || !response.data) {
-      throw new Error(response.message || "Failed to fetch filtered courses");
-    }
-
-    const transformedCourses = (response.data as DashboardCourse[])
-      .map(transformApiCourse);
-
-    setSearchResults(transformedCourses);
-    setFilteredCourses(transformedCourses);
-    setDisplayedCourses(transformedCourses.slice(0, COURSES_PER_PAGE));
-    setCurrentPage(1);
-
-  } catch (err) {
-    console.error("Error applying filters:", err);
-    setError(err instanceof Error ? err.message : "Failed to apply filters");
-  } finally {
-    setLoading(false);
-  }
-};
-
-
-  const handleClearFilters = () => {
-  clearAllFilters();
-
-  setSearchQuery("");
-  setSearchResults(null);
-
-  setFilteredCourses(courses);
-
-  setDisplayedCourses(courses.slice(0, COURSES_PER_PAGE));
-  setCurrentPage(1);
-
-  setIsFilterBottomSheetOpen(false);
-};
 
 
   const handleExploreClick = () => {
@@ -492,9 +420,9 @@ const StudentDashboard: React.FC = () => {
   const shouldShowFooter = !isFilterBottomSheetOpen;
 
     return (
-    <div className="w-full min-h-screen flex flex-col bg-gradient-to-b from-[#dbe0ff] via-white to-white max-lg:pb-[80px]">
-      <HomeHeader
-        userName={user?.name || "Student"}
+    <div className="w-full min-h-screen flex flex-col bg-white max-lg:pb-20">
+      <StudentNavbar
+        userName={user?.name || 'Student'}
         userAvatar={user?.profilePicture}
         searchValue={searchQuery}
         onSearchChange={handleSearchChange}
@@ -502,8 +430,14 @@ const StudentDashboard: React.FC = () => {
         onFilterClick={handleFilterToggle}
         onNotificationClick={handleNotificationPaneToggle}
         onWishlistClick={handleWishlistPaneToggle}
-        onProfileClick={() => router.push("/student/profile")}
+        onProfileClick={() => router.push('/student/profile')}
       />
+
+      <CategoryRow
+        activeCategory={activeCategory}
+        onCategorySelect={handleCategorySelect}
+      />
+
 
 
       {activePane && (
@@ -640,15 +574,23 @@ const StudentDashboard: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="flex flex-1 w-full relative">
+        <div className="flex flex-1 w-full relative ">
           <div className="hidden lg:block">
-          <FilterSidebar activeFilters={activeFilters} onFilterChange={handleFilterChange} onApplyFilters={handleApplyFilters} onClearFilters={handleClearFilters}/>
+          <FilterSidebar/>
           </div>
-          <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto">
+          <main className="flex-1 p-7 md:p-6 lg:p-8 overflow-y-auto">
             <section className="w-full">
               {displayedCourses.length > 0 ? (
                 <>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 animate-fadeIn">
+                  <div
+                    className="
+                      grid gap-4
+                      md:grid-cols-3           /* tablets */
+                      lg:grid-cols-4           /* desktop */
+                      xl:grid-cols-4
+                      animate-fadeIn
+                    "
+                  >
                     {displayedCourses.map((course) => (
                       <CourseCard
                         key={course.id}
@@ -710,12 +652,9 @@ const StudentDashboard: React.FC = () => {
               <h2 className="text-lg font-medium">Filter&apos;s</h2>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-4">
-              <FilterSidebar activeFilters={activeFilters} onFilterChange={handleFilterChange} onApplyFilters={handleApplyFilters} />
+              <FilterSidebar  />
             </div>
-            <div className="flex gap-3 px-6 py-4 border-t bg-white">
-              <button className="flex-1 border rounded-xl py-3 font-semibold" onClick={clearAllFilters}>Clear Filter</button>
-              <button  className="flex-1 bg-blue-600 text-white rounded-xl py-3 font-semibold" onClick={() => setIsFilterBottomSheetOpen(false)}>Show {filteredCourses.length} Results</button>
-            </div>
+            
           </div>
         </>
       )}

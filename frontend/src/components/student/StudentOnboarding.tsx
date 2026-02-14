@@ -299,7 +299,7 @@ const StudentonBoarding: React.FC = () => {
       avatarUrl: normalizedAvatar,
     };
 
-    if (user.name) {
+    if (user.name  && !fullName) {
       setFullName(user.name);
       const nameError = validateNameInstant(user.name);
       if (nameError) setErrors((prev) => ({ ...prev, fullName: nameError }));
@@ -309,9 +309,9 @@ const StudentonBoarding: React.FC = () => {
       setAvatarUrl(user.profilePicture);
       setAvatarFile(null);
     }
-    if (user.address) setLocation(user.address);
+    if (user.address && !location) setLocation(user.address);
     if (user.birthday && !birthday) setBirthday(normalizedBirthday);
-  }, [user, fullName, birthday]);
+  }, [user]);
   
   useEffect(() => {
     if (step >= 6) {

@@ -138,7 +138,7 @@ export default function CollegeForm({
           </div>
 
           <InputField label="Course Duration" name="courseDuration" value={currentCourse.courseDuration || ""} onChange={handleCourseChange} placeholder="e.g. 3 months" required />
-          <InputField label="Starting date" name="startDate" value={currentCourse.startDate} onChange={handleCourseChange} type="date" required />
+          <InputField label="Starting date" name="startDate" value={currentCourse.startDate || ""} onChange={handleCourseChange} type="date" required />
 
           <InputField label="Language of Class" name="classlanguage" value={currentCourse.classlanguage || ""} onChange={handleCourseChange} placeholder="Eg English" required />
           <InputField label="Ownership Type" name="ownershipType" value={currentCourse.ownershipType || ""} onChange={handleCourseChange} isSelect options={["Government", "Private", "Semi-Government", "Aided", "Unaided"]} placeholder="Select Ownership type" required />
@@ -178,7 +178,7 @@ export default function CollegeForm({
                 <div key={time.name} className="flex items-center flex-1 h-[48px] border border-[#DADADD] rounded-xl bg-white overflow-hidden focus-within:ring-1 focus-within:ring-[#0222D7]">
                   <div className="flex items-center gap-2 px-3 flex-1 h-full">
                     <Clock size={18} className="text-[#697282]" />
-                    <input type="text" name={time.name} placeholder={time.label} value={currentCourse[time.name]} onChange={handleCourseChange} className="w-full bg-transparent text-[15px] outline-none" />
+                    <input type="text" name={time.name} placeholder={time.label} value={currentCourse[time.name] || ""} onChange={handleCourseChange} className="w-full bg-transparent text-[15px] outline-none" />
                   </div>
                   <div className="relative h-full flex items-center border-l border-[#DADADD] bg-gray-50/30">
                     <select className="appearance-none pl-3 pr-8 h-full bg-transparent text-[13px] font-bold outline-none cursor-pointer" value={currentCourse[`${time.name}Period`] || "AM"} onChange={(e) => handlePeriodChange(time.name, e.target.value)}>
@@ -246,7 +246,7 @@ export default function CollegeForm({
           <SearchableSelect
             label="State"
             name="state"
-            value={currentCourse.state}
+            value={currentCourse.state || ""}
             onChange={handleCourseChange}
             options={STATE_OPTIONS}
             placeholder="Select state"
@@ -258,7 +258,7 @@ export default function CollegeForm({
           <SearchableSelect
             label="District"
             name="district"
-            value={currentCourse.district}
+            value={currentCourse.district || ""}
             onChange={handleCourseChange}
             options={districtOptions}
             placeholder={currentCourse.state ? "Select district" : "Select state first"}
@@ -270,7 +270,7 @@ export default function CollegeForm({
           <InputField
             label="Town"
             name="town"
-            value={currentCourse.town}
+            value={currentCourse.town || ""}
             onChange={handleCourseChange}
             placeholder="Medchal"
             error={courseErrors.town}
@@ -326,7 +326,7 @@ export default function CollegeForm({
           <InputField label="Year" name="yearString" value={(currentCourse as any).yearString || ""} onChange={handleCourseChange} isSelect options={["1st Year", "2nd Year"]} placeholder="select the year" />
           <InputField label="Class Type" name="classType" value={currentCourse.classType || ""} onChange={handleCourseChange} isSelect options={["Regular", "Vocational", "Honours", "Other"]} placeholder="Select Class type" required />
           <InputField label="Specialization" name="specialization" value={currentCourse.specialization || ""} onChange={handleCourseChange} isSelect options={["MPC", "BiPC", "CEC", "HEC", "MEC"]} placeholder="Select Specialization type" required />
-          <InputField label="Fee's" name="priceOfCourse" value={currentCourse.priceOfCourse} onChange={handleCourseChange} placeholder="Enter Fee's" type="number" required />
+          <InputField label="Fee's" name="priceOfCourse" value={currentCourse.priceOfCourse || ""} onChange={handleCourseChange} placeholder="Enter Fee's" type="number" required />
         </div>
       </div>
 

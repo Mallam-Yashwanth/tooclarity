@@ -60,7 +60,7 @@ export default function StudyHallForm({
         <InputField
           label="Seating option"
           name="seatingOption"
-          value={currentCourse.seatingOption}
+          value={currentCourse.seatingOption || ""}
           onChange={handleCourseChange}
           isSelect
           options={["Individual Desk", "Shared Table", "Private Cabin", "Open Seating"]}
@@ -75,14 +75,14 @@ export default function StudyHallForm({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <IconInput icon={<Clock size={20} />}>
-                <input type="time" name="openingTime" value={currentCourse.openingTime} onChange={handleCourseChange}
+                <input type="time" name="openingTime" value={currentCourse.openingTime || ""} onChange={handleCourseChange}
                   className={`w-full h-12 pl-12 pr-4 bg-white border rounded-xl font-normal text-base ${courseErrors.openingTime ? "border-red-500" : "border-[#DADADD]"}`} />
               </IconInput>
               {courseErrors.openingTime && <p className="text-sm text-red-600 mt-1">{courseErrors.openingTime}</p>}
             </div>
             <div>
               <IconInput icon={<Clock size={20} />}>
-                <input type="time" name="closingTime" value={currentCourse.closingTime} onChange={handleCourseChange}
+                <input type="time" name="closingTime" value={currentCourse.closingTime || ""} onChange={handleCourseChange}
                   className={`w-full h-12 pl-12 pr-4 bg-white border rounded-xl font-normal text-base ${courseErrors.closingTime ? "border-red-500" : "border-[#DADADD]"}`} />
               </IconInput>
               {courseErrors.closingTime && <p className="text-sm text-red-600 mt-1">{courseErrors.closingTime}</p>}
@@ -109,7 +109,7 @@ export default function StudyHallForm({
           <InputField
             label="Hall Start Date"
             name="startDate"
-            value={currentCourse.startDate}
+            value={currentCourse.startDate || ""}
             onChange={handleCourseChange}
             type="date"
             error={courseErrors.startDate}
@@ -119,7 +119,7 @@ export default function StudyHallForm({
           <InputField
             label="Hall End Date"
             name="endDate"
-            value={currentCourse.endDate}
+            value={currentCourse.endDate || ""}
             onChange={handleCourseChange}
             type="date"
             error={courseErrors.endDate}
@@ -133,14 +133,14 @@ export default function StudyHallForm({
           <div className="grid grid-cols-2 gap-6">
             <div>
               <IconInput icon={<Building size={20} />}>
-                <input type="number" name="totalSeats" value={currentCourse.totalSeats} onChange={handleCourseChange} placeholder="Total seats"
+                <input type="number" name="totalSeats" value={currentCourse.totalSeats || ""} onChange={handleCourseChange} placeholder="Total seats"
                   className={`w-full h-12 pl-12 pr-4 bg-white border rounded-xl font-normal text-base ${courseErrors.totalSeats ? "border-red-500" : "border-[#DADADD]"}`} />
               </IconInput>
               {courseErrors.totalSeats && <p className="text-sm text-red-600 mt-1">{courseErrors.totalSeats}</p>}
             </div>
             <div>
               <IconInput icon={<Building size={20} />}>
-                <input type="number" name="availableSeats" value={currentCourse.availableSeats} onChange={handleCourseChange} placeholder="Available seats"
+                <input type="number" name="availableSeats" value={currentCourse.availableSeats || ""} onChange={handleCourseChange} placeholder="Available seats"
                   className={`w-full h-12 pl-12 pr-4 bg-white border rounded-xl font-normal text-base ${courseErrors.availableSeats ? "border-red-500" : "border-[#DADADD]"}`} />
               </IconInput>
               {courseErrors.availableSeats && <p className="text-sm text-red-600 mt-1">{courseErrors.availableSeats}</p>}
@@ -152,7 +152,7 @@ export default function StudyHallForm({
         <div className="flex flex-col gap-3">
           <label className="font-medium text-lg text-black">Price of the Seat<span className="text-red-500 ml-1">*</span></label>
           <IconInput icon={<IndianRupee size={20} />}>
-            <input type="number" name="pricePerSeat" value={currentCourse.pricePerSeat} onChange={handleCourseChange} placeholder="Enter price per seat"
+            <input type="number" name="pricePerSeat" value={currentCourse.pricePerSeat || ""} onChange={handleCourseChange} placeholder="Enter price per seat"
               className={`w-full h-12 pl-12 pr-4 bg-white border rounded-xl font-normal text-base ${courseErrors.pricePerSeat ? "border-red-500" : "border-[#DADADD]"}`} />
           </IconInput>
           {courseErrors.pricePerSeat && <p className="text-sm text-red-600 mt-1">{courseErrors.pricePerSeat}</p>}

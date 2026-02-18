@@ -230,7 +230,7 @@ export default function StudyAbroadForm({
         <SearchableSelect
           label="State"
           name="state"
-          value={currentCourse.state}
+          value={currentCourse.state || ""}
           onChange={handleCourseChange}
           options={STATE_OPTIONS}
           placeholder="Select state"
@@ -242,7 +242,7 @@ export default function StudyAbroadForm({
         <SearchableSelect
           label="District"
           name="district"
-          value={currentCourse.district}
+          value={currentCourse.district || ""}
           onChange={handleCourseChange}
           options={districtOptions}
           placeholder={currentCourse.state ? "Select district" : "Select state first"}
@@ -254,7 +254,7 @@ export default function StudyAbroadForm({
         <InputField
           label="Town"
           name="town"
-          value={currentCourse.town}
+          value={currentCourse.town || ""}
           onChange={handleCourseChange}
           placeholder="Medchal"
           error={courseErrors.town}

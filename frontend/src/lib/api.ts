@@ -1324,8 +1324,7 @@ export const getInstitutionBranches = async (
 };
 
 export const getInstitutionCourses = async (
-  institutionId: string,
-  instituteType: string
+  institutionId: string
 ): Promise<unknown[]> => {
   const res = await apiRequest<unknown>(
     `/v1/institutions/${institutionId}/courses`,

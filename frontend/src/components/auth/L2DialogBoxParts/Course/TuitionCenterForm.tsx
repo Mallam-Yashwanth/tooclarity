@@ -65,19 +65,19 @@ export default function TuitionCenterForm({
     if (isSubscriptionProgram && selectedBranchId && currentCourse.createdBranch === "Main") {
       const branch = uniqueRemoteBranches.find(b => b._id === selectedBranchId);
       if (branch) {
-        setCourses(prev => prev.map(c => 
+        setCourses(prev => prev.map(c =>
           c.id === selectedCourseId ? {
             ...c,
             // Only sync these two specific fields
-            aboutBranch: branch.branchAddress || "",
+            headquatersAddress: branch.branchAddress || "",
             locationURL: branch.locationUrl || "",
           } : c
         ));
       }
     }
   }, [selectedBranchId, uniqueRemoteBranches, selectedCourseId, currentCourse.createdBranch, setCourses, isSubscriptionProgram]);
-   
-     const handleRadioChange = (name: keyof Course, value: string) => {
+
+  const handleRadioChange = (name: keyof Course, value: string) => {
     if (name === "createdBranch" && value === "Main") {
       if (selectedBranchId) {
         const branch = uniqueRemoteBranches.find((b) => b._id === selectedBranchId);
@@ -86,12 +86,12 @@ export default function TuitionCenterForm({
             prev.map((c) =>
               c.id === selectedCourseId
                 ? {
-                    ...c,
-                    createdBranch: "Main",
-                    // Only pull address and map link
-                    aboutBranch: branch.branchAddress || "",
-                    locationURL: branch.locationUrl || "",
-                  }
+                  ...c,
+                  createdBranch: "Main",
+                  // Only pull address and map link
+                  headquatersAddress: branch.branchAddress || "",
+                  locationURL: branch.locationUrl || "",
+                }
                 : c
             )
           );
@@ -99,7 +99,7 @@ export default function TuitionCenterForm({
         }
       }
     }
-  
+
     setCourses((prev) =>
       prev.map((c) => {
         if (c.id === selectedCourseId) {
@@ -108,7 +108,7 @@ export default function TuitionCenterForm({
             return {
               ...c,
               createdBranch: "",
-              aboutBranch: "",
+              headquatersAddress: "",
               locationURL: "",
             };
           }
@@ -146,7 +146,7 @@ export default function TuitionCenterForm({
 
   const handlePeriodChange = (name: "openingTime" | "closingTime", period: string) => {
     const timeValue = name === "openingTime" ? currentCourse.openingTime : currentCourse.closingTime;
-    const time24 = convertTo24Hour(timeValue, period);
+    const time24 = convertTo24Hour(timeValue || "", period);
 
     setCourses((prev) =>
       prev.map((c) =>
@@ -222,7 +222,7 @@ export default function TuitionCenterForm({
                 : "bg-gray-50 border-gray-200 dark:bg-gray-800 text-gray-600 hover:bg-gray-100"
                 }`}
             >
-              {course.courseName || `Course ${course.id}`}
+              {course.tutionCenterName || `Course ${course.id}`}
               {courses.length > 1 && (
                 <span
                   onClick={(e) => {
@@ -251,7 +251,7 @@ export default function TuitionCenterForm({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
-        <InputField label="Tuition centre name" name="courseName" value={currentCourse.courseName} onChange={handleCourseChange} placeholder="Aryabhatta tuition centre" required />
+        <InputField label="Tuition centre name" name="tutionCenterName" value={currentCourse.tutionCenterName || ""} onChange={handleCourseChange} placeholder="Aryabhatta tuition centre" required />
 
         <div className="flex flex-col gap-3">
           <label className="font-medium text-[16px] text-black dark:text-slate-200">Mode <span className="text-red-500">*</span></label>
@@ -348,7 +348,7 @@ export default function TuitionCenterForm({
           <IconInput icon={<Book size={18} />}>
             <input
               name="subject"
-              value={currentCourse.subject}
+              value={(currentCourse.subject as unknown as string) || ""}
               onChange={handleCourseChange}
               placeholder="Enter subject name"
               className={`w-full pl-10 pr-3 py-3 border rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all ${courseErrors.subject ? "border-red-500" : "border-gray-300"
@@ -361,7 +361,7 @@ export default function TuitionCenterForm({
         <InputField
           label="Class Size"
           name="classSize"
-          value={currentCourse.classSize}
+          value={currentCourse.classSize || ""}
           onChange={handleCourseChange}
           placeholder="Enter no of students per class"
           error={courseErrors.classSize}
@@ -372,87 +372,87 @@ export default function TuitionCenterForm({
       {/* LOCATION BOX SECTION [cite: 14-25] */}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-4">
-          <div className="flex flex-col gap-4">
-            <span className="font-[Montserrat] font-medium text-[16px] md:text-[18px] text-black dark:text-slate-200">
-              This is same as Campus Address
-            </span>
-            <div className="flex gap-8">
-              {["Yes", "No"].map((opt) => (
-                <label key={opt} className="flex items-center gap-2 cursor-pointer text-sm font-medium dark:text-slate-200">
-                  <input
-                    type="radio"
-                    name="sameAsCampus"
-                    value={opt}
-                    checked={currentCourse.createdBranch === (opt === "Yes" ? "Main" : "")}
-                    onChange={(e) => handleRadioChange("createdBranch", e.target.value === "Yes" ? "Main" : "")}
-                    className="accent-[#0222D7] w-4 h-4 cursor-pointer"
-                  />
-                  {opt}
-                </label>
-              ))}
-            </div>
-            {currentCourse.createdBranch === "Main" && !selectedBranchId && (
-              <p className="text-red-600 text-[10px] font-bold italic">* Select a branch at the top first</p>
-            )}
+        <div className="flex flex-col gap-4">
+          <span className="font-[Montserrat] font-medium text-[16px] md:text-[18px] text-black dark:text-slate-200">
+            This is same as Campus Address
+          </span>
+          <div className="flex gap-8">
+            {["Yes", "No"].map((opt) => (
+              <label key={opt} className="flex items-center gap-2 cursor-pointer text-sm font-medium dark:text-slate-200">
+                <input
+                  type="radio"
+                  name="sameAsCampus"
+                  value={opt}
+                  checked={currentCourse.createdBranch === (opt === "Yes" ? "Main" : "")}
+                  onChange={(e) => handleRadioChange("createdBranch", e.target.value === "Yes" ? "Main" : "")}
+                  className="accent-[#0222D7] w-4 h-4 cursor-pointer"
+                />
+                {opt}
+              </label>
+            ))}
           </div>
-        
+          {currentCourse.createdBranch === "Main" && !selectedBranchId && (
+            <p className="text-red-600 text-[10px] font-bold italic">* Select a branch at the top first</p>
+          )}
+        </div>
+
 
         <InputField
-                label="Location URL"
-                name="locationURL" 
-                value={currentCourse.locationURL || ""}
-                onChange={handleCourseChange}
-                placeholder="https://maps.app.goo.gl/4mPv8SX6cD52i9B"
-                error={courseErrors.locationURL}
-                required
-                disabled={currentCourse.createdBranch === "Main"} 
-              />
-          
-              <InputField
-                label="headquarters address"
-                name="aboutBranch"
-                value={currentCourse.aboutBranch || ""}
-                onChange={handleCourseChange}
-                placeholder="2-3, Uppal Hills Colony, Peerzadiguda"
-                error={courseErrors.aboutBranch}
-                required
-                disabled={currentCourse.createdBranch === "Main"}
-              />
-          
-              <SearchableSelect
-                label="State"
-                name="state"
-                value={currentCourse.state}
-                onChange={handleCourseChange}
-                options={STATE_OPTIONS}
-                placeholder="Select state"
-                required
-                error={courseErrors.state}
-                disabled={false} 
-              />
-          
-              <SearchableSelect
-                label="District"
-                name="district"
-                value={currentCourse.district}
-                onChange={handleCourseChange}
-                options={districtOptions}
-                placeholder={currentCourse.state ? "Select district" : "Select state first"}
-                required
-                error={courseErrors.district}
-                disabled={!currentCourse.state} 
-              />
-          
-              <InputField
-                label="Town"
-                name="town"
-                value={currentCourse.town}
-                onChange={handleCourseChange}
-                placeholder="Medchal"
-                error={courseErrors.town}
-                required
-                disabled={false} 
-              />
+          label="Location URL"
+          name="locationURL"
+          value={currentCourse.locationURL || ""}
+          onChange={handleCourseChange}
+          placeholder="https://maps.app.goo.gl/4mPv8SX6cD52i9B"
+          error={courseErrors.locationURL}
+          required
+          disabled={currentCourse.createdBranch === "Main"}
+        />
+
+        <InputField
+          label="headquarters address"
+          name="headquatersAddress"
+          value={currentCourse.headquatersAddress || ""}
+          onChange={handleCourseChange}
+          placeholder="2-3, Uppal Hills Colony, Peerzadiguda"
+          error={courseErrors.headquatersAddress}
+          required
+          disabled={currentCourse.createdBranch === "Main"}
+        />
+
+        <SearchableSelect
+          label="State"
+          name="state"
+          value={currentCourse.state}
+          onChange={handleCourseChange}
+          options={STATE_OPTIONS}
+          placeholder="Select state"
+          required
+          error={courseErrors.state}
+          disabled={false}
+        />
+
+        <SearchableSelect
+          label="District"
+          name="district"
+          value={currentCourse.district}
+          onChange={handleCourseChange}
+          options={districtOptions}
+          placeholder={currentCourse.state ? "Select district" : "Select state first"}
+          required
+          error={courseErrors.district}
+          disabled={!currentCourse.state}
+        />
+
+        <InputField
+          label="Town"
+          name="town"
+          value={currentCourse.town}
+          onChange={handleCourseChange}
+          placeholder="Medchal"
+          error={courseErrors.town}
+          required
+          disabled={false}
+        />
 
       </div>
 
@@ -659,7 +659,7 @@ export default function TuitionCenterForm({
               className="hidden"
             />
             <label
-              htmlFor="center-image-input"
+              htmlFor="tuition-image-input"
               className="flex items-center justify-between w-full h-[42px] px-4 bg-[#F5F6F9] border border-[#DADADD] rounded-lg cursor-pointer hover:bg-gray-100 transition-all overflow-hidden"
             >
               {/* ✅ Update check to use tuitionImagePreviewUrl */}

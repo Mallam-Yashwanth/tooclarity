@@ -256,6 +256,7 @@ function ProgramsPage() {
 
       const res = await paymentAPI.initiateFreeListing({
         courseIds: selectedCourseIds,
+        institutionType: institution?.institutionType,
       });
 
       // Check if the response indicates direct activation (no Razorpay needed)
@@ -347,6 +348,7 @@ function ProgramsPage() {
                 .filter((course) => !!selectedInactive[course.id])
                 .map((course) => course.id)
                 .filter((courseId) => !!courseId && !courseId.startsWith("inactive-")),
+              institutionType: institution?.institutionType
             }}
             onSuccess={() => {
               programsAPI.invalidateCache(institution?._id ? String(institution._id) : undefined);

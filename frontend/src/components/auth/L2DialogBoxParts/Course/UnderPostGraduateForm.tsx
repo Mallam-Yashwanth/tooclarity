@@ -2549,7 +2549,7 @@ export default function UnderPostGraduateForm({
           c.id === selectedCourseId ? {
             ...c,
             // Only sync these two specific fields
-            aboutBranch: branch.branchAddress || "",
+            headquatersAddress: branch.branchAddress || "",
             locationURL: branch.locationUrl || "",
           } : c
         ));
@@ -2569,7 +2569,7 @@ export default function UnderPostGraduateForm({
                   ...c,
                   createdBranch: "Main",
                   // Only pull address and map link
-                  aboutBranch: branch.branchAddress || "",
+                  headquatersAddress: branch.branchAddress || "",
                   locationURL: branch.locationUrl || "",
                 }
                 : c
@@ -2588,7 +2588,7 @@ export default function UnderPostGraduateForm({
             return {
               ...c,
               createdBranch: "",
-              aboutBranch: "",
+              headquatersAddress: "",
               locationURL: "",
             };
           }
@@ -2651,7 +2651,7 @@ export default function UnderPostGraduateForm({
         <InputField
           label="Graduation type"
           name="graduationType"
-          value={currentCourse.graduationType}
+          value={currentCourse.graduationType || ""}
           onChange={handleGraduationTypeChange}
           isSelect
           options={["Under Graduation", "Post Graduation"]}
@@ -2663,7 +2663,7 @@ export default function UnderPostGraduateForm({
         <SearchableSelect
           label="Stream type"
           name="streamType"
-          value={currentCourse.streamType}
+          value={currentCourse.streamType || ""}
           onChange={handleStreamTypeChange}
           options={availableStreams}
           placeholder="Select Stream type"
@@ -2676,7 +2676,7 @@ export default function UnderPostGraduateForm({
         <SearchableSelect
           label="Select branch"
           name="selectBranch"
-          value={currentCourse.selectBranch}
+          value={currentCourse.selectBranch || ""}
           onChange={handleCourseChange}
           options={availableBranches}
           placeholder="Select branch type"
@@ -2687,12 +2687,12 @@ export default function UnderPostGraduateForm({
 
         <InputField
           label="About branch"
-          name="branchDescription"
-          value={currentCourse.branchDescription || ""}
+          name="aboutBranch"
+          value={currentCourse.aboutBranch || ""}
           onChange={handleCourseChange}
           placeholder="Enter the course info"
           required
-          error={courseErrors.branchDescription}
+          error={courseErrors.aboutBranch}
         />
 
       </div>
@@ -2738,11 +2738,11 @@ export default function UnderPostGraduateForm({
 
           <InputField
             label="headquarters address"
-            name="aboutBranch"
-            value={currentCourse.aboutBranch || ""}
+            name="headquatersAddress"
+            value={currentCourse.headquatersAddress || ""}
             onChange={handleCourseChange}
             placeholder="2-3, Uppal Hills Colony, Peerzadiguda"
-            error={courseErrors.aboutBranch}
+            error={courseErrors.headquatersAddress}
             required
           />
 
@@ -2791,8 +2791,8 @@ export default function UnderPostGraduateForm({
         <div className="flex flex-col gap-2">
           <label className="font-medium text-[16px]">Education type</label>
           <SlidingIndicator
-            options={["Full time", "part time", "Distance"] as const}
-            activeOption={currentCourse.educationType}
+            options={["Full time", "Part time", "Distance"] as const}
+            activeOption={currentCourse.educationType || "Full time"}
             onOptionChange={(educationType) =>
               setCourses(
                 courses.map((course) =>
@@ -2828,10 +2828,9 @@ export default function UnderPostGraduateForm({
         <InputField
           label="Class size"
           name="classSize"
-          value={currentCourse.classSize}
+          value={currentCourse.classSize || ""}
           onChange={handleCourseChange}
           placeholder="60"
-          type="number"
           required
           error={courseErrors.classSize}
         />
@@ -2839,7 +2838,7 @@ export default function UnderPostGraduateForm({
         <InputField
           label="Eligibility Criteria"
           name="eligibilityCriteria"
-          value={currentCourse.eligibilityCriteria}
+          value={currentCourse.eligibilityCriteria || ""}
           onChange={handleCourseChange}
           placeholder="Must have completed 12th Grade"
           required
@@ -2851,7 +2850,7 @@ export default function UnderPostGraduateForm({
         <InputField
           label="Ownership type"
           name="ownershipType"
-          value={currentCourse.ownershipType}
+          value={currentCourse.ownershipType || ""}
           onChange={handleCourseChange}
           isSelect
           options={["Government", "Private", "Semi-Government", "Aided", "Unaided"]}
@@ -2864,7 +2863,7 @@ export default function UnderPostGraduateForm({
         <InputField
           label="College category"
           name="collegeCategory"
-          value={currentCourse.collegeCategory}
+          value={currentCourse.collegeCategory || ""}
           onChange={handleCourseChange}
           isSelect
           options={["Engineering", "Medical", "Arts & Science", "Commerce", "Management", "Law", "Other"]}
@@ -2878,7 +2877,7 @@ export default function UnderPostGraduateForm({
         <InputField
           label="Affiliation type"
           name="affiliationType"
-          value={currentCourse.affiliationType}
+          value={currentCourse.affiliationType || ""}
           onChange={handleCourseChange}
           isSelect
           options={["University", "Autonomous", "Affiliated", "Deemed University", "Other"]}
@@ -2891,7 +2890,7 @@ export default function UnderPostGraduateForm({
         <InputField
           label="Course Duration"
           name="courseDuration"
-          value={currentCourse.courseDuration}
+          value={currentCourse.courseDuration || ""}
           onChange={handleCourseChange}
           placeholder="4years"
           required
@@ -2994,7 +2993,6 @@ export default function UnderPostGraduateForm({
           value={currentCourse.totalNumberRequires || ""}
           onChange={handleCourseChange}
           placeholder="690"
-          type="number"
           required
 
         />

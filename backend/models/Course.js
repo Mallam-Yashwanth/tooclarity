@@ -18,10 +18,10 @@ const courseSchema = new mongoose.Schema(
       required: false,
       index: true,
     },
-    type: { 
-      type: String, 
-      enum: ["COURSE", "PROGRAM"], 
-      default: "COURSE" 
+    type: {
+      type: String,
+      enum: ["COURSE", "PROGRAM"],
+      default: "COURSE"
     },
     courseType: { type: String }, // Stores category like "Coaching centers", "Study Abroad", etc.
     status: {
@@ -43,13 +43,13 @@ const courseSchema = new mongoose.Schema(
     district: { type: String, trim: true, maxlength: 100 },
     town: { type: String, trim: true, maxlength: 100 },
     locationURL: { type: String, trim: true }, // Map Link for this specific campus
-    
+
     //Institutional Headquarters / Main Branch Address
-    aboutBranch: { type: String, trim: true }, 
-    
+    aboutBranch: { type: String, trim: true },
+
     // Track if Location A is synced from Location B ("Main")
-    createdBranch: { type: String }, 
-    
+    createdBranch: { type: String },
+
 
     // --- 3. COMMON CORE FIELDS ---
     courseName: { type: String, trim: true, maxlength: 150 },
@@ -71,26 +71,26 @@ const courseSchema = new mongoose.Schema(
     collegeImageUrl: { type: String },
     tuitionImageUrl: { type: String },
     businessProofUrl: { type: String },
-    panAadhaarUrl: { type: String },    
+    panAadhaarUrl: { type: String },
 
     // --- 5. INSTITUTIONAL & ACADEMIC META (Schools, Colleges, K12) ---
-    collegeType: { type: String },      
-    schoolType: { type: String },      
-    curriculumType: { type: String }, 
-    streamType: { type: String },      
-    selectBranch: { type: String },   
-    year: { type: String },             
-    specialization: { type: String },   
-    classType: { type: String },       
+    collegeType: { type: String },
+    schoolType: { type: String },
+    curriculumType: { type: String },
+    streamType: { type: String },
+    selectBranch: { type: String },
+    year: { type: String },
+    specialization: { type: String },
+    classType: { type: String },
     ownershipType: { type: String },
     affiliationType: { type: String },
-    educationType: { type: String },   
+    educationType: { type: String },
     eligibilityCriteria: { type: String },
     classSize: { type: String },
-    classSizeRatio: { type: String },   
+    classSizeRatio: { type: String },
 
     // --- 6. COACHING & SKILLING SPECIFIC ---
-    categoriesType: { type: String },  
+    categoriesType: { type: String },
     domainType: { type: String },
     subDomainType: { type: String },
     courseHighlights: { type: String },
@@ -169,7 +169,7 @@ const courseSchema = new mongoose.Schema(
     // --- 11. SUBSCRIPTION VARIATIONS ARRAY ---
     courses: [
       {
-        type: mongoose.Schema.Types.Mixed, 
+        type: mongoose.Schema.Types.Mixed,
       }
     ],
   },

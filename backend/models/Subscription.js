@@ -33,7 +33,12 @@ const subscriptionSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
-
+    courseIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Course",
+      },
+    ],
   },
   { timestamps: true }
 );

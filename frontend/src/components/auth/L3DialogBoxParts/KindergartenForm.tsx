@@ -60,19 +60,20 @@ export default function KindergartenForm({
     if (isSubscriptionProgram && selectedBranchId && currentCourse.createdBranch === "Main") {
       const branch = uniqueRemoteBranches.find(b => b._id === selectedBranchId);
       if (branch) {
-        setCourses(prev => prev.map(c => 
+        setCourses(prev => prev.map(c =>
           c.id === selectedCourseId ? {
             ...c,
             // Only sync these two specific fields
             aboutBranch: branch.branchAddress || "",
+            headquatersAddress: branch.branchAddress || "",
             locationURL: branch.locationUrl || "",
           } : c
         ));
       }
     }
   }, [selectedBranchId, uniqueRemoteBranches, selectedCourseId, currentCourse.createdBranch, setCourses, isSubscriptionProgram]);
-   
-     const handleRadioChange = (name: keyof Course, value: string) => {
+
+  const handleRadioChange = (name: keyof Course, value: string) => {
     if (name === "createdBranch" && value === "Main") {
       if (selectedBranchId) {
         const branch = uniqueRemoteBranches.find((b) => b._id === selectedBranchId);
@@ -81,12 +82,13 @@ export default function KindergartenForm({
             prev.map((c) =>
               c.id === selectedCourseId
                 ? {
-                    ...c,
-                    createdBranch: "Main",
-                    // Only pull address and map link
-                    aboutBranch: branch.branchAddress || "",
-                    locationURL: branch.locationUrl || "",
-                  }
+                  ...c,
+                  createdBranch: "Main",
+                  // Only pull address and map link
+                  aboutBranch: branch.branchAddress || "",
+                  headquatersAddress: branch.branchAddress || "",
+                  locationURL: branch.locationUrl || "",
+                }
                 : c
             )
           );
@@ -94,7 +96,7 @@ export default function KindergartenForm({
         }
       }
     }
-  
+
     setCourses((prev) =>
       prev.map((c) => {
         if (c.id === selectedCourseId) {
@@ -104,6 +106,7 @@ export default function KindergartenForm({
               ...c,
               createdBranch: "",
               aboutBranch: "",
+              headquatersAddress: "",
               locationURL: "",
             };
           }
@@ -120,20 +123,20 @@ export default function KindergartenForm({
 
 
   const convertTo24Hour = (time: string, period: string): string => {
-  if (!time) return "";
-  
-  // 1. Destructure using const for both
-  const [rawHours, minutes] = time.split(":").map(Number);
-  if (isNaN(rawHours)) return "";
-  let hours = rawHours;
+    if (!time) return "";
 
-  if (period === "PM" && hours < 12) hours += 12;
-  if (period === "AM" && hours === 12) hours = 0;
+    // 1. Destructure using const for both
+    const [rawHours, minutes] = time.split(":").map(Number);
+    if (isNaN(rawHours)) return "";
+    let hours = rawHours;
 
-  const h = hours.toString().padStart(2, '0');
-  const m = (minutes || 0).toString().padStart(2, '0');
-  return `${h}:${m}`;
-};
+    if (period === "PM" && hours < 12) hours += 12;
+    if (period === "AM" && hours === 12) hours = 0;
+
+    const h = hours.toString().padStart(2, '0');
+    const m = (minutes || 0).toString().padStart(2, '0');
+    return `${h}:${m}`;
+  };
 
   const handleTimeUIChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -149,7 +152,7 @@ export default function KindergartenForm({
 
   const handlePeriodChange = (name: "openingTime" | "closingTime", period: string) => {
     const timeValue = name === "openingTime" ? currentCourse.openingTime : currentCourse.closingTime;
-    const time24 = convertTo24Hour(timeValue, period);
+    const time24 = convertTo24Hour(timeValue || "", period);
 
     setCourses((prev) =>
       prev.map((c) =>
@@ -199,8 +202,8 @@ export default function KindergartenForm({
                 variant="ghost"
                 onClick={() => setSelectedCourseId(course.id)}
                 className={`px-3 py-2 rounded-lg text-sm border transition-colors flex items-center gap-2 ${selectedCourseId === course.id
-                    ? "bg-blue-50 border-blue-200 text-blue-700 font-medium"
-                    : "bg-gray-50 border-gray-200 dark:bg-gray-800 text-gray-600 hover:bg-gray-100"
+                  ? "bg-blue-50 border-blue-200 text-blue-700 font-medium"
+                  : "bg-gray-50 border-gray-200 dark:bg-gray-800 text-gray-600 hover:bg-gray-100"
                   }`}
               >
                 {course.courseName || `Course ${course.id}`}
@@ -235,7 +238,7 @@ export default function KindergartenForm({
           <InputField
             label="Category Type"
             name="categoriesType"
-            value={currentCourse.categoriesType}
+            value={currentCourse.categoriesType || ""}
             onChange={handleCourseChange}
             isSelect
             options={["Nursery", "LKG", "UKG", "Playgroup"]}
@@ -296,8 +299,8 @@ export default function KindergartenForm({
 
           <InputField
             label="headquarters address"
-            name="aboutBranch"
-            value={currentCourse.aboutBranch || ""}
+            name="headquatersAddress"
+            value={currentCourse.headquatersAddress || ""}
             onChange={handleCourseChange}
             placeholder="2-3, Uppal Hills Colony, Peerzadiguda"
             error={courseErrors.aboutBranch}
@@ -346,7 +349,7 @@ export default function KindergartenForm({
         <InputField
           label="About Course"
           name="aboutCourse"
-          value={currentCourse.aboutCourse}
+          value={currentCourse.aboutCourse || ""}
           onChange={handleCourseChange}
           placeholder="Enter the course info"
           error={courseErrors.aboutCourse}
@@ -356,7 +359,7 @@ export default function KindergartenForm({
         <InputField
           label="Course Duration"
           name="courseDuration"
-          value={currentCourse.courseDuration}
+          value={currentCourse.courseDuration || ""}
           onChange={handleCourseChange}
           placeholder="eg. 3 months"
           error={courseErrors.courseDuration}
@@ -382,7 +385,7 @@ export default function KindergartenForm({
         <InputField
           label="Class Size"
           name="classSize"
-          value={currentCourse.classSize}
+          value={currentCourse.classSize || ""}
           onChange={handleCourseChange}
           placeholder="Enter no of students per class"
           error={courseErrors.classSize}
@@ -392,7 +395,7 @@ export default function KindergartenForm({
         <InputField
           label="Curriculum type"
           name="curriculumType"
-          value={currentCourse.curriculumType}
+          value={currentCourse.curriculumType || ""}
           onChange={handleCourseChange}
           placeholder="Enter Curriculum type"
           error={courseErrors.curriculumType}
@@ -402,7 +405,7 @@ export default function KindergartenForm({
         <InputField
           label="Ownership Type"
           name="ownershipType"
-          value={currentCourse.ownershipType}
+          value={currentCourse.ownershipType || ""}
           onChange={handleCourseChange}
           isSelect
           options={["Private", "Government", "Trust", "Other"]}
@@ -423,8 +426,8 @@ export default function KindergartenForm({
                 type="button"
                 onClick={() => handleOperationalDayChange(day)}
                 className={`h-10 px-3 rounded-lg border transition-all ${currentCourse.operationalDays?.includes(day)
-                    ? "bg-[#0222D7] text-white border-[#0222D7]"
-                    : "bg-[#F5F6F9] text-[#697282] border-[#DADADD] hover:bg-gray-100"
+                  ? "bg-[#0222D7] text-white border-[#0222D7]"
+                  : "bg-[#F5F6F9] text-[#697282] border-[#DADADD] hover:bg-gray-100"
                   }`}
               >
                 {day}
@@ -447,7 +450,7 @@ export default function KindergartenForm({
                   type="text"
                   name="openingTime"
                   placeholder="From"
-                  value={currentCourse.openingTime}
+                  value={currentCourse.openingTime || ""}
                   onChange={handleCourseChange}
                   className="w-full bg-transparent text-[15px] outline-none placeholder:text-[#9CA3AF]"
                 />
@@ -476,7 +479,7 @@ export default function KindergartenForm({
                   type="text"
                   name="closingTime"
                   placeholder="To"
-                  value={currentCourse.closingTime}
+                  value={currentCourse.closingTime || ""}
                   onChange={handleCourseChange}
                   className="w-full bg-transparent text-[15px] outline-none placeholder:text-[#9CA3AF]"
                 />
@@ -505,7 +508,7 @@ export default function KindergartenForm({
           { label: "Extended care ?", name: "extendedCare" },
           { label: "Meals Provided ?", name: "mealsProvided" },
           { label: "Playground ?", name: "playground" },
-          { label: "Pickup/Drop Services ?", name: "busService" },
+          { label: "Pickup/Drop Services ?", name: "pickupDropService" },
           { label: "Installments ?", name: "installments" },
           { label: "EMI Options", name: "emioptions" }
         ].map((item) => (
@@ -535,11 +538,11 @@ export default function KindergartenForm({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6 items-end">
         <InputField
           label="Teacher: Student Ratio"
-          name="classSizeRatio"
-          value={currentCourse.classSizeRatio || ""}
+          name="teacherStudentRatio"
+          value={currentCourse.teacherStudentRatio || ""}
           onChange={handleCourseChange}
           placeholder="Eg. 5 students per 1 teacher"
-          error={courseErrors.classSizeRatio}
+          error={courseErrors.teacherStudentRatio}
           required
         />
 
@@ -564,11 +567,11 @@ export default function KindergartenForm({
               {/* 2. Check for the specific Kindergarten preview key */}
               {(currentCourse.kindergartenImage || currentCourse.kindergartenImagePreviewUrl) ? (
                 <div className="absolute inset-0 w-full h-full">
-                    <img
-                      src={currentCourse.kindergartenImagePreviewUrl}
-                      alt="Center Preview"
-                      className="w-full h-full object-cover"
-                    />
+                  <img
+                    src={currentCourse.kindergartenImagePreviewUrl}
+                    alt="Center Preview"
+                    className="w-full h-full object-cover"
+                  />
                   {/* Optional: Add a semi-transparent overlay on hover to show it's still clickable */}
                   <div className="absolute inset-0 bg-black/0 hover:bg-black/10 transition-colors flex items-center justify-center">
                     <span className="text-white text-xs font-bold opacity-0 hover:opacity-100 bg-black/40 px-2 py-1 rounded">Change Photo</span>

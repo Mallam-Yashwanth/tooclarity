@@ -92,19 +92,19 @@ export default function StudyAbroadForm({
     if (isSubscriptionProgram && selectedBranchId && currentCourse.createdBranch === "Main") {
       const branch = uniqueRemoteBranches.find(b => b._id === selectedBranchId);
       if (branch) {
-        setCourses(prev => prev.map(c => 
+        setCourses(prev => prev.map(c =>
           c.id === selectedCourseId ? {
             ...c,
             // Only sync these two specific fields
-            aboutBranch: branch.branchAddress || "",
+            headquatersAddress: branch.branchAddress || "",
             locationURL: branch.locationUrl || "",
           } : c
         ));
       }
     }
   }, [selectedBranchId, uniqueRemoteBranches, selectedCourseId, currentCourse.createdBranch, setCourses, isSubscriptionProgram]);
-   
-     const handleRadioChange = (name: keyof Course, value: string) => {
+
+  const handleRadioChange = (name: keyof Course, value: string) => {
     if (name === "createdBranch" && value === "Main") {
       if (selectedBranchId) {
         const branch = uniqueRemoteBranches.find((b) => b._id === selectedBranchId);
@@ -113,12 +113,12 @@ export default function StudyAbroadForm({
             prev.map((c) =>
               c.id === selectedCourseId
                 ? {
-                    ...c,
-                    createdBranch: "Main",
-                    // Only pull address and map link
-                    aboutBranch: branch.branchAddress || "",
-                    locationURL: branch.locationUrl || "",
-                  }
+                  ...c,
+                  createdBranch: "Main",
+                  // Only pull address and map link
+                  headquatersAddress: branch.branchAddress || "",
+                  locationURL: branch.locationUrl || "",
+                }
                 : c
             )
           );
@@ -126,7 +126,7 @@ export default function StudyAbroadForm({
         }
       }
     }
-  
+
     setCourses((prev) =>
       prev.map((c) => {
         if (c.id === selectedCourseId) {
@@ -135,7 +135,7 @@ export default function StudyAbroadForm({
             return {
               ...c,
               createdBranch: "",
-              aboutBranch: "",
+              headquatersAddress: "",
               locationURL: "",
             };
           }
@@ -206,61 +206,61 @@ export default function StudyAbroadForm({
         </div>
 
         <InputField
-                        label="Location URL"
-                        name="locationURL" 
-                        value={currentCourse.locationURL || ""}
-                        onChange={handleCourseChange}
-                        placeholder="https://maps.app.goo.gl/4mPv8SX6cD52i9B"
-                        error={courseErrors.locationURL}
-                        required
-                        disabled={currentCourse.createdBranch === "Main"} 
-                      />
-                  
-                      <InputField
-                        label="headquarters address"
-                        name="aboutBranch"
-                        value={currentCourse.aboutBranch || ""}
-                        onChange={handleCourseChange}
-                        placeholder="2-3, Uppal Hills Colony, Peerzadiguda"
-                        error={courseErrors.aboutBranch}
-                        required
-                        disabled={currentCourse.createdBranch === "Main"}
-                      />
-                  
-                      <SearchableSelect
-                        label="State"
-                        name="state"
-                        value={currentCourse.state}
-                        onChange={handleCourseChange}
-                        options={STATE_OPTIONS}
-                        placeholder="Select state"
-                        required
-                        error={courseErrors.state}
-                        disabled={false} 
-                      />
-                  
-                      <SearchableSelect
-                        label="District"
-                        name="district"
-                        value={currentCourse.district}
-                        onChange={handleCourseChange}
-                        options={districtOptions}
-                        placeholder={currentCourse.state ? "Select district" : "Select state first"}
-                        required
-                        error={courseErrors.district}
-                        disabled={!currentCourse.state} 
-                      />
-                  
-                      <InputField
-                        label="Town"
-                        name="town"
-                        value={currentCourse.town}
-                        onChange={handleCourseChange}
-                        placeholder="Medchal"
-                        error={courseErrors.town}
-                        required
-                        disabled={false} 
-                      />
+          label="Location URL"
+          name="locationURL"
+          value={currentCourse.locationURL || ""}
+          onChange={handleCourseChange}
+          placeholder="https://maps.app.goo.gl/4mPv8SX6cD52i9B"
+          error={courseErrors.locationURL}
+          required
+          disabled={currentCourse.createdBranch === "Main"}
+        />
+
+        <InputField
+          label="headquarters address"
+          name="headquatersAddress"
+          value={currentCourse.headquatersAddress || ""}
+          onChange={handleCourseChange}
+          placeholder="2-3, Uppal Hills Colony, Peerzadiguda"
+          error={courseErrors.headquatersAddress}
+          required
+          disabled={currentCourse.createdBranch === "Main"}
+        />
+
+        <SearchableSelect
+          label="State"
+          name="state"
+          value={currentCourse.state}
+          onChange={handleCourseChange}
+          options={STATE_OPTIONS}
+          placeholder="Select state"
+          required
+          error={courseErrors.state}
+          disabled={false}
+        />
+
+        <SearchableSelect
+          label="District"
+          name="district"
+          value={currentCourse.district}
+          onChange={handleCourseChange}
+          options={districtOptions}
+          placeholder={currentCourse.state ? "Select district" : "Select state first"}
+          required
+          error={courseErrors.district}
+          disabled={!currentCourse.state}
+        />
+
+        <InputField
+          label="Town"
+          name="town"
+          value={currentCourse.town}
+          onChange={handleCourseChange}
+          placeholder="Medchal"
+          error={courseErrors.town}
+          required
+          disabled={false}
+        />
       </div>
 
       <div className="bg-[#DCDCFF] p-6 rounded-[6px] space-y-6 border border-blue-100 shadow-[0px_4px_20px_rgba(0,0,0,0.1)]">
@@ -273,8 +273,8 @@ export default function StudyAbroadForm({
                 variant="ghost"
                 onClick={() => setSelectedCourseId(course.id)}
                 className={`px-3 py-2 rounded-lg text-sm border transition-colors flex items-center gap-2 ${selectedCourseId === course.id
-                    ? "bg-blue-50 border-blue-200 text-blue-700 font-medium"
-                    : "bg-gray-50 border-gray-200 dark:bg-gray-800 text-gray-600 hover:bg-gray-100"
+                  ? "bg-blue-50 border-blue-200 text-blue-700 font-medium"
+                  : "bg-gray-50 border-gray-200 dark:bg-gray-800 text-gray-600 hover:bg-gray-100"
                   }`}
               >
                 {course.courseName || `Course ${course.id}`}

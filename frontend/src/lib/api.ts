@@ -312,6 +312,7 @@ export interface PaymentInitPayload {
   couponCode?: string | null;
   courseIds?: string[];
   noOfMonths?: number;
+  institutionType?: string;
   // institutionId: string;
 }
 
@@ -322,6 +323,7 @@ export interface PaymentVerifyPayload {
   planType?: string;
   coupon?: string | null;
   amount?: number;
+  institutionType?: string;
 }
 
 export async function apiRequest<T>(
@@ -1130,9 +1132,12 @@ export const programsAPI = {
   create: async (payload: Record<string, unknown>): Promise<ApiResponse> => {
     const institutionId = String(payload.institution || '');
     if (!institutionId) throw new Error('institution required');
-    const normalized = { ...payload, type: payload?.type || 'PROGRAM' };
-    const wrapper = { totalCourses: 1, courses: [normalized] };
-    return apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses`, { method: 'POST', body: JSON.stringify(wrapper) });
+    // Send institutionType and courses at root level to match backend validator expectations
+    const requestBody = {
+      institutionType: payload.institutionType,
+      courses: payload.courses,
+    };
+    return apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses`, { method: 'POST', body: JSON.stringify(requestBody) });
   },
   list: async (institutionId: string): Promise<ApiResponse> => {
     const cacheKey = `programs_${institutionId}`;
@@ -1319,7 +1324,8 @@ export const getInstitutionBranches = async (
 };
 
 export const getInstitutionCourses = async (
-  institutionId: string
+  institutionId: string,
+  instituteType: string
 ): Promise<unknown[]> => {
   const res = await apiRequest<unknown>(
     `/v1/institutions/${institutionId}/courses`,
@@ -1351,7 +1357,7 @@ export const paymentAPI = {
    * - Courses will be activated with limited features
    */
   initiateFreeListing: async (
-    payload: { courseIds: string[] }
+    payload: { courseIds: string[]; institutionType?: string }
   ): Promise<ApiResponse> => {
     return apiRequest("/v1/payment/create-order", {
       method: "POST",
@@ -1360,6 +1366,7 @@ export const paymentAPI = {
         planType: "free",
         courseIds: payload.courseIds,
         listingType: "free", // Backend will use this to mark courses as limited
+        institutionType: payload.institutionType,
       }),
     });
   },
@@ -1367,10 +1374,10 @@ export const paymentAPI = {
   /**
    * Apply coupon to get discount amount from backend
    */
-  applyCoupon: async (code: string): Promise<ApiResponse<{ discountAmount: number }>> => {
+  applyCoupon: async (code: string, institutionType?: string): Promise<ApiResponse<{ discountAmount: number }>> => {
     return apiRequest("/v1/coupon/apply-coupon", {
       method: "POST",
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, institutionType }),
     });
   },
 
@@ -1403,6 +1410,7 @@ export const paymentAPI = {
         ...(payload.planType ? { planType: payload.planType } : {}),
         ...(payload.coupon ? { coupon: String(payload.coupon) } : {}),
         ...(typeof payload.amount !== "undefined" ? { amount: String(payload.amount) } : {}),
+        ...(payload.institutionType ? { institutionType: String(payload.institutionType) } : {}),
       }).toString();
       const endpoint = `/v1/payment/verify-payment?${qs}`;
 

@@ -144,16 +144,16 @@ export default function SchoolForm({
         </div>
 
         {/* Row 2: Duration & Starting Date */}
-        <InputField label="Course Duration" name="courseDuration" value={currentCourse.courseDuration} onChange={handleCourseChange} placeholder="e.g. 3 months" required />
-        <InputField label="Starting date" name="startDate" value={currentCourse.startDate} onChange={handleCourseChange} type="date" required />
+        <InputField label="Course Duration" name="courseDuration" value={currentCourse.courseDuration || ""} onChange={handleCourseChange} placeholder="e.g. 3 months" required />
+        <InputField label="Starting date" name="startDate" value={currentCourse.startDate || ""} onChange={handleCourseChange} type="date" required />
 
         {/* Row 3: Language & Ownership */}
         <InputField label="Language of Class" name="classLanguage" value={(currentCourse as any).classLanguage || currentCourse.classlanguage || ""} onChange={handleCourseChange} placeholder="Eg English" />
-        <InputField label="Ownership Type" name="ownershipType" value={currentCourse.ownershipType} onChange={handleCourseChange} isSelect options={["Private", "Government", "Trust"]} placeholder="Select Ownership type" required />
+        <InputField label="Ownership Type" name="ownershipType" value={currentCourse.ownershipType || ""} onChange={handleCourseChange} isSelect options={["Private", "Government", "Trust"]} placeholder="Select Ownership type" required />
 
         {/* Row 4: School Type & Curriculum */}
-        <InputField label="School Type" name="schoolType" value={currentCourse.schoolType} onChange={handleCourseChange} isSelect options={["Co-Education", "Boys Only", "Girls Only"]} placeholder="Select school type" required />
-        <InputField label="Curriculum Type *" name="curriculumType" value={currentCourse.curriculumType} onChange={handleCourseChange} isSelect options={["State board", "CBSE", "ICSE", "IB", "IGCSE"]} placeholder="Select Curriculum type" required />
+        <InputField label="School Type" name="schoolType" value={currentCourse.schoolType || ""} onChange={handleCourseChange} isSelect options={["Co-Education", "Boys Only", "Girls Only"]} placeholder="Select school type" required />
+        <InputField label="Curriculum Type *" name="curriculumType" value={currentCourse.curriculumType || ""} onChange={handleCourseChange} isSelect options={["State board", "CBSE", "ICSE", "IB", "IGCSE"]} placeholder="Select Curriculum type" required />
       </div>
 
       {/* Row 5: Operational Times (Left aligned) */}
@@ -172,7 +172,7 @@ export default function SchoolForm({
                   type="text"
                   name="openingTime"
                   placeholder="From"
-                  value={currentCourse.openingTime}
+                  value={currentCourse.openingTime || ""}
                   onChange={handleCourseChange}
                   className="w-full bg-transparent text-[15px] outline-none placeholder:text-[#9CA3AF]"
                 />
@@ -201,7 +201,7 @@ export default function SchoolForm({
                   type="text"
                   name="closingTime"
                   placeholder="To"
-                  value={currentCourse.closingTime}
+                  value={currentCourse.closingTime || ""}
                   onChange={handleCourseChange}
                   className="w-full bg-transparent text-[15px] outline-none placeholder:text-[#9CA3AF]"
                 />
@@ -276,7 +276,7 @@ export default function SchoolForm({
         <SearchableSelect
           label="State"
           name="state"
-          value={currentCourse.state}
+          value={currentCourse.state || ""}
           onChange={handleCourseChange}
           options={STATE_OPTIONS}
           placeholder="Select state"
@@ -288,7 +288,7 @@ export default function SchoolForm({
         <SearchableSelect
           label="District"
           name="district"
-          value={currentCourse.district}
+          value={currentCourse.district || ""}
           onChange={handleCourseChange}
           options={districtOptions}
           placeholder={currentCourse.state ? "Select district" : "Select state first"}
@@ -300,7 +300,7 @@ export default function SchoolForm({
         <InputField
           label="Town"
           name="town"
-          value={currentCourse.town}
+          value={currentCourse.town || ""}
           onChange={handleCourseChange}
           placeholder="Medchal"
           error={courseErrors.town}
@@ -368,7 +368,7 @@ export default function SchoolForm({
           <InputField
             label="Fee's"
             name="priceOfCourse"
-            value={currentCourse.priceOfCourse}
+            value={currentCourse.priceOfCourse || ""}
             onChange={handleCourseChange}
             placeholder="Enter Fee's"
             type="number"

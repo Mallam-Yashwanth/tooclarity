@@ -72,10 +72,12 @@ type PaymentCheckoutProps = {
     pricePerCourse: number;
     totalAmount: number;
     courseIds: string[];
+    institutionType?: string;
   };
+  institutionType?: string;
 };
 
-export default function PaymentCheckout({ onProcessing, onSuccess, onFailure, customPaymentDetails }: PaymentCheckoutProps) {
+export default function PaymentCheckout({ onProcessing, onSuccess, onFailure, customPaymentDetails, institutionType }: PaymentCheckoutProps) {
   const [selectedPlan, setSelectedPlan] = useState<PlanKey>("yearly");
   const [selectedMonths, setSelectedMonths] = useState("1");
   const [coupon, setCoupon] = useState("");
@@ -161,7 +163,8 @@ export default function PaymentCheckout({ onProcessing, onSuccess, onFailure, cu
       setCouponMessage(null);
       setCouponDiscount(0);
 
-      const res = await paymentAPI.applyCoupon(code);
+      const resolvedInstitutionType = customPaymentDetails?.institutionType || institutionType;
+      const res = await paymentAPI.applyCoupon(code, resolvedInstitutionType);
       if (res.success && res.data && typeof (res.data as { discountAmount?: number }).discountAmount === "number") {
         const discount = (res.data as { discountAmount?: number }).discountAmount;
         setCouponDiscount(discount || 0);
@@ -188,6 +191,7 @@ export default function PaymentCheckout({ onProcessing, onSuccess, onFailure, cu
         couponCode: appliedCoupon ?? undefined,
         courseIds: customPaymentDetails?.courseIds,
         noOfMonths: selectedPlan === "monthly" ? Number(selectedMonths) : 1,
+        institutionType: customPaymentDetails?.institutionType || institutionType,
       });
 
       if (!res.success || !res.data) {
@@ -240,6 +244,7 @@ export default function PaymentCheckout({ onProcessing, onSuccess, onFailure, cu
               planType: selectedPlan,
               coupon: appliedCoupon ?? null,
               amount: _payable,
+              institutionType: customPaymentDetails?.institutionType || institutionType,
             });
 
             const status = (verifyRes.message || "").toLowerCase();

@@ -36,6 +36,8 @@ import {
 
 // ✅ New imports for split forms
 import CoachingCourseForm from "./L2DialogBoxParts/Course/CoachingCourseForm";
+import ExamPrepCourseForm from "./L2DialogBoxParts/Course/ExamPrepCourseForm";
+import UpskillingCourseForm from "./L2DialogBoxParts/Course/UpskillingCourseForm";
 import StudyHallForm from "./L2DialogBoxParts/Course/StudyHallForm";
 import TuitionCenterForm from "./L2DialogBoxParts/Course/TuitionCenterForm";
 import UnderPostGraduateForm from "./L2DialogBoxParts/Course/UnderPostGraduateForm";
@@ -74,6 +76,7 @@ interface L2DialogBoxProps {
   adminFlow?: boolean;
 }
 
+
 export interface AcademicDetail {
   subject: string;
   classTiming: string;
@@ -111,17 +114,21 @@ export interface Course {
   brochurePreviewUrl: string;
   createdBranch: string;
   aboutBranch: string;
+  headquatersAddress: string;
 
   // --- SECTION 2: COLLEGE & K12 FIELDS ---
   collegeType: string;
   collegeCategory: string;
   specialization: string;
   year: string;
+  intermediateName?: string;
+  intermediateType?: string;
   intermediateImage: File | null;
   intermediateImagePreviewUrl: string;
   intermediateImageUrl?: string;
 
   // --- SECTION 3: SCHOOL & KINDERGARTEN FIELDS ---
+  schoolName: string;
   schoolType: string;
   curriculumType: string;
   schoolCategory: string;
@@ -129,9 +136,11 @@ export interface Course {
   classSizeRatio?: string;
   extendedCare: string;
   mealsProvided: string;
+  pickupDropService: string;
   schoolImage: File | null;
   schoolImagePreviewUrl: string;
   schoolImageUrl?: string;
+  teacherStudentRatio?: string;
   kindergartenImage: File | null;
   kindergartenImagePreviewUrl: string;
   kindergartenImageUrl?: string;
@@ -144,6 +153,7 @@ export interface Course {
   courselanguage: string;
   branchDescription: string;
   classlanguage: string;
+  classLanguage?: string;
   certification: string;
   placementDrives: string;
   totalStudentsPlaced: string | number;
@@ -163,6 +173,8 @@ export interface Course {
   collegeImage: File | null;
   collegeImagePreviewUrl: string;
   collegeImageUrl?: string;
+  library: string;
+  libraryFacility?: string;
 
   // --- SECTION 5: STUDY ABROAD FIELDS ---
   consultancyName: string;
@@ -176,8 +188,10 @@ export interface Course {
   preDepartureOrientation: string;
   accommodationAssistance: string;
   educationLoans: string;
+  educationLoan?: string;
   postArrivalSupport: string;
   partTimeHelp: string;
+  partTimeOpportunities?: string;
   consultancyImage: File | null;
   consultancyImagePreviewUrl: string;
   consultancyImageUrl?: string;
@@ -189,6 +203,7 @@ export interface Course {
   panAadhaarUrl: string;
 
   // --- SECTION 6: TUITION & ACADEMIC ARRAYS ---
+  tutionCenterName?: string;
   subject: string;
   tuitionType: string;
   instructorProfile: string;
@@ -230,33 +245,50 @@ export interface Course {
   eligibilityCriteria: string;
   ownershipType: string;
   affiliationType: string;
-  library: string;
+
+  // Legacy fields kept for compatibility or not mentioned but likely needed
+  listingType?: "free" | "paid";
+  contactInfo?: string;
+  yearString?: string; // Kept for compatibility with CollegeForm
+  classes?: any[]; // Kept for safety if used dynamically
+  subjectList?: any[];
+  countries?: any[]; // Kept for safety
+  faculty?: any[];
+  campusImage?: string;
+  campusPhoto?: string;
 }
 
 const FORM_WHITELISTS: Record<string, (keyof Course)[]> = {
   "Intermediate college(K12)": [
-    "courseName", "mode", "courseDuration", "startDate", "classlanguage", "ownershipType", "collegeType", "curriculumType", "operationalDays", "openingTime", "openingTimePeriod", "closingTime", "closingTimePeriod", "year", "classType", "specialization", "priceOfCourse", "createdBranch", "aboutBranch", "state", "district", "town", "locationURL", "playground", "busService", "hostelFacility", "emioptions", "partlyPayment", "intermediateImageUrl", "imageUrl", "brochureUrl"
+    "intermediateName", "courseName", "mode", "courseDuration", "startDate", "classlanguage",
+    "ownershipType", "collegeType", "curriculumType", "operationalDays", "openingTime", "openingTimePeriod", "closingTime", "closingTimePeriod", "year", "classType", "specialization", "priceOfCourse", "createdBranch", "aboutBranch", "headquatersAddress", "state", "district", "town", "locationURL", "playground", "busService", "pickupDropService", "hostelFacility", "emioptions", "partlyPayment", "intermediateImageUrl", "campusPhoto", "imageUrl", "brochureUrl"
   ],
   "School's": [
-    "courseName", "mode", "courseDuration", "startDate", "classlanguage", "ownershipType", "schoolType", "curriculumType", "openingTime", "openingTimePeriod", "closingTime", "closingTimePeriod", "createdBranch", "aboutBranch", "state", "district", "town", "locationURL", "classType", "priceOfCourse", "playground", "busService", "hostelFacility", "emioptions", "partlyPayment", "schoolImageUrl", "imageUrl", "brochureUrl"
+    "courseName", "schoolName", "mode", "courseDuration", "startDate", "classlanguage", "classLanguage", "ownershipType", "schoolType", "curriculumType", "openingTime", "openingTimePeriod", "closingTime", "closingTimePeriod", "createdBranch", "aboutBranch", "headquatersAddress", "state", "district", "town", "locationURL", "classType", "priceOfCourse", "playground", "busService", "pickupDropService", "hostelFacility", "emioptions", "partlyPayment", "schoolImageUrl", "imageUrl", "brochureUrl"
   ],
   "Coaching centers": [
-    "categoriesType", "domainType", "classSize", "subDomainType", "courseName", "mode", "courseDuration", "startDate", "createdBranch", "aboutBranch", "state", "district", "town", "locationURL", "classTiming", "courselanguage", "classlanguage", "certification", "placementDrives", "totalStudentsPlaced", "highestPackage", "averagePackage", "mockInterviews", "resumeBuilding", "linkedinOptimization", "mockTests", "library", "studyMaterial", "priceOfCourse", "installments", "emioptions", "centerImageUrl", "imageUrl", "brochureUrl"
+    "categoriesType", "domainType", "classSize", "subDomainType", "courseName", "mode", "courseDuration", "startDate", "createdBranch", "aboutBranch", "headquatersAddress", "state", "district", "town", "locationURL", "classTiming", "courselanguage", "classlanguage", "certification", "placementDrives", "totalStudentsPlaced", "highestPackage", "averagePackage", "mockInterviews", "resumeBuilding", "linkedinOptimization", "mockTests", "library", "libraryFacility", "studyMaterial", "priceOfCourse", "installments", "emioptions", "centerImageUrl", "imageUrl", "brochureUrl"
+  ],
+  "Exam Preparation": [
+    "categoriesType", "domainType", "classSize", "subDomainType", "courseName", "mode", "courseDuration", "startDate", "createdBranch", "aboutBranch", "headquatersAddress", "state", "district", "town", "locationURL", "classTiming", "courselanguage", "classlanguage", "certification", "placementDrives", "totalStudentsPlaced", "highestPackage", "averagePackage", "mockInterviews", "resumeBuilding", "linkedinOptimization", "mockTests", "library", "libraryFacility", "studyMaterial", "priceOfCourse", "installments", "emioptions", "centerImageUrl", "imageUrl", "brochureUrl"
+  ],
+  "Upskilling": [
+    "categoriesType", "domainType", "classSize", "subDomainType", "courseName", "mode", "courseDuration", "startDate", "createdBranch", "aboutBranch", "headquatersAddress", "state", "district", "town", "locationURL", "classTiming", "courselanguage", "classlanguage", "certification", "placementDrives", "totalStudentsPlaced", "highestPackage", "averagePackage", "mockInterviews", "resumeBuilding", "linkedinOptimization", "mockTests", "library", "libraryFacility", "studyMaterial", "priceOfCourse", "installments", "emioptions", "centerImageUrl", "imageUrl", "brochureUrl"
   ],
   "Kindergarten/childcare center": [
-    "courseName","courseType", "categoriesType", "priceOfCourse", "createdBranch", "aboutBranch", "state", "district", "town", "locationURL", "aboutCourse", "courseDuration", "mode", "classSize", "curriculumType", "ownershipType", "operationalDays", "openingTime", "openingTimePeriod", "closingTime", "closingTimePeriod", "extendedCare", "mealsProvided", "playground", "busService", "installments", "emioptions", "classSizeRatio", "kindergartenImageUrl", "imageUrl", "brochureUrl"
+    "courseName", "courseType", "categoriesType", "priceOfCourse", "createdBranch", "aboutBranch", "headquatersAddress", "state", "district", "town", "locationURL", "aboutCourse", "courseDuration", "mode", "classSize", "classSizeRatio", "curriculumType", "ownershipType", "operationalDays", "openingTime", "openingTimePeriod", "closingTime", "closingTimePeriod", "extendedCare", "mealsProvided", "playground", "pickupDropService", "teacherStudentRatio", "installments", "emioptions", "kindergartenImageUrl", "imageUrl", "brochureUrl"
   ],
   "Study Abroad": [
-    "consultancyName", "studentAdmissions", "createdBranch", "aboutBranch", "state", "district", "town", "locationURL", "countriesOffered", "academicOfferings", "budget", "studentsSent", "applicationAssistance", "visaProcessingSupport", "preDepartureOrientation", "accommodationAssistance", "educationLoans", "postArrivalSupport", "partTimeHelp", "consultancyImageUrl", "imageUrl", "brochureUrl", "businessProofUrl", "panAadhaarUrl"
+    "consultancyName", "studentAdmissions", "createdBranch", "aboutBranch", "headquatersAddress", "state", "district", "town", "locationURL", "countriesOffered", "academicOfferings", "budget", "studentsSent", "applicationAssistance", "visaProcessingSupport", "preDepartureOrientation", "accommodationAssistance", "educationLoans", "educationLoan", "postArrivalSupport", "partTimeHelp", "partTimeOpportunities", "consultancyImageUrl", "imageUrl", "brochureUrl", "businessProofUrl", "panAadhaarUrl"
   ],
   "Tution Center's": [
-    "courseName", "mode", "operationalDays", "openingTime", "openingTimePeriod", "closingTime", "closingTimePeriod", "subject", "classSize", "createdBranch", "aboutBranch", "state", "district", "town", "locationURL", "academicDetails", "facultyDetails", "partlyPayment", "tuitionImageUrl", "imageUrl", "brochureUrl"
+    "courseName", "tutionCenterName", "mode", "operationalDays", "openingTime", "openingTimePeriod", "closingTime", "closingTimePeriod", "subject", "classSize", "createdBranch", "aboutBranch", "headquatersAddress", "state", "district", "town", "locationURL", "academicDetails", "facultyDetails", "partlyPayment", "tuitionImageUrl", "campusImage", "imageUrl", "brochureUrl"
   ],
   "Study Halls": [
     "hallName", "seatingOption", "totalSeats", "availableSeats", "pricePerSeat", "openingTime", "closingTime", "operationalDays", "startDate", "endDate", "hasWifi", "hasChargingPoints", "hasAC", "hasPersonalLocker", "imageUrl", "brochureUrl", "state", "district", "town", "locationURL"
   ],
   "Under Graduation/Post Graduation": [
-    "graduationType", "streamType", "selectBranch","branchDescription", "createdBranch", "aboutBranch", "state", "district", "town", "locationURL", "educationType", "mode", "classSize", "eligibilityCriteria", "ownershipType", "collegeCategory", "affiliationType", "courseDuration", "library", "hostelFacility", "entranceExam", "managementQuota", "playground", "busService", "placementDrives", "totalNumberRequires", "highestPackage", "averagePackage", "totalStudentsPlaced", "mockInterviews", "resumeBuilding", "linkedinOptimization", "priceOfCourse", "installments", "emioptions", "collegeImageUrl", "imageUrl", "brochureUrl"
+    "graduationType", "streamType", "selectBranch", "branchDescription", "createdBranch", "aboutBranch", "headquatersAddress", "state", "district", "town", "locationURL", "educationType", "mode", "classSize", "eligibilityCriteria", "ownershipType", "collegeCategory", "affiliationType", "courseDuration", "library", "hostelFacility", "entranceExam", "managementQuota", "playground", "busService", "pickupDropService", "placementDrives", "totalNumberRequires", "highestPackage", "averagePackage", "totalStudentsPlaced", "mockInterviews", "resumeBuilding", "linkedinOptimization", "priceOfCourse", "installments", "emioptions", "collegeImageUrl", "imageUrl", "brochureUrl"
   ]
 };
 
@@ -285,6 +317,9 @@ export const getInitialCourseData = (
     id,
     _id: typeof existing?._id === "string" ? existing._id : undefined,
     courseName: (existing?.courseName as string) || (existing?.programName as string) || (existing?.hallName as string) || (existing?.consultancyName as string) || "",
+    schoolName: (existing?.schoolName as string) || "",
+    intermediateName: (existing?.intermediateName as string) || "",
+    tutionCenterName: (existing?.tutionCenterName as string) || "",
     aboutCourse: (existing?.aboutCourse as string) || "",
     courseDuration: (existing?.courseDuration as string) || "",
     startDate: typeof existing?.startDate === "string" ? existing.startDate.split('T')[0] : "",
@@ -295,6 +330,7 @@ export const getInitialCourseData = (
     district: (existing?.district as string) || "",
     town: (existing?.town as string) || "",
     locationURL: (existing?.locationURL as string) || (existing?.locationUrl as string) || "",
+    headquatersAddress: (existing?.headquatersAddress as string) || "",
 
     // --- DATABASE URLS ---
     imageUrl: (existing?.imageUrl as string) || "",
@@ -308,6 +344,8 @@ export const getInitialCourseData = (
     consultancyImageUrl: (existing?.consultancyImageUrl as string) || "",
     collegeImageUrl: (existing?.collegeImageUrl as string) || "",
     tuitionImageUrl: (existing?.tuitionImageUrl as string) || "",
+    campusImage: (existing?.campusImage as string) || "",
+    campusPhoto: (existing?.campusPhoto as string) || "",
 
     createdBranch: (existing?.createdBranch as string) || "",
     aboutBranch: (existing?.aboutBranch as string) || "",
@@ -315,7 +353,6 @@ export const getInitialCourseData = (
     brochure: null,
 
     // --- UI PREVIEW MAPPING ---
-    // This maps existing S3 URLs to the preview fields so they show up in the Edit Modal
     imagePreviewUrl: (existing?.imageUrl as string) || "",
     brochurePreviewUrl: (existing?.brochureUrl as string) || "",
     businessProofPreviewUrl: (existing?.businessProofUrl as string) || "",
@@ -328,11 +365,15 @@ export const getInitialCourseData = (
     collegeImagePreviewUrl: (existing?.collegeImageUrl as string) || "",
     tuitionImagePreviewUrl: (existing?.tuitionImageUrl as string) || "",
 
-    // ... (rest of your existing fields)
     collegeType: (existing?.collegeType as string) || "",
     collegeCategory: (existing?.collegeCategory as string) || "",
     specialization: (existing?.specialization as string) || "",
+
+    // year defaults to string
     year: (existing?.year as string) || "",
+    // Compatibility fields
+    yearString: (existing?.yearString as string) || (existing?.year as string) || "",
+
     branchDescription: (existing?.branchDescription as string) || "",
     classTiming: (existing?.classTiming as string) || "",
     intermediateImage: null,
@@ -340,16 +381,22 @@ export const getInitialCourseData = (
     curriculumType: (existing?.curriculumType as string) || "",
     schoolCategory: (existing?.schoolCategory as string) || "",
     classType: (existing?.classType as string) || "",
+
+    // classes: Array.isArray(existing?.classes) ? existing.classes as any[] : [], // removed from interface but kept safe below
+    classes: Array.isArray(existing?.classes) ? existing.classes as any[] : [],
+
     courseType: (existing?.courseType as string) || "",
     extendedCare: (existing?.extendedCare as string) || "No",
     mealsProvided: (existing?.mealsProvided as string) || "No",
+    pickupDropService: (existing?.pickupDropService as string) || "No",
     schoolImage: null,
     kindergartenImage: null,
-    categoriesType: (existing?.categoriesType as string) || "",
+    categoriesType: (existing?.categoriesType as string) || (type === "Exam Preparation" ? "Exam Preparation" : type === "Upskilling" ? "Upskilling" : ""),
     domainType: (existing?.domainType as string) || "",
     subDomainType: (existing?.subDomainType as string) || "",
     courselanguage: (existing?.courselanguage as string) || "",
-    classlanguage: (existing?.classlanguage as string) || "",
+    classlanguage: (existing?.classlanguage as string) || (existing?.classLanguage as string) || "",
+    classLanguage: (existing?.classLanguage as string) || (existing?.classlanguage as string) || "",
     certification: (existing?.certification as string) || "No",
     placementDrives: (existing?.placementDrives as string) || "No",
     totalStudentsPlaced: String(existing?.totalStudentsPlaced || ""),
@@ -364,6 +411,9 @@ export const getInitialCourseData = (
     consultancyName: (existing?.consultancyName as string) || "",
     studentAdmissions: String(existing?.studentAdmissions || ""),
     countriesOffered: (existing?.countriesOffered as string) || "",
+
+    countries: Array.isArray(existing?.countries) ? existing.countries : [], // kept for safety
+
     academicOfferings: (existing?.academicOfferings as string) || "",
     budget: String(existing?.budget || ""),
     studentsSent: String(existing?.studentsSent || ""),
@@ -372,16 +422,23 @@ export const getInitialCourseData = (
     preDepartureOrientation: (existing?.preDepartureOrientation as string) || "No",
     accommodationAssistance: (existing?.accommodationAssistance as string) || "No",
     educationLoans: (existing?.educationLoans as string) || "No",
+    educationLoan: (existing?.educationLoan as string) || "No",
     postArrivalSupport: (existing?.postArrivalSupport as string) || "No",
     partTimeHelp: (existing?.partTimeHelp as string) || "No",
+    partTimeOpportunities: (existing?.partTimeOpportunities as string) || "No",
     consultancyImage: null,
     businessProof: null,
     panAadhaar: null,
+
+    // subject defaults to string
     subject: (existing?.subject as string) || "",
+
     tuitionType: (existing?.tuitionType as string) || "",
     instructorProfile: (existing?.instructorProfile as string) || "",
     academicDetails: Array.isArray(existing?.academicDetails) ? existing.academicDetails as AcademicDetail[] : [],
     facultyDetails: Array.isArray(existing?.facultyDetails) ? existing.facultyDetails as FacultyDetail[] : [],
+    subjectList: Array.isArray(existing?.subjectList) ? existing.subjectList as any[] : [],
+    faculty: Array.isArray(existing?.faculty) ? existing.faculty as any[] : [],
     tuitionImage: null,
     hallName: (existing?.hallName as string) || "",
     seatingOption: (existing?.seatingOption as string) || "",
@@ -408,6 +465,7 @@ export const getInitialCourseData = (
     selectBranch: (existing?.selectBranch as string) || "",
     educationType: (existing?.educationType as string) || "Full time",
     classSize: (existing?.classSize as string) || "",
+    classSizeRatio: (existing?.classSizeRatio as string) || "",
     eligibilityCriteria: (existing?.eligibilityCriteria as string) || "",
     ownershipType: (existing?.ownershipType as string) || "",
     affiliationType: (existing?.affiliationType as string) || "",
@@ -534,6 +592,16 @@ export default function L2DialogBox({
     aboutBranch: "",
 
     // Specialized Fields
+    schoolName: "",
+    intermediateName: "",
+    tutionCenterName: "",
+    headquatersAddress: "",
+    pickupDropService: "No",
+    teacherStudentRatio: "",
+    classes: [],
+    faculty: [],
+    campusImage: "",
+    campusPhoto: "",
     collegeType: "",
     collegeCategory: "",
     specialization: "",
@@ -561,6 +629,7 @@ export default function L2DialogBox({
     branchDescription: "",
     courselanguage: "",
     classlanguage: "",
+    classLanguage: "",
     certification: "No",
     placementDrives: "No",
     totalStudentsPlaced: "",
@@ -643,6 +712,8 @@ export default function L2DialogBox({
 
   const isUnderPostGraduate = institutionType === "Under Graduation/Post Graduation";
   const isCoachingCenter = institutionType === "Coaching centers";
+  const isExamPrep = institutionType === "Exam Preparation";
+  const isUpskilling = institutionType === "Upskilling";
   const isStudyHall = institutionType === "Study Halls";
   const isTutionCenter = institutionType === "Tution Center's";
   const isKindergarten = institutionType === "Kindergarten/childcare center";
@@ -650,7 +721,7 @@ export default function L2DialogBox({
   const isIntermediateCollege = institutionType === "Intermediate college(K12)";
   const isStudyAbroad = institutionType === "Study Abroad";
   const isBasicCourseForm = isKindergarten || isSchool || isIntermediateCollege;
-  const isCoachingOrUGPG = isCoachingCenter || isUnderPostGraduate;
+  const isCoachingOrUGPG = isCoachingCenter || isExamPrep || isUpskilling || isUnderPostGraduate;
 
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -1182,18 +1253,18 @@ export default function L2DialogBox({
   };
 
   const handleSaveAndAddAnother = () => {
-  // Validate ONLY the current tab's data
-  const currentCourseToValidate = courses.filter(c => c.id === selectedCourseId);
-  const validationError = validateCourses(currentCourseToValidate);
+    // Validate ONLY the current tab's data
+    const currentCourseToValidate = courses.filter(c => c.id === selectedCourseId);
+    const validationError = validateCourses(currentCourseToValidate);
 
-  if (validationError) {
-    toast.error(validationError);
-    return;
-  }
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
 
-  addNewCourse(); 
-  toast.success("Course details saved locally. You can now add another!");
-};
+    addNewCourse();
+    toast.success("Course details saved locally. You can now add another!");
+  };
 
   const handleCourseSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -1269,71 +1340,144 @@ export default function L2DialogBox({
       if (isSubscriptionProgram) {
         if (!institutionId) throw new Error("institutionId required");
 
-        // 1. Identify Common Root Fields (Shared by all courses)
-        const firstCourse = uploadedCourses[0];
-
-        // 2. Map Unique "Blue Box" Fields into a Sub-Array
-        const type = institutionType || "";
-        const blueBoxKeys = BLUE_BOX_FIELDS[type] || [];
-
-        const courseSubArray = uploadedCourses.map(course => {
-          const uniqueFields: Record<string, any> = {};
-          blueBoxKeys.forEach(key => {
-            uniqueFields[key] = course[key as keyof Course];
-          });
-          return uniqueFields;
-        });
-
-        // 1. Define a mapping for types that differ between UI and Backend
-const typeMapping: Record<string, string> = {
-  "Kindergarten/childcare center": "Kindergarten",
-  "School's": "School",
-  "Tution Center's": "Tuition Center",
-  "Intermediate college(K12)": "College"
-};
-
-        // 3. Build the Normalized Payload
-        // Common fields stay at the top, dynamic fields go inside "courses"
-        const normalizedPayload = {
-          ...getCleanedPayload(firstCourse),
-          institution: institutionId,
-          branch: selectedBranchIdForProgram || null,
-          branchName: resolveLocalBranchName(),
-          type: "PROGRAM" as const,
-          courseType: firstCourse.courseType || typeMapping[institutionType || ""] || institutionType,
-          courses: courseSubArray, // Only contains the bluebox variations
+        // 1. Define Valid Backend Types mapping
+        const typeMapping: Record<string, string> = {
+          "Kindergarten/childcare center": "KINDERGARTEN",
+          "School's": "SCHOOL",
+          "Tution Center's": "TUTION_CENTER",
+          "Intermediate college(K12)": "INTERMEDIATE",
+          "Under Graduation/Post Graduation": "UG_PG",
+          "Study Abroad": "STUDY_ABROAD",
+          "Coaching centers": "EXAM_PREP", // Fallback or distinct
+          "Exam Preparation": "EXAM_PREP",
+          "Upskilling": "UPSKILLING",
+          "Study Halls": "STUDY_HALL"
         };
 
-        // 4. Remove the sub-array fields from the root to prevent redundancy
-        blueBoxKeys.forEach(key => {
-          delete (normalizedPayload as any)[key];
+        const backendType = typeMapping[institutionType || ""] || institutionType || "PROGRAM";
+
+        // 2. Map Courses to the requested structure
+        // 2. Map Courses to the requested structure
+        const courseList = uploadedCourses.map((c) => {
+          let cleanedData = getCleanedPayload(c);
+
+          // Transformation for Study Abroad: Flat UI fields -> Backend Schema
+          if (institutionType === "Study Abroad") {
+            // No cast needed as Course handles all fields
+            if (
+              c.countriesOffered &&
+              (!c.countries || c.countries.length === 0)
+            ) {
+              cleanedData = {
+                ...cleanedData,
+                countries: [{
+                  country: c.countriesOffered,
+                  academicOffering: c.academicOfferings || "",
+                  budget: c.budget || "",
+                  studentSendTillNow: c.studentsSent || ""
+                }]
+              };
+            }
+          }
+
+          // Transformation for Tuition Center: Legacy UI Arrays -> Backend Schema
+          if (institutionType === "Tution Center's") {
+            const subjectList = c.academicDetails?.map((d) => ({
+              subject: d.subject,
+              classTiming: d.classTiming,
+              specialization: d.specialization,
+              fee: d.monthlyFees
+            }));
+
+            const facultyList = c.facultyDetails?.map((f) => ({
+              facultyName: f.name,
+              experience: f.experience,
+              qualifications: f.qualification,
+              subjectYouTeach: f.subjectTeach
+            }));
+
+            cleanedData = {
+              ...cleanedData,
+              ...(subjectList ? { subjectOffer: subjectList } : {}),
+              ...(facultyList ? { faculty: facultyList } : {})
+            };
+          }
+
+          // Transformation for School: Aggregate course tabs into classes array
+          if (institutionType === "School's") {
+            // Build classes array from all course tabs if not already present
+            if (!c.classes || c.classes.length === 0) {
+              const classesFromTabs = uploadedCourses
+                .filter((tab) => tab.classType && tab.priceOfCourse)
+                .map((tab) => ({
+                  classType: tab.classType || "",
+                  priceOfCourse: Number(tab.priceOfCourse) || 0,
+                }));
+              cleanedData = {
+                ...cleanedData,
+                classes: classesFromTabs.length > 0 ? classesFromTabs : [{ classType: c.classType || "", priceOfCourse: Number(c.priceOfCourse) || 0 }],
+                schoolName: c.schoolName || c.courseName || "",
+              };
+            }
+          }
+
+          if (isIntermediateCollege) {
+            // Aggregate year details into array structure required by backend
+            const yearDetails = [{
+              year: c.yearString || "",
+              classType: c.classType || "",
+              specialization: c.specialization || "",
+              fee: Number(c.priceOfCourse) || 0
+            }];
+            cleanedData = {
+              ...cleanedData,
+              year: yearDetails,
+              // Ensure name is mapped from intermediateName
+              name: c.intermediateName || "",
+            } as any;
+          }
+
+          return {
+            ...cleanedData,
+            name: c.courseName || c.schoolName || c.intermediateName, // Explicitly map courseName/schoolName/intermediateName to 'name'
+            branch: selectedBranchIdForProgram || c.createdBranch, // Branch ID
+          };
         });
 
-        // 5. Send to API
+        // 3. Construct Unified Payload
+        // STRICTLY matching user request structure: { institutionType, courses: [{name, branch, ...}] }
+        const normalizedPayload = {
+          institution: institutionId,
+          institutionType: backendType,
+          courses: courseList
+        };
 
+        // 4. Send to API
+        const firstCourse = uploadedCourses[0];
         const res =
-        editMode && firstCourse._id
-          ? await programsAPI.update(firstCourse._id, normalizedPayload)
-          : await programsAPI.create(normalizedPayload);
+          editMode && firstCourse._id
+            ? await programsAPI.update(firstCourse._id, normalizedPayload)
+            : await programsAPI.create(normalizedPayload);
 
-      if (!res?.success) {
-        throw new Error(res?.message || "Program save failed");
-      }
+        if (!res?.success) {
+          throw new Error(res?.message || "Program save failed");
+        }
 
-      toast.success(
-        editMode ? "Program updated successfully" : "Program created successfully"
-      );
+        toast.success(
+          editMode ? "Program updated successfully" : "Program created successfully"
+        );
 
-      await persistAdminProgramsToIndexedDb(uploadedCourses);
+        // Update local state if needed
+        // await persistAdminProgramsToIndexedDb(uploadedCourses); 
 
-      if (editMode) {
-        onEditSuccess?.();
-      } else {
-        router.push("/dashboard/subscription?tab=details");
-        onSuccess?.();
-      }
+        if (editMode) {
+          onEditSuccess?.();
+        } else {
+          router.push("/dashboard/subscription?tab=details");
+          onSuccess?.();
+        }
 
-      return;
+        return;
       }
 
       // --- STEP 5: LOCAL DB & REDIRECT (Non-Subscription) ---
@@ -1544,8 +1688,8 @@ const typeMapping: Record<string, string> = {
   };
 
   const getRequiredFields = () => {
-    // Added "town" and "aboutBranch" to the required list
-    const locationFields = ["state", "district", "town", "locationURL", "aboutBranch"];
+    // Added "town" and "headquatersAddress" to the required list
+    const locationFields = ["state", "district", "town", "locationURL", "headquatersAddress"];
     const coachingCommon = ["categoriesType", "domainType", "subDomainType", "courseName", "courseDuration", "startDate", "priceOfCourse", "installments", "emioptions"];
 
     switch (true) {
@@ -1553,28 +1697,28 @@ const typeMapping: Record<string, string> = {
       case isKindergarten:
         return [
           ...locationFields,
-           "courseName", "categoriesType", "priceOfCourse",
-          "aboutCourse", "courseDuration", "mode", "classSize", "curriculumType",
-          "ownershipType", "operationalDays", "openingTime", "closingTime",
-          "extendedCare", "mealsProvided", "playground", "busService", "classSizeRatio"
+          "courseName", "categoriesType", "priceOfCourse",
+          "aboutCourse", "courseDuration", "mode", "curriculumType",
+          "ownershipType",
+          "extendedCare", "mealsProvided", "playground", "pickupDropService", "teacherStudentRatio",
+          "installments", "emioptions"
         ];
-      case isBasicCourseForm: return [...locationFields, "courseName", "courseDuration", "priceOfCourse", "startDate"];
-
       case isSchool:
         return [
           ...locationFields,
-          "courseName",
+          "schoolName",
           "mode",
           "courseDuration",
-          "startDate",
-          "classlanguage",
+          "classLanguage",
           "ownershipType",
           "schoolType",
           "curriculumType",
+          "openingTime",
+          "closingTime",
           "classType",
           "priceOfCourse",
           "playground",
-          "busService",
+          "pickupDropService",
           "hostelFacility",
           "emioptions",
           "partlyPayment",
@@ -1582,11 +1726,11 @@ const typeMapping: Record<string, string> = {
       case isIntermediateCollege:
         return [
           ...locationFields,
-          "courseName", "mode", "courseDuration", "startDate", "classlanguage",
-          "ownershipType", "collegeType", "curriculumType", "operationalDays","openingTime", "closingTime","year", "classType",
-          "specialization", "priceOfCourse", "playground", "busService",
-          "hostelFacility", "emioptions", "partlyPayment"
+          "intermediateName", "mode", "courseDuration", "startDate", "classlanguage",
+          "ownershipType", "intermediateType", "curriculumType", "openingTime", "closingTime", "yearString", "classType",
+          "specialization", "priceOfCourse", "pickupDropService", "headquatersAddress"
         ];
+      case isBasicCourseForm: return [...locationFields, "courseName", "courseDuration", "priceOfCourse", "startDate"];
       case isUnderPostGraduate:
         return [
           ...locationFields,
@@ -1601,30 +1745,65 @@ const typeMapping: Record<string, string> = {
           "collegeCategory",
           "affiliationType",
           "placementDrives",
-          "totalStudentsPlaced",
-          "highestPackage",
-          "averagePackage",
+          "totalNumberRequires",
+          "library",
+          "hostelFacility",
+          "entranceExam",
+          "managementQuota",
+          "playground",
+          "busService",
+          "mockInterviews",
+          "resumeBuilding",
+          "linkedinOptimization",
           "priceOfCourse",
           "installments",
           "emioptions"
         ];
 
       case isCoachingCenter:
-        return currentCourse.categoriesType === "Upskilling"
+      case isExamPrep:
+      case isUpskilling:
+        // Logic split based on category (existing logic handles CoachingCenter, we extend it for new types)
+        const cat = currentCourse.categoriesType || (isExamPrep ? "Exam Preparation" : isUpskilling ? "Upskilling" : "");
+
+        return cat === "Upskilling"
           ? [...locationFields, ...coachingCommon, "classTiming", "courselanguage", "certification", "placementDrives", "highestPackage", "averagePackage", "totalStudentsPlaced"]
-          : [...locationFields, ...coachingCommon, "classlanguage", "classSize", "mockTests", "library", "studyMaterial"];
+          : [...locationFields, ...coachingCommon, "classlanguage", "classSize", "mockTests", "libraryFacility", "studyMaterial"];
+
+      case isStudyAbroad:
+        return [
+          ...locationFields,
+          "consultancyName",
+          "studentAdmissions",
+          "headquatersAddress",
+          "countriesOffered",
+          "academicOfferings",
+          "budget",
+          "studentsSent",
+          "applicationAssistance",
+          "visaProcessingSupport",
+          "preDepartureOrientation",
+          "accommodationAssistance",
+          "educationLoans",
+          "postArrivalSupport",
+          "partTimeHelp"
+        ];
 
       case isTutionCenter:
         return [
           ...locationFields,
-          "courseName",
+          ...locationFields,
+          "tutionCenterName",
           "mode",
           "operationalDays",
           "openingTime",
           "closingTime",
           "subject",
           "classSize",
-          "partlyPayment"
+          "partlyPayment",
+          "headquatersAddress",
+          "academicDetails",
+          "facultyDetails"
         ];
       case isStudyHall: return [...locationFields, "hallName", "seatingOption", "openingTime", "closingTime", "operationalDays", "startDate", "totalSeats", "availableSeats", "pricePerSeat", "hasPersonalLocker", "hasWifi", "hasChargingPoints", "hasAC"];
       default: return [...locationFields, "courseName", "courseDuration", "priceOfCourse"];
@@ -1633,7 +1812,7 @@ const typeMapping: Record<string, string> = {
 
   const getSchemaKey = (): keyof typeof L2Schemas => {
     if (isStudyAbroad) return "studyAbroad";
-    if (isCoachingCenter) return "coaching";
+    if (isCoachingCenter || isExamPrep || isUpskilling) return "coaching";
     if (isStudyHall) return "studyHall";
     if (isTutionCenter) return "tuition";
     if (isUnderPostGraduate) return "ugpg";
@@ -1643,23 +1822,39 @@ const typeMapping: Record<string, string> = {
     return "basic";
   };
 
-   const isFormIncomplete = useMemo(() => {
-  const requiredFields = getRequiredFields();
-  const hasMissingTextFields = requiredFields.some((field) => {
-    const value = currentCourse[field as keyof Course];
-    if (Array.isArray(value)) return value.length === 0;
-    return !value || String(value).trim() === "";
-  });
+  const isFormIncomplete = useMemo(() => {
+    const requiredFields = getRequiredFields();
 
-  const hasMissingFiles = !currentCourse.imagePreviewUrl || !currentCourse.brochurePreviewUrl;
-  let hasMissingCampusImage = false;
-  if (isKindergarten) hasMissingCampusImage = !currentCourse.kindergartenImagePreviewUrl;
-  if (isSchool) hasMissingCampusImage = !currentCourse.schoolImagePreviewUrl;
-  if (isUnderPostGraduate) hasMissingCampusImage = !currentCourse.collegeImagePreviewUrl;
-  if (isCoachingCenter) hasMissingCampusImage = !currentCourse.centerImagePreviewUrl;
+    // Debug: Check which fields are missing
+    const missingFieldsList = requiredFields.filter((field) => {
+      // Special check for 'yearString' which we use as a proxy for 'year' array validation
+      if (field === "yearString") return !(currentCourse as any).yearString;
 
-  return hasMissingTextFields || hasMissingFiles || hasMissingCampusImage;
-}, [currentCourse, institutionType]);
+      const value = currentCourse[field as keyof Course];
+      if (Array.isArray(value)) return value.length === 0;
+      return !value || String(value).trim() === "";
+    });
+
+    const hasMissingTextFields = missingFieldsList.length > 0;
+
+    const hasMissingFiles = !currentCourse.imagePreviewUrl || !currentCourse.brochurePreviewUrl;
+    let hasMissingCampusImage = false;
+    if (isKindergarten) hasMissingCampusImage = !currentCourse.kindergartenImagePreviewUrl;
+    if (isSchool) hasMissingCampusImage = !currentCourse.schoolImagePreviewUrl;
+    if (isUnderPostGraduate) hasMissingCampusImage = !currentCourse.collegeImagePreviewUrl;
+    if (isCoachingCenter || isExamPrep || isUpskilling) hasMissingCampusImage = !currentCourse.centerImagePreviewUrl;
+    if (isIntermediateCollege) hasMissingCampusImage = !currentCourse.intermediateImagePreviewUrl;
+
+    // Enhanced Debugging
+    /* console.log("--- DEBUG isFormIncomplete ---");
+    console.log("Institution Type:", institutionType);
+    console.log("Required Fields:", requiredFields);
+    console.log("Missing Fields:", missingFieldsList);
+    // ... removed extensive logging
+    */
+
+    return hasMissingTextFields || hasMissingFiles || hasMissingCampusImage;
+  }, [currentCourse, institutionType, isSchool, isKindergarten, isIntermediateCollege, isUnderPostGraduate, isCoachingCenter, isExamPrep, isUpskilling, getRequiredFields]);
 
   const content = (
     <_Card className="w-full sm:p-6 rounded-[24px] bg-[#F5F6F9] dark:bg-gray-900 border-0 shadow-none">
@@ -1716,6 +1911,26 @@ const typeMapping: Record<string, string> = {
                   setCourses={setCourses} courses={courses} selectedCourseId={selectedCourseId}
                   courseErrors={courseErrorsById[currentCourse.id] || {}} setSelectedCourseId={setSelectedCourseId}
                   addNewCourse={addNewCourse} deleteCourse={deleteCourse}
+                  uniqueRemoteBranches={uniqueRemoteBranches}
+                  selectedBranchId={selectedBranchIdForProgram}
+                  isSubscriptionProgram={isSubscriptionProgram}
+                />
+              ) : isExamPrep ? (
+                <ExamPrepCourseForm
+                  currentCourse={currentCourse} handleCourseChange={handleCourseChange} setCourses={setCourses}
+                  courses={courses} selectedCourseId={selectedCourseId} courseErrors={courseErrorsById[currentCourse.id] || {}}
+                  handleFileChange={handleFileChange} setSelectedCourseId={setSelectedCourseId} addNewCourse={addNewCourse}
+                  deleteCourse={deleteCourse}
+                  uniqueRemoteBranches={uniqueRemoteBranches}
+                  selectedBranchId={selectedBranchIdForProgram}
+                  isSubscriptionProgram={isSubscriptionProgram}
+                />
+              ) : isUpskilling ? (
+                <UpskillingCourseForm
+                  currentCourse={currentCourse} handleCourseChange={handleCourseChange} setCourses={setCourses}
+                  courses={courses} selectedCourseId={selectedCourseId} courseErrors={courseErrorsById[currentCourse.id] || {}}
+                  handleFileChange={handleFileChange} setSelectedCourseId={setSelectedCourseId} addNewCourse={addNewCourse}
+                  deleteCourse={deleteCourse}
                   uniqueRemoteBranches={uniqueRemoteBranches}
                   selectedBranchId={selectedBranchIdForProgram}
                   isSubscriptionProgram={isSubscriptionProgram}

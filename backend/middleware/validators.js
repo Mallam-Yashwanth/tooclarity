@@ -5,7 +5,6 @@ const {
   validationResult,
   matchedData,
 } = require("express-validator");
-const { Institution } = require("../models/Institution");
 const logger = require("../config/logger");
 
 // --- UTILITY FUNCTION ---
@@ -48,7 +47,7 @@ exports.validateRegistration = [
   // Password → required for both student & institution
   body("password")
     .if(
-      (value, { req }) =>req.body.type === "institution"
+      (value, { req }) => req.body.type === "institution"
     )
     .isStrongPassword(strongPasswordOptions)
     .withMessage(
@@ -204,244 +203,1054 @@ const l2BaseCourseRules = [
   body("partlyPayment").optional().isIn(["Yes", "No"]).withMessage("A selection for Partly Payment is required."),
 ];
 
-// --- UPDATED SCHOOL RULES ---
 const l2SchoolRules = [
-  body("courseName").trim().notEmpty().withMessage("School Name is required."),
-  body("mode").isIn(["Offline", "Online", "Hybrid"]).withMessage("Invalid mode specified."),
-  body("courseDuration").trim().notEmpty().withMessage("Course duration is required."),
-  body("startDate").notEmpty().withMessage("Course start date is required.").isISO8601().withMessage("Must be a valid date."),
-  body("classlanguage").optional().trim(),
-  body("ownershipType").isIn(["Private", "Government", "Trust"]).withMessage("Invalid ownership type."),
-  body("schoolType").isIn(["Co-Education", "Boys Only", "Girls Only"]).withMessage("Invalid school type selected."),
-  body("curriculumType").isIn(["State board", "CBSE", "ICSE", "IB", "IGCSE"]).withMessage("Invalid curriculum type selected."),
-  body("openingTime").notEmpty().withMessage("Opening time is required."),
-  body("closingTime").notEmpty().withMessage("Closing time is required."),
-  body("locationURL").trim().notEmpty().withMessage("Location URL is required."),
-  body("aboutBranch").trim().notEmpty().withMessage("Campus address is required."),
-  body("state").notEmpty().withMessage("State is required"),
-  body("district").notEmpty().withMessage("District is required"),
-  body("town").notEmpty().withMessage("Town is required"),
-  body("classType").notEmpty().withMessage("Class Type is required."),
-  body("priceOfCourse").notEmpty().withMessage("Price is required."),
-  body("playground").isIn(["Yes", "No"]).withMessage("A selection for Playground is required."),
-  body("busService").isIn(["Yes", "No"]).withMessage("A selection for Bus Service is required."),
-  body("hostelFacility").isIn(["Yes", "No"]).withMessage("A selection for Hostel Facility is required."),
-  body("emioptions").isIn(["Yes", "No"]).withMessage("A selection for EMI Options is required."),
-  body("partlyPayment").isIn(["Yes", "No"]).withMessage("A selection for Partly Payment is required."),
-  // --- File Validations ---
-  body("schoolImageUrl").trim().isURL().withMessage("School photos are required."),
-  body("imageUrl").trim().isURL().withMessage("Course image is required."),
-  body("brochureUrl").trim().isURL().withMessage("Brochure URL is required.")
+  body("schoolName").notEmpty().withMessage("School name is required."),
+  body("mode").isIn(["Offline", "Online", "Hybrid"]),
+  body("courseDuration").notEmpty(),
+  body("startDate").optional().isISO8601(),
+  body("classLanguage").notEmpty(),
+
+  body("ownershipType").notEmpty(),
+  body("schoolType").notEmpty(),
+  body("curriculumType").notEmpty(),
+
+  body("openingTime").notEmpty(),
+  body("closingTime").notEmpty(),
+  body("openingTimePeriod").isIn(["AM", "PM"]),
+  body("closingTimePeriod").isIn(["AM", "PM"]),
+
+  body("locationURL").notEmpty().isURL(),
+  body("headquatersAddress").notEmpty(),
+
+  body("state").notEmpty(),
+  body("district").notEmpty(),
+  body("town").notEmpty(),
+
+  body("classes").isArray({ min: 1 }),
+  body("classes.*.classType").notEmpty(),
+  body("classes.*.priceOfCourse").isNumeric(),
+
+  body("playground").isIn(["Yes", "No"]),
+  body("pickupDropService").isIn(["Yes", "No"]),
+  body("hostelFacility").isIn(["Yes", "No"]),
+  body("emioptions").isIn(["Yes", "No"]),
+  body("partlyPayment").isIn(["Yes", "No"]),
+
+  body("schoolPhotoUrl").optional().isURL(),
+  body("imageUrl").optional().isURL(),
+  body("brochureUrl").optional().isURL()
 ];
 
-// --- UPDATED INTERMEDIATE COLLEGE RULES ---
+
 const l2IntermediateCollegeRules = [
-  body("courseName").trim().notEmpty().withMessage("Intermediate Name is required."),
-  body("mode").isIn(["Offline", "Online", "Hybrid"]).withMessage("Invalid mode specified."),
-  body("courseDuration").trim().notEmpty().withMessage("Course duration is required."),
-  body("startDate").notEmpty().withMessage("Course start date is required.").isISO8601().withMessage("Must be a valid date."),
-  body("classlanguage").notEmpty().withMessage("Language of class is required."),
-  body("ownershipType").isIn(["Government", "Private", "Semi-Government", "Aided", "Unaided"]).withMessage("Invalid ownership type."),
-  body("collegeType").isIn(["Junior College", "Senior Secondary", "Higher Secondary", "Intermediate", "Pre-University"]).withMessage("Invalid college type selected."),
-  body("curriculumType").isIn(["State board", "CBSE", "ICSE", "IB", "Cambridge", "Other"]).withMessage("Invalid curriculum type selected."),
-  body("openingTime").notEmpty().withMessage("Opening time is required."),
-  body("closingTime").notEmpty().withMessage("Closing time is required."),
-  body("locationURL").trim().notEmpty().withMessage("Location URL is required."),
-  body("aboutBranch").trim().notEmpty().withMessage("Campus address is required."),
-  body("state").notEmpty().withMessage("State is required"),
-  body("district").notEmpty().withMessage("District is required"),
-  body("town").notEmpty().withMessage("Town is required"),
-  body("year").isIn(["1st Year", "2nd Year"]).withMessage("Please select the year."),
-  body("classType").isIn(["Regular", "Vocational", "Honours", "Other"]).withMessage("Select class type."),
-  body("specialization").isIn(["MPC", "BiPC", "CEC", "HEC", "MEC"]).withMessage("Select a valid specialization."),
-  body("priceOfCourse").notEmpty().withMessage("Price is required."),
-  body("playground").isIn(["Yes", "No"]).withMessage("A selection for Playground is required."),
-  body("busService").isIn(["Yes", "No"]).withMessage("A selection for Bus Service is required."),
-  body("hostelFacility").isIn(["Yes", "No"]).withMessage("A selection for Hostel Facility is required."),
-  body("emioptions").isIn(["Yes", "No"]).withMessage("A selection for EMI Options is required."),
-  body("partlyPayment").isIn(["Yes", "No"]).withMessage("A selection for Partly Payment is required."),
-  // --- File Validations ---
-  body("intermediateImageUrl").trim().isURL().withMessage("Campus photos are required."),
-  body("imageUrl").trim().isURL().withMessage("Course image is required."),
-  body("brochureUrl").trim().isURL().withMessage("Brochure URL is required.")
+  body("intermediateName")
+    .trim()
+    .notEmpty()
+    .withMessage("Intermediate name is required."),
+
+  body("mode")
+    .isIn(["Offline", "Online", "Hybrid"])
+    .withMessage("Invalid mode specified."),
+
+  body("courseDuration")
+    .trim()
+    .notEmpty()
+    .withMessage("Course duration is required."),
+
+  body("startDate")
+    .optional()
+    .isISO8601()
+    .withMessage("Start date must be valid."),
+
+  body("classlanguage")
+    .optional()
+    .trim(),
+
+  body("ownershipType")
+    .trim()
+    .notEmpty()
+    .withMessage("Ownership type is required."),
+
+  body("intermediateType")
+    .trim()
+    .notEmpty()
+    .withMessage("Intermediate type is required."),
+
+  body("curriculumType")
+    .trim()
+    .notEmpty()
+    .withMessage("Curriculum type is required."),
+
+  body("operationalDays")
+    .optional()
+    .isArray()
+    .withMessage("Operational days must be an array."),
+
+  body("openingTime")
+    .notEmpty()
+    .withMessage("Opening time is required."),
+
+  body("closingTime")
+    .notEmpty()
+    .withMessage("Closing time is required."),
+
+  body("openingTimePeriod")
+    .isIn(["AM", "PM"])
+    .withMessage("Opening time period must be AM or PM."),
+
+  body("closingTimePeriod")
+    .isIn(["AM", "PM"])
+    .withMessage("Closing time period must be AM or PM."),
+
+  body("locationURL")
+    .optional()
+    .isURL()
+    .withMessage("Location URL must be valid."),
+
+  body("headquatersAddress")
+    .trim()
+    .notEmpty()
+    .withMessage("Headquarters address is required."),
+
+  body("state")
+    .trim()
+    .notEmpty()
+    .isLength({ max: 100 })
+    .withMessage("State is required and must be under 100 characters."),
+
+  body("district")
+    .trim()
+    .notEmpty()
+    .isLength({ max: 100 })
+    .withMessage("District is required and must be under 100 characters."),
+
+  body("town")
+    .trim()
+    .notEmpty()
+    .isLength({ max: 100 })
+    .withMessage("Town is required and must be under 100 characters."),
+
+  body("year")
+    .isArray({ min: 1 })
+    .withMessage("At least one year entry is required."),
+
+  body("year.*.year")
+    .trim()
+    .notEmpty()
+    .withMessage("Year is required."),
+
+  body("year.*.classType")
+    .trim()
+    .notEmpty()
+    .withMessage("Class type is required."),
+
+  body("year.*.specialization")
+    .trim()
+    .notEmpty()
+    .withMessage("Specialization is required."),
+
+  body("year.*.fee")
+    .optional()
+    .isNumeric()
+    .withMessage("Fee must be a number."),
+
+  body("playground")
+    .optional()
+    .isIn(["Yes", "No"])
+    .withMessage("Playground must be Yes or No."),
+
+  body("pickupDropService")
+    .optional()
+    .isIn(["Yes", "No"])
+    .withMessage("Pickup/Drop Service must be Yes or No."),
+
+  body("hostelFacility")
+    .optional()
+    .isIn(["Yes", "No"])
+    .withMessage("Hostel Facility must be Yes or No."),
+
+  body("emioptions")
+    .optional()
+    .isIn(["Yes", "No"])
+    .withMessage("EMI options must be Yes or No."),
+
+  body("partlyPayment")
+    .optional()
+    .isIn(["Yes", "No"])
+    .withMessage("Partly payment must be Yes or No."),
+
+  body("campusPhoto").optional().isURL(),
+  body("imageUrl").optional().isURL(),
+  body("brochureUrl").optional().isURL(),
 ];
 
 const l2KindergartenRules = [
-  body("courseType").equals("Kindergarten").withMessage("A valid Course type is required."),
-  body("courseName").trim().notEmpty().withMessage("Course name is required."),
-  body("categoriesType").isIn(["Nursery", "LKG", "UKG", "Playgroup"]).withMessage("Select Category Type"),
-  body("aboutCourse").trim().notEmpty().withMessage("About course is required."),
-  body("courseDuration").trim().notEmpty().withMessage("Course duration is required."),
-  body("mode").isIn(["Offline", "Online", "Hybrid"]).withMessage("Invalid mode specified."),
-  body("priceOfCourse").notEmpty().withMessage("Price is required."),
-  body("locationURL").trim().notEmpty().withMessage("Location URL is required."),
-  body("aboutBranch").trim().notEmpty().withMessage("Campus address is required."),
-  body("state").notEmpty().withMessage("State is required"),
-  body("district").notEmpty().withMessage("District is required"),
-  body("town").notEmpty().withMessage("Town is required"),
-  body("curriculumType").trim().notEmpty().withMessage("Curriculum type is required."),
-  body("classSizeRatio").notEmpty().withMessage("Teacher: Student Ratio is required"),
-  body("ownershipType").isIn(["Private", "Government", "Trust", "Other"]).withMessage("Invalid school type selected."),
-  body("extendedCare").isIn(["Yes", "No"]).withMessage("A selection for Extended Care is required."),
-  body("mealsProvided").isIn(["Yes", "No"]).withMessage("A selection for Meals Provided is required."),
-  body("playground").isIn(["Yes", "No"]).withMessage("A selection for Playground is required."),
-  body("busService").isIn(["Yes", "No"]).withMessage("A selection for Bus Service is required."),
-  body("installments").isIn(["Yes", "No"]).withMessage("A selection for Installments is required."),
-  body("emioptions").isIn(["Yes", "No"]).withMessage("A selection for EMI Options is required."),
-  // --- File Validations ---
-  body("kindergartenImageUrl").trim().isURL().withMessage("Center image is required."),
-  body("imageUrl").trim().isURL().withMessage("Course image is required."),
-  body("brochureUrl").trim().isURL().withMessage("Brochure PDF is required.")
+  body("categoriesType")
+    .notEmpty()
+    .isIn(["Nursery", "LKG", "UKG", "Playgroup"])
+    .withMessage("Select valid Category Type."),
+
+  body("courseName")
+    .trim()
+    .notEmpty().withMessage("Course name is required.")
+    .isLength({ max: 150 }).withMessage("Course name cannot exceed 150 characters."),
+
+  body("aboutCourse")
+    .trim()
+    .notEmpty().withMessage("About course is required.")
+    .isLength({ max: 3000 }).withMessage("About course cannot exceed 3000 characters."),
+
+  body("courseDuration")
+    .trim()
+    .notEmpty().withMessage("Course duration is required.")
+    .isLength({ max: 50 }).withMessage("Course duration cannot exceed 50 characters."),
+
+  body("mode")
+    .notEmpty()
+    .isIn(["Offline", "Online", "Hybrid"])
+    .withMessage("Invalid mode specified."),
+
+  body("classSize")
+    .optional()
+    .trim(),
+
+  body("priceOfCourse")
+    .notEmpty().withMessage("Price is required.")
+    .isNumeric().withMessage("Price must be a number.")
+    .custom(value => value >= 0).withMessage("Price cannot be negative."),
+
+  body("ownershipType")
+    .notEmpty()
+    .isIn(["Private", "Goverment", "Trust", "Other"])
+    .withMessage("Invalid ownership type selected."),
+
+  body("locationURL")
+    .trim()
+    .notEmpty().withMessage("Location URL is required.")
+    .isURL().withMessage("Invalid Location URL."),
+
+  body("headquatersAddress")
+    .notEmpty().withMessage("Headquarters address is required."),
+
+  body("state")
+    .trim()
+    .notEmpty().withMessage("State is required.")
+    .isLength({ max: 100 }),
+
+  body("district")
+    .trim()
+    .notEmpty().withMessage("District is required.")
+    .isLength({ max: 100 }),
+
+  body("town")
+    .trim()
+    .notEmpty().withMessage("Town is required.")
+    .isLength({ max: 100 }),
+
+  body("curriculumType")
+    .notEmpty().withMessage("Curriculum type is required."),
+
+  body("openingTime")
+    .optional()
+    .notEmpty().withMessage("Opening time cannot be empty."),
+
+  body("closingTime")
+    .optional()
+    .notEmpty().withMessage("Closing time cannot be empty."),
+
+  body("openingTimePeriod")
+    .optional()
+    .isIn(["AM", "PM"])
+    .withMessage("Invalid opening time period."),
+
+  body("closingTimePeriod")
+    .optional()
+    .isIn(["AM", "PM"])
+    .withMessage("Invalid closing time period."),
+
+  body("operationalDays")
+    .optional()
+    .isArray().withMessage("Operational days must be an array."),
+
+  body("extendedCare")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Extended Care option."),
+
+  body("mealsProvided")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Meals Provided option."),
+
+  body("playground")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Playground option."),
+
+  body("pickupDropService")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Pickup/Drop Service option."),
+
+  body("emioptions")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select EMI option."),
+
+  body("installments")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Installments option."),
+
+  body("teacherStudentRatio")
+    .notEmpty()
+    .withMessage("Teacher: Student Ratio is required."),
+
+  body("centerImageUrl")
+    .optional()
+    .isURL().withMessage("Invalid Center Image URL."),
+
+  body("kindergartenImageUrl")
+    .optional()
+    .isURL().withMessage("Invalid Kindergarten Image URL."),
+
+  body("brochureUrl")
+    .optional()
+    .isURL().withMessage("Invalid Brochure URL."),
 ];
-// --- UPDATED UG/PG RULES ---
-// Pulls from UnderPostGraduateForm.tsx & your old l2UgPgCourseRules
+
 const l2UgPgCourseRules = [
-  body("graduationType").isIn(["Under Graduation", "Post Graduation"]).withMessage("Graduation type is required."),
-  body("streamType").notEmpty().withMessage("Stream type is required."),
-  body("selectBranch").notEmpty().withMessage("A branch must be selected."),
-  body("branchDescription").notEmpty().withMessage("Branch description is required."),
-  body("locationURL").trim().notEmpty().withMessage("Location URL is required."),
-  body("aboutBranch").trim().notEmpty().withMessage("Campus address is required."),
-  body("state").notEmpty().withMessage("State is required"),
-  body("district").notEmpty().withMessage("District is required"),
-  body("town").notEmpty().withMessage("Town is required"),
-  body("educationType").isIn(["Full time", "part time", "Distance"]).withMessage("A valid education type is required."),
-  body("mode").isIn(["Offline", "Online", "Hybrid"]).withMessage("Invalid mode specified."),
-  body("classSize").notEmpty().withMessage("Class size is required.").isNumeric().withMessage("Must be a number."),
-  body("eligibilityCriteria").trim().notEmpty().withMessage("Eligibility criteria is required."),
-  body("ownershipType").isIn(["Government", "Private", "Semi-Government", "Aided", "Unaided"]).withMessage("Invalid ownership type."),
-  body("collegeCategory").isIn(["Engineering", "Medical", "Arts & Science", "Commerce", "Management", "Law", "Other"]).withMessage("Invalid category."),
-  body("affiliationType").isIn(["University", "Autonomous", "Affiliated", "Deemed University", "Other"]).withMessage("Select affiliation."),
-  body("courseDuration").trim().notEmpty().withMessage("Course duration is required."),
-  body("library").isIn(["Yes", "No"]).withMessage("A selection for Library is required."),
-  body("hostelFacility").isIn(["Yes", "No"]).withMessage("A selection for Hostel Facility is required."),
-  body("entranceExam").isIn(["Yes", "No"]).withMessage("A selection for Entrance Exam is required."),
-  body("managementQuota").isIn(["Yes", "No"]).withMessage("A selection for Management Quota is required."),
-  body("playground").isIn(["Yes", "No"]).withMessage("A selection for Playground is required."),
-  body("busService").isIn(["Yes", "No"]).withMessage("A selection for Bus Service is required."),
-  body("placementDrives").isIn(["Yes", "No"]).withMessage("A selection for Placement Drives is required."),
-  body("totalNumberRequires").notEmpty().withMessage("This field is required."),
-  body("mockInterviews").isIn(["Yes", "No"]).withMessage("A selection for Mock Interviews is required."),
-  body("resumeBuilding").isIn(["Yes", "No"]).withMessage("A selection for Resume Building is required."),
-  body("linkedinOptimization").isIn(["Yes", "No"]).withMessage("A selection for LinkedIn Optimization is required."),
-  body("priceOfCourse").notEmpty().withMessage("Price is required."),
-  body("installments").isIn(["Yes", "No"]).withMessage("A selection for Installments is required."),
-  body("emioptions").isIn(["Yes", "No"]).withMessage("A selection for EMI Options is required."),
-  // --- File Validations ---
-  body("collegeImageUrl").trim().isURL().withMessage("College image is required."),
-  body("imageUrl").trim().isURL().withMessage("Course image is required."),
-  body("brochureUrl").trim().isURL().withMessage("Brochure URL is required.")
+  body("graduationType")
+    .notEmpty()
+    .isIn(["Under Graduation", "Post Graduation"])
+    .withMessage("Graduation type is required."),
+
+  body("streamType")
+    .notEmpty()
+    .withMessage("Stream type is required."),
+
+  body("selectBranch")
+    .notEmpty()
+    .withMessage("A branch must be selected."),
+
+  body("aboutBranch")
+    .trim()
+    .notEmpty()
+    .withMessage("About branch is required."),
+
+  body("educationType")
+    .notEmpty()
+    .isIn(["Full time", "Part time", "Distance"])
+    .withMessage("A valid education type is required."),
+
+  body("mode")
+    .notEmpty()
+    .isIn(["Offline", "Online", "Hybrid"])
+    .withMessage("Invalid mode specified."),
+
+  body("classSize")
+    .notEmpty()
+    .withMessage("Class size is required."),
+
+  body("eligibilityCriteria")
+    .trim()
+    .notEmpty()
+    .withMessage("Eligibility criteria is required."),
+
+  body("ownershipType")
+    .notEmpty()
+    .withMessage("Ownership type is required."),
+
+  body("collegeCategory")
+    .notEmpty()
+    .withMessage("College category is required."),
+
+  body("affiliationType")
+    .notEmpty()
+    .withMessage("Affiliation type is required."),
+
+  body("courseDuration")
+    .trim()
+    .notEmpty()
+    .withMessage("Course duration is required.")
+    .isLength({ max: 50 })
+    .withMessage("Course duration cannot exceed 50 characters."),
+
+  body("locationURL")
+    .trim()
+    .notEmpty()
+    .withMessage("Location URL is required.")
+    .isURL()
+    .withMessage("Invalid Location URL."),
+
+  body("headquatersAddress")
+    .notEmpty()
+    .withMessage("Headquarters address is required."),
+
+  body("state")
+    .trim()
+    .notEmpty()
+    .withMessage("State is required.")
+    .isLength({ max: 100 }),
+
+  body("district")
+    .trim()
+    .notEmpty()
+    .withMessage("District is required.")
+    .isLength({ max: 100 }),
+
+  body("town")
+    .trim()
+    .notEmpty()
+    .withMessage("Town is required.")
+    .isLength({ max: 100 }),
+
+  body("library")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Library option."),
+
+  body("hostelFacility")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Hostel Facility option."),
+
+  body("entranceExam")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Entrance Exam option."),
+
+  body("managementQuota")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Management Quota option."),
+
+  body("playground")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Playground option."),
+
+  body("busService")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Bus Service option."),
+
+  body("placementDrives")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Placement Drives option."),
+
+  body("mockInterviews")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Mock Interviews option."),
+
+  body("resumeBuilding")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Resume Building option."),
+
+  body("linkedinOptimization")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select LinkedIn Optimization option."),
+
+  body("totalNumberRequires")
+    .notEmpty()
+    .withMessage("Total number required is mandatory."),
+
+  body("highestPackage")
+    .optional()
+    .notEmpty()
+    .withMessage("Highest package cannot be empty."),
+
+  body("averagePackage")
+    .optional()
+    .notEmpty()
+    .withMessage("Average package cannot be empty."),
+
+  body("totalStudentsPlaced")
+    .optional()
+    .notEmpty()
+    .withMessage("Total students placed cannot be empty."),
+
+  body("priceOfCourse")
+    .notEmpty()
+    .withMessage("Price is required.")
+    .isNumeric()
+    .withMessage("Price must be a number.")
+    .custom(value => value >= 0)
+    .withMessage("Price cannot be negative."),
+
+  body("installments")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Installments option."),
+
+  body("emioptions")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select EMI Options option."),
+
+  body("centerImageUrl")
+    .optional()
+    .isURL()
+    .withMessage("Invalid Center Image URL."),
+
+  body("imageUrl")
+    .optional()
+    .isURL()
+    .withMessage("Invalid Course Image URL."),
+
+  body("brochureUrl")
+    .optional()
+    .isURL()
+    .withMessage("Invalid Brochure URL."),
 ];
 
-// --- UPDATED COACHING RULES ---
-// Pulls from CoachingCourseForm.tsx & your old l2CoachingCourseRules
-const l2CoachingCourseRules = [
-  body("categoriesType").isIn(["Exam Preparation", "Upskilling"]).withMessage("Please select a valid categories type."),
-  body("domainType").notEmpty().withMessage("Domain is required."),
-  body("subDomainType").notEmpty().withMessage("Sub-domain is required."),
-  body("courseName").trim().notEmpty().withMessage("Course name is required."),
-  body("mode").isIn(["Offline", "Online", "Hybrid"]).withMessage("Invalid mode specified."),
-  body("courseDuration").trim().notEmpty().withMessage("Course duration is required."),
-  body("startDate").notEmpty().isISO8601().withMessage("Valid start date required."),
-  body("locationURL").trim().notEmpty().withMessage("Location URL is required."),
-  body("aboutBranch").trim().notEmpty().withMessage("Campus address is required."),
-  body("state").notEmpty().withMessage("State is required"),
-  body("district").notEmpty().withMessage("District is required"),
-  body("town").notEmpty().withMessage("Town is required"),
-  body("certification").isIn(["Yes", "No"]).withMessage("A selection for Certification is required."),
-  body("installments").isIn(["Yes", "No"]).withMessage("A selection for Installments is required."),
-  body("emioptions").isIn(["Yes", "No"]).withMessage("A selection for EMI Options is required."),
-  body("priceOfCourse").notEmpty().withMessage("Price is required."),
-  // Conditional fields based on UI logic
-  body("classTiming").if(body("categoriesType").equals("Upskilling")).notEmpty().withMessage("Class timings are required."),
-  body("courselanguage").if(body("categoriesType").equals("Upskilling")).isIn(["English", "Hindi", "Telugu"]).withMessage("Select language."),
-  body("classlanguage").if(body("categoriesType").equals("Exam Preparation")).notEmpty().withMessage("Class language is required."),
-  body("classSize").if(body("categoriesType").equals("Exam Preparation")).notEmpty().withMessage("Class size is required."),
-  body("mockTests").if(body("categoriesType").equals("Exam Preparation")).isIn(["Yes", "No"]).withMessage("Selection required."),
-  // --- File Validations ---
-  body("centerImageUrl").trim().isURL().withMessage("Center images are required."),
-  body("imageUrl").trim().isURL().withMessage("Course image is required."),
-  body("brochureUrl").trim().isURL().withMessage("Brochure URL is required.")
-];
-
-// --- UPDATED TUITION CENTER RULES ---
 const l2TuitionCourseRules = [
-  body("courseName").trim().notEmpty().withMessage("Tuition centre name is required."),
-  body("mode").isIn(["Offline", "Online", "Hybrid"]).withMessage("Invalid mode specified."),
-  body("operationalDays").isArray({ min: 1 }).withMessage("At least one operational day required."),
-  body("openingTime").notEmpty().withMessage("Opening time is required."),
-  body("closingTime").notEmpty().withMessage("Closing time is required."),
-  body("subject").trim().notEmpty().withMessage("Subject is required."),
-  body("classSize").notEmpty().withMessage("Class size is required."),
-  body("locationURL").trim().notEmpty().withMessage("Location URL is required."),
-  body("aboutBranch").trim().notEmpty().withMessage("Campus address is required."),
-  body("state").notEmpty().withMessage("State is required"),
-  body("district").notEmpty().withMessage("District is required"),
-  body("town").notEmpty().withMessage("Town is required"),
-  body("partlyPayment").isIn(["Yes", "No"]).withMessage("A selection for Partly Payment is required."),
-  body("priceOfCourse").notEmpty().withMessage("Price is required."),
-  // Nested Arrays for "Add more" logic
-  body("academicDetails").isArray().withMessage("Academic details required."),
-  body("academicDetails.*.subject").notEmpty().withMessage("Academic subject required."),
-  body("academicDetails.*.monthlyFees").notEmpty().withMessage("Monthly fees required."),
-  body("facultyDetails").isArray().withMessage("Faculty details required."),
-  body("facultyDetails.*.name").notEmpty().withMessage("Faculty name required."),
-  // --- File Validations ---
-  body("tuitionImageUrl").trim().isURL().withMessage("Tuition center image is required."),
-  body("imageUrl").trim().isURL().withMessage("Course image is required."),
-  body("brochureUrl").trim().isURL().withMessage("Brochure PDF is required.")
+  body("tutionCenterName")
+    .trim()
+    .notEmpty()
+    .withMessage("Tuition centre name is required."),
+
+  body("mode")
+    .notEmpty()
+    .isIn(["Offline", "Online", "Hybrid"])
+    .withMessage("Invalid mode specified."),
+
+  body("operationalDays")
+    .isArray({ min: 1 })
+    .withMessage("At least one operational day required."),
+
+  body("openingTime")
+    .notEmpty()
+    .withMessage("Opening time is required."),
+
+  body("closingTime")
+    .notEmpty()
+    .withMessage("Closing time is required."),
+
+  body("openingTimePeriod")
+    .optional()
+    .isIn(["AM", "PM"])
+    .withMessage("Invalid opening time period."),
+
+  body("closingTimePeriod")
+    .optional()
+    .isIn(["AM", "PM"])
+    .withMessage("Invalid closing time period."),
+
+  body("subject")
+    .trim()
+    .notEmpty()
+    .withMessage("Primary subject is required."),
+
+  body("classSize")
+    .notEmpty()
+    .withMessage("Class size is required."),
+
+  body("locationURL")
+    .trim()
+    .notEmpty()
+    .withMessage("Location URL is required.")
+    .isURL()
+    .withMessage("Invalid Location URL."),
+
+  body("headquatersAddress")
+    .notEmpty()
+    .withMessage("Headquarters address is required."),
+
+  body("state")
+    .trim()
+    .notEmpty()
+    .withMessage("State is required.")
+    .isLength({ max: 100 }),
+
+  body("district")
+    .trim()
+    .notEmpty()
+    .withMessage("District is required.")
+    .isLength({ max: 100 }),
+
+  body("town")
+    .trim()
+    .notEmpty()
+    .withMessage("Town is required.")
+    .isLength({ max: 100 }),
+
+  body("subjectOffer")
+    .isArray({ min: 1 })
+    .withMessage("At least one subject offering is required."),
+
+  body("subjectOffer.*.subject")
+    .notEmpty()
+    .withMessage("Subject is required."),
+
+  body("subjectOffer.*.classTiming")
+    .notEmpty()
+    .withMessage("Class timing is required."),
+
+  body("subjectOffer.*.specialization")
+    .optional(),
+
+  body("subjectOffer.*.fee")
+    .notEmpty()
+    .withMessage("Fee is required.")
+    .isNumeric()
+    .withMessage("Fee must be a number."),
+
+  body("faculty")
+    .isArray({ min: 1 })
+    .withMessage("At least one faculty detail is required."),
+
+  body("faculty.*.facultyName")
+    .notEmpty()
+    .withMessage("Faculty name is required."),
+
+  body("faculty.*.experience")
+    .optional()
+    .isNumeric()
+    .withMessage("Experience must be a number."),
+
+  body("faculty.*.qualifications")
+    .optional(),
+
+  body("faculty.*.subjectYouTeach")
+    .optional(),
+
+  body("partlyPayment")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Partly Payment option."),
+
+  body("campusImage")
+    .optional()
+    .isURL()
+    .withMessage("Invalid Campus Image URL."),
+
+  body("imageUrl")
+    .optional()
+    .isURL()
+    .withMessage("Invalid Course Image URL."),
+
+  body("brochureUrl")
+    .optional()
+    .isURL()
+    .withMessage("Invalid Brochure URL."),
 ];
 
-// ✅ --- L2 STUDY HALL COURSE RULES ---
-const l2StudyHallRules = [
-  body("hallName").trim().notEmpty().withMessage("Hall name is required."),
-  body("seatingOption").isIn(["Individual Desk", "Shared Table", "Private Cabin", "Open Seating"]).withMessage("Select seating option."),
-  body("openingTime").notEmpty().withMessage("Opening time is required."),
-  body("closingTime").notEmpty().withMessage("Closing time is required."),
-  body("operationalDays").isArray({ min: 1 }).withMessage("Select operational days."),
-  body("startDate").notEmpty().isISO8601().withMessage("Valid start date required."),
-  body("endDate").notEmpty().isISO8601().withMessage("Valid end date required."),
-  body("totalSeats").notEmpty().withMessage("Total seats is required."),
-  body("availableSeats").notEmpty().withMessage("Available seats is required."),
-  body("pricePerSeat").notEmpty().withMessage("Price per seat is required."),
-  body("hasWifi").isIn(["Yes", "No"]).withMessage("A selection for Wi-Fi is required."),
-  body("hasChargingPoints").isIn(["Yes", "No"]).withMessage("A selection for Charging Points is required."),
-  body("hasAC").isIn(["Yes", "No"]).withMessage("A selection for Air Conditioner is required."),
-  body("hasPersonalLocker").isIn(["Yes", "No"]).withMessage("A selection for Personal Lockers is required."),
-  // --- File Validations ---
-  body("imageUrl").trim().isURL().withMessage("Hall image is required.")
-];
-
-// --- UPDATED STUDY ABROAD RULES ---
-// Pulls from StudyAbroadForm.tsx & merges old studyAbroadL3Rules
 const l2StudyAbroadRules = [
- body("consultancyName").trim().notEmpty().withMessage("Consultancy name is required."),
-  body("studentAdmissions").notEmpty().withMessage("Student admissions count is required."),
-  body("locationURL").trim().notEmpty().withMessage("Location URL is required."),
-  body("aboutBranch").trim().notEmpty().withMessage("Campus address is required."),
-  body("state").notEmpty().withMessage("State is required"),
-  body("district").notEmpty().withMessage("District is required"),
-  body("town").notEmpty().withMessage("Town is required"),
-  body("countriesOffered").notEmpty().not().equals("Select Country").withMessage("Please select a valid country."),
-  body("academicOfferings").notEmpty().not().equals("Select Academic type").withMessage("Please select a valid academic type."),
-  body("budget").trim().notEmpty().withMessage("Budget info is required."),
-  body("studentsSent").notEmpty().withMessage("Students count is required."),
-  body("applicationAssistance").isIn(["Yes", "No"]).withMessage("A selection for Application Assistance is required."),
-  body("visaProcessingSupport").isIn(["Yes", "No"]).withMessage("A selection for Visa Processing Support is required."),
-  body("partTimeHelp").isIn(["Yes", "No"]).withMessage("A selection for Part-time help is required."),
-  body("preDepartureOrientation").isIn(["Yes", "No"]).withMessage("Selection required."),
-  body("accommodationAssistance").isIn(["Yes", "No"]).withMessage("Selection required."),
-  body("educationLoans").isIn(["Yes", "No"]).withMessage("Selection required."),
-  body("postArrivalSupport").isIn(["Yes", "No"]).withMessage("Selection required."),
-  // --- File Validations ---
-  body("consultancyImageUrl").trim().isURL().withMessage("Consultancy image is required."),
-  body("imageUrl").trim().isURL().withMessage("Program image is required."),
-  body("brochureUrl").trim().isURL().withMessage("Brochure URL is required."),
-  body("businessProofUrl").trim().isURL().withMessage("Business Proof document is required."),
-  body("panAadhaarUrl").trim().isURL().withMessage("PAN/Aadhaar document is required.")
+  body("listingType")
+    .optional()
+    .isIn(["free", "paid"])
+    .withMessage("Invalid listing type."),
+
+  body("consultancyName")
+    .trim()
+    .notEmpty()
+    .withMessage("Consultancy name is required."),
+
+  body("studentAdmissions")
+    .notEmpty()
+    .withMessage("Student admissions count is required."),
+
+  body("locationURL")
+    .trim()
+    .notEmpty()
+    .withMessage("Location URL is required.")
+    .isURL()
+    .withMessage("Invalid Location URL."),
+
+  body("headquatersAddress")
+    .notEmpty()
+    .withMessage("Headquarters address is required."),
+
+  body("state")
+    .trim()
+    .notEmpty()
+    .withMessage("State is required.")
+    .isLength({ max: 100 }),
+
+  body("district")
+    .trim()
+    .notEmpty()
+    .withMessage("District is required.")
+    .isLength({ max: 100 }),
+
+  body("town")
+    .trim()
+    .notEmpty()
+    .withMessage("Town is required.")
+    .isLength({ max: 100 }),
+
+  body("countries")
+    .isArray({ min: 1 })
+    .withMessage("At least one country offering is required."),
+
+  body("countries.*.country")
+    .notEmpty()
+    .withMessage("Country is required."),
+
+  body("countries.*.academicOffering")
+    .notEmpty()
+    .withMessage("Academic offering is required."),
+
+  body("countries.*.budget")
+    .notEmpty()
+    .withMessage("Budget is required.")
+    .isNumeric()
+    .withMessage("Budget must be a number.")
+    .custom(value => value >= 0)
+    .withMessage("Budget cannot be negative."),
+
+  body("countries.*.studentSendTillNow")
+    .notEmpty()
+    .withMessage("Students sent count is required.")
+    .isNumeric()
+    .withMessage("Students sent must be a number.")
+    .custom(value => value >= 0)
+    .withMessage("Students sent cannot be negative."),
+
+  body("applicationAssistance")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Application Assistance option."),
+
+  body("visaProcessingSupport")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Visa Processing Support option."),
+
+  body("partTimeOpportunities")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Part-time Opportunities option."),
+
+  body("preDepartureOrientation")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Pre-departure Orientation option."),
+
+  body("accommodationAssistance")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Accommodation Assistance option."),
+
+  body("educationLoan")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Education Loan option."),
+
+  body("postArrivalSupport")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Post-arrival Support option."),
+
+  body("consultancyImageUrl")
+    .optional()
+    .isURL()
+    .withMessage("Invalid Consultancy Image URL."),
+
+  body("imageUrl")
+    .optional()
+    .isURL()
+    .withMessage("Invalid Program Image URL."),
+
+  body("brochureUrl")
+    .optional()
+    .isURL()
+    .withMessage("Invalid Brochure URL."),
+
+  body("businessProofUrl")
+    .optional()
+    .isURL()
+    .withMessage("Invalid Business Proof URL."),
+
+  body("panAadhaarUrl")
+    .optional()
+    .isURL()
+    .withMessage("Invalid PAN/Aadhaar URL."),
 ];
 
 
+const l2ExamPrepCourseRules = [
+  body("categoriesType")
+    .notEmpty()
+    .withMessage("Category type is required."),
+
+  body("domainType")
+    .notEmpty()
+    .withMessage("Domain type is required."),
+
+  body("subDomainType")
+    .notEmpty()
+    .withMessage("Sub-domain type is required."),
+
+  body("courseName")
+    .trim()
+    .notEmpty()
+    .withMessage("Course name is required.")
+    .isLength({ max: 150 })
+    .withMessage("Course name cannot exceed 150 characters."),
+
+  body("mode")
+    .notEmpty()
+    .isIn(["Offline", "Online", "Hybrid"])
+    .withMessage("Invalid mode specified."),
+
+  body("courseDuration")
+    .trim()
+    .notEmpty()
+    .withMessage("Course duration is required.")
+    .isLength({ max: 50 })
+    .withMessage("Course duration cannot exceed 50 characters."),
+
+  body("startDate")
+    .optional()
+    .isISO8601()
+    .withMessage("Invalid start date."),
+
+  body("classlanguage")
+    .notEmpty()
+    .withMessage("Class language is required."),
+
+  body("classSize")
+    .notEmpty()
+    .withMessage("Class size is required."),
+
+  body("mockTests")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Mock Tests option."),
+
+  body("locationURL")
+    .trim()
+    .notEmpty()
+    .withMessage("Location URL is required.")
+    .isURL()
+    .withMessage("Invalid Location URL."),
+
+  body("headquatersAddress")
+    .notEmpty()
+    .withMessage("Headquarters address is required."),
+
+  body("state")
+    .trim()
+    .notEmpty()
+    .withMessage("State is required.")
+    .isLength({ max: 100 }),
+
+  body("district")
+    .trim()
+    .notEmpty()
+    .withMessage("District is required.")
+    .isLength({ max: 100 }),
+
+  body("town")
+    .trim()
+    .notEmpty()
+    .withMessage("Town is required.")
+    .isLength({ max: 100 }),
+
+  body("priceOfCourse")
+    .notEmpty()
+    .withMessage("Price is required.")
+    .isNumeric()
+    .withMessage("Price must be a number.")
+    .custom(value => value >= 0)
+    .withMessage("Price cannot be negative."),
+
+  body("installments")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Installments option."),
+
+  body("emioptions")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select EMI option."),
+
+  body("libraryFacility")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Library Facility option."),
+
+  body("studyMaterial")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Study Material option."),
+
+  body("centerImageUrl")
+    .optional()
+    .isURL()
+    .withMessage("Invalid Center Image URL."),
+
+  body("imageUrl")
+    .optional()
+    .isURL()
+    .withMessage("Invalid Course Image URL."),
+
+  body("brochureUrl")
+    .optional()
+    .isURL()
+    .withMessage("Invalid Brochure URL."),
+];
+
+
+const l2UpskillingCourseRules = [
+
+  body("categoriesType")
+    .notEmpty()
+    .withMessage("Category type is required."),
+
+  body("domainType")
+    .notEmpty()
+    .withMessage("Domain type is required."),
+
+  body("subDomainType")
+    .notEmpty()
+    .withMessage("Sub-domain type is required."),
+
+  body("courseName")
+    .trim()
+    .notEmpty()
+    .withMessage("Course name is required.")
+    .isLength({ max: 150 })
+    .withMessage("Course name cannot exceed 150 characters."),
+
+  body("mode")
+    .notEmpty()
+    .isIn(["Offline", "Online", "Hybrid"])
+    .withMessage("Invalid mode specified."),
+
+  body("courseDuration")
+    .trim()
+    .notEmpty()
+    .withMessage("Course duration is required.")
+    .isLength({ max: 50 })
+    .withMessage("Course duration cannot exceed 50 characters."),
+
+  body("startDate")
+    .optional()
+    .isISO8601()
+    .withMessage("Invalid start date."),
+
+  body("classTiming")
+    .notEmpty()
+    .withMessage("Class timing is required."),
+
+  body("courselanguage")
+    .notEmpty()
+    .withMessage("Course language is required."),
+
+  body("certification")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Certification option."),
+
+  body("locationURL")
+    .trim()
+    .notEmpty()
+    .withMessage("Location URL is required.")
+    .isURL()
+    .withMessage("Invalid Location URL."),
+
+  body("headquatersAddress")
+    .notEmpty()
+    .withMessage("Headquarters address is required."),
+
+  body("state")
+    .trim()
+    .notEmpty()
+    .withMessage("State is required.")
+    .isLength({ max: 100 }),
+
+  body("district")
+    .trim()
+    .notEmpty()
+    .withMessage("District is required.")
+    .isLength({ max: 100 }),
+
+  body("town")
+    .trim()
+    .notEmpty()
+    .withMessage("Town is required.")
+    .isLength({ max: 100 }),
+
+  body("placementDrives")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Placement Drives option."),
+
+  body("totalNumberRequires")
+    .optional()
+    .notEmpty()
+    .withMessage("Total number required cannot be empty."),
+
+  body("highestPackage")
+    .optional()
+    .notEmpty()
+    .withMessage("Highest package cannot be empty."),
+
+  body("averagePackage")
+    .optional()
+    .notEmpty()
+    .withMessage("Average package cannot be empty."),
+
+  body("totalStudentsPlaced")
+    .optional()
+    .notEmpty()
+    .withMessage("Total students placed cannot be empty."),
+
+  body("mockInterviews")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Mock Interviews option."),
+
+  body("resumeBuilding")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Resume Building option."),
+
+  body("linkedinOptimization")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select LinkedIn Optimization option."),
+
+  body("priceOfCourse")
+    .notEmpty()
+    .withMessage("Price is required.")
+    .isNumeric()
+    .withMessage("Price must be a number.")
+    .custom(value => value >= 0)
+    .withMessage("Price cannot be negative."),
+
+  body("installments")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select Installments option."),
+
+  body("emioptions")
+    .notEmpty()
+    .isIn(["Yes", "No"])
+    .withMessage("Select EMI option."),
+
+  body("centerImageUrl")
+    .optional()
+    .isURL()
+    .withMessage("Invalid Center Image URL."),
+
+  body("imageUrl")
+    .optional()
+    .isURL()
+    .withMessage("Invalid Course Image URL."),
+
+  body("brochureUrl")
+    .optional()
+    .isURL()
+    .withMessage("Invalid Brochure URL."),
+];
 
 // Define this at the top of your validator file
 const BLUE_BOX_FIELDS = {
@@ -453,77 +1262,102 @@ const BLUE_BOX_FIELDS = {
   "Under Graduation/Post Graduation": ["graduationType", "streamType", "selectBranch", "branchDescription", "educationType", "priceOfCourse"]
 };
 
+// exports.validateL2Update = async (req, res, next) => {
+//   try {
+
+//     const { institutionType } = req.body;
+
+//     if (!institutionType) {
+//       return res.status(400).json({
+//         message: "institutionType is required",
+//       });
+//     }
+
+//     const validationMap = {
+//       SCHOOL: l2SchoolRules,
+//       INTERMEDIATE: l2IntermediateCollegeRules,
+//       UG_PG: l2UgPgCourseRules,
+//       KINDERGARTEN: l2KindergartenRules,
+//       TUTION: l2TuitionCourseRules,
+//       STUDY_ABROAD: l2StudyAbroadRules,
+//       EXAM_PREP: l2ExamPrepCourseRules,
+//       UPSKILLING: l2UpskillingCourseRules,
+//     };
+
+//     const validationChain = validationMap[institutionType];
+
+//     if (!validationChain) {
+//       return res.status(400).json({
+//         message: `Unsupported institutionType: ${institutionType}`,
+//       });
+//     }
+
+//     await Promise.all(validationChain.map(v => v.run(req)));
+
+//     return handleValidationErrors(req, res, next);
+
+//   } catch (error) {
+//     next(error);
+//   }
+// };
+
+
 exports.validateL2Update = async (req, res, next) => {
   try {
-    const userId = req.userId;
-    const institution = await Institution.findOne({ institutionAdmin: userId });
+    const { institutionType, courses } = req.body;
 
-    if (!institution) return res.status(404).json({ message: "Institution not found" });
-
-    
-
-    if (req.body.courses && Array.isArray(req.body.courses)) {
-      req.body.courses.forEach((topLevelCourse) => {
-        // 1. Move fields from the top-level course object to root
-        Object.keys(topLevelCourse).forEach(key => {
-          if (key !== 'courses' && topLevelCourse[key] !== undefined) {
-            req.body[key] = topLevelCourse[key];
-          }
-        });
-
-        // 2. CRITICAL: Dig into the nested subarray (the "Blue Box" fields)
-        if (topLevelCourse.courses && Array.isArray(topLevelCourse.courses)) {
-          topLevelCourse.courses.forEach((subArrayItem) => {
-            Object.keys(subArrayItem).forEach(subKey => {
-              if (subArrayItem[subKey] !== undefined && subArrayItem[subKey] !== "") {
-                // Move classType, priceOfCourse, etc. to root
-                req.body[subKey] = subArrayItem[subKey];
-              }
-            });
-          });
-        }
+    if (!institutionType) {
+      return res.status(400).json({
+        message: "institutionType is required",
       });
     }
-    const type = institution.instituteType;
-    console.log("validation", type);
 
-    let validationChain = [];
-    switch (type) {
-      case "School's":
-        validationChain = l2SchoolRules;
-        break;
-      case "Intermediate college(K12)":
-        validationChain = l2IntermediateCollegeRules;
-        break;
-      case "Coaching centers":
-        validationChain = l2CoachingCourseRules;
-        break;
-      case "Under Graduation/Post Graduation":
-        validationChain = l2UgPgCourseRules;
-        break;
-      case "Kindergarten/childcare center":
-        validationChain = l2KindergartenRules;
-        break;
-      case "Tution Center's":
-        validationChain = l2TuitionCourseRules;
-        break;
-      case "Study Halls":
-        validationChain = l2StudyHallRules;
-        break;
-      case "Study Abroad":
-        validationChain = l2StudyAbroadRules;
-        break;
-      default:
-        return res.status(400).json({ message: `Unsupported type: ${type}` });
+    const validationMap = {
+      SCHOOL: l2SchoolRules,
+      INTERMEDIATE: l2IntermediateCollegeRules,
+      UG_PG: l2UgPgCourseRules,
+      KINDERGARTEN: l2KindergartenRules,
+      KINDERGARTEN: l2KindergartenRules,
+      TUTION_CENTER: l2TuitionCourseRules,
+      STUDY_ABROAD: l2StudyAbroadRules,
+      STUDY_ABROAD: l2StudyAbroadRules,
+      EXAM_PREP: l2ExamPrepCourseRules,
+      UPSKILLING: l2UpskillingCourseRules,
+    };
+
+    const validationChain = validationMap[institutionType];
+
+    if (!validationChain) {
+      return res.status(400).json({
+        message: `Unsupported institutionType: ${institutionType}`,
+      });
     }
 
-    await Promise.all(validationChain.map((v) => v.run(req)));
+    // ✅ If courses array is sent, validate each item separately
+    if (Array.isArray(courses)) {
+      for (let i = 0; i < courses.length; i++) {
+        const originalBody = req.body;
 
-    handleValidationErrors(req, res, next);
+        // Replace body with current course object
+        req.body = { ...courses[i] };
+
+        await Promise.all(validationChain.map(v => v.run(req)));
+
+        // Restore original body
+        req.body = originalBody;
+      }
+    } else {
+      // Normal single object validation
+      await Promise.all(validationChain.map(v => v.run(req)));
+    }
+
+    return handleValidationErrors(req, res, next);
+
   } catch (error) {
     next(error);
   }
 };
+
 
 // --- BRANCH VALIDATORS ---
 exports.validateBranchCreation = [
@@ -580,7 +1414,7 @@ exports.validateBranchUpdate = [
 // --- COURSE VALIDATORS---
 exports.validateCourseCreation = [
   param("institutionId").isMongoId().withMessage("Invalid institution ID."),
-  
+
   body("courseName")
     .trim()
     .notEmpty()
@@ -606,7 +1440,7 @@ exports.validateCourseCreation = [
   body("priceOfCourse")
     .notEmpty()
     .withMessage("Price is required."),
-    // Removed .isNumeric() because frontend sends it as a string "100000"
+  // Removed .isNumeric() because frontend sends it as a string "100000"
 
   // UPDATED: Changed from 'location' to 'locationURL' to match your frontend payload
   body("locationURL")
@@ -864,7 +1698,7 @@ exports.validateUploadedFile = async (req, res, next) => {
       req.body = branchGroup;
       await Promise.all(l2BranchRules.map((v) => v.run(req)));
       let branchErrors = validationResult(req);
-      
+
       if (!branchErrors.isEmpty()) {
         return res.status(422).json({
           context: "Branch Data Error",
@@ -884,7 +1718,7 @@ exports.validateUploadedFile = async (req, res, next) => {
         if (!courseErrors.isEmpty()) {
           // Dynamic name lookup for the error response
           const cName = course.courseName || course.hallName || course.consultancyName || "Unnamed";
-          
+
           console.error(`❌ FAILED: ${cName} in branch ${branchGroup.branchName}`);
           return res.status(422).json({
             context: "Course Data Error",
@@ -912,7 +1746,7 @@ const allowedFilters = new Set([
   "page", "limit", "state", "pincode", "instituteType", "district", "town",
   "playground", "busService", "hostelFacility", "extendedCare", "mealsProvided",
   "outdoorPlayArea", "placementDrives", "mockInterviews", "resumeBuilding",
-  "linkedinOptimization", "certification", "library", "entranceExam", 
+  "linkedinOptimization", "certification", "library", "entranceExam",
   "managementQuota", "emioptions", "partlyPayment"
 ]);
 
@@ -936,11 +1770,11 @@ exports.validateInstitutionFilter = [
 
   // Updated Amenity Validation: Match the "Yes"/"No" logic used in L2 rules
   [
-    "playground", "busService", "hostelFacility", "extendedCare", 
+    "playground", "busService", "hostelFacility", "extendedCare",
     "mealsProvided", "outdoorPlayArea", "placementDrives", "mockInterviews",
     "resumeBuilding", "linkedinOptimization", "certification", "library",
     "entranceExam", "managementQuota", "emioptions", "partlyPayment"
-  ].map(field => 
+  ].map(field =>
     query(field)
       .optional()
       .isIn(["Yes", "No"])
@@ -965,9 +1799,9 @@ exports.validateInstitutionFilter = [
 // =======================
 module.exports.l2BaseCourseRules = l2BaseCourseRules;
 module.exports.l2UgPgCourseRules = l2UgPgCourseRules;
-module.exports.l2CoachingCourseRules = l2CoachingCourseRules;
+// module.exports.l2CoachingCourseRules = l2CoachingCourseRules;
 module.exports.l2TuitionCourseRules = l2TuitionCourseRules;
-module.exports.l2StudyHallRules = l2StudyHallRules;
+// module.exports.l2StudyHallRules = l2StudyHallRules;
 module.exports.l2StudyAbroadRules = l2StudyAbroadRules;
 module.exports.l2SchoolRules = l2SchoolRules;
 module.exports.l2IntermediateCollegeRules = l2IntermediateCollegeRules;

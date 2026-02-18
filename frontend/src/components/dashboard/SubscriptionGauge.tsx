@@ -89,27 +89,27 @@ const SubscriptionGauge: React.FC<Props> = ({ daysLeft, _onUpgrade }) => {
       animate="visible"
     >
       <_Card className="border-none bg-gray-50 h-full shadow-sm rounded-2xl border border-gray-100 hover:shadow-md transition-shadow duration-200 overflow-hidden dark:bg-gray-900 dark:border-gray-800">
-      <_CardContent className="p-6 h-full flex flex-col">
+        <_CardContent className="p-6 h-full flex flex-col">
           <div className="flex items-center justify-between mb-6">
             <div className="tezt-sm md:text-2xl font-semibold dark:text-gray-100">Subscription</div>
-          <motion.div 
-            className="text-gray-400 cursor-pointer dark:text-gray-300"
-            whileHover={{ scale: 1.2 }}
-            transition={{ duration: 0.2 }}
-          >
-            {/* vertical kebab */}
-            <span className="inline-flex"><Kebab /></span>
-          </motion.div>
+            <motion.div
+              className="text-gray-400 cursor-pointer dark:text-gray-300"
+              whileHover={{ scale: 1.2 }}
+              transition={{ duration: 0.2 }}
+            >
+              {/* vertical kebab */}
+              <span className="inline-flex"><Kebab /></span>
+            </motion.div>
           </div>
-          
+
           <div className="flex-1 flex flex-col items-center justify-center bg-white pb-7 rounded-2xl dark:bg-gray-800 dark:border-gray-700">
             <div className="relative mb-4 w-full mt-4">
               <svg width="100%" height={230} viewBox="0 0 300 160" className="mx-auto">
                 {generateRectangularSegments()}
               </svg>
             </div>
-            
-            <motion.div 
+
+            <motion.div
               className="text-4xl font-bold -mt-8"
               style={{ color: getNumberColor() }}
               key={Math.floor(animatedDaysLeft)}
@@ -119,7 +119,7 @@ const SubscriptionGauge: React.FC<Props> = ({ daysLeft, _onUpgrade }) => {
             >
               {Math.floor(animatedDaysLeft)}
             </motion.div>
-            <motion.div 
+            <motion.div
               className="text-sm text-gray-500 mt-1 dark:text-gray-300"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -127,9 +127,9 @@ const SubscriptionGauge: React.FC<Props> = ({ daysLeft, _onUpgrade }) => {
             >
               Days left
             </motion.div>
-        </div>
-      </_CardContent>
-    </_Card>
+          </div>
+        </_CardContent>
+      </_Card>
     </motion.div>
   );
 };

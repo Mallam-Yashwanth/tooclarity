@@ -70,6 +70,20 @@ export function useInstitution() {
         _id: (response as { _id?: string })._id || '',
         instituteName: (response as { instituteName?: string }).instituteName || '',
         institutionAdmin: (response as { institutionAdmin?: { _id?: string } }).institutionAdmin ? String((response as { institutionAdmin: { _id?: string } }).institutionAdmin._id) : undefined,
+        institutionType: (() => {
+          const type = (response as { instituteType?: string }).instituteType || (response as { institutionType?: string }).institutionType;
+          const map: Record<string, string> = {
+            "Kindergarten/childcare center": "KINDERGARTEN",
+            "School's": "SCHOOL",
+            "Intermediate college(K12)": "INTERMEDIATE",
+            "Under Graduation/Post Graduation": "UG_PG",
+            "Exam Preparation": "EXAM_PREP",
+            "Upskilling": "UPSKILLING",
+            "Tution Center's": "TUTION_CENTER",
+            "Study Abroad": "STUDY_ABROAD",
+          };
+          return type && map[type] ? map[type] : type;
+        })(),
         lastUpdated: Date.now()
       } as Institution;
 
@@ -331,7 +345,7 @@ export function useInfinitePrograms(institutionId?: string, limit: number = 10) 
     enabled: !!institutionId,
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam }) => {
-      const res = await programsAPI.list(institutionId!, 
+      const res = await programsAPI.list(institutionId!,
         // pageParam, limit
       );
       return res;

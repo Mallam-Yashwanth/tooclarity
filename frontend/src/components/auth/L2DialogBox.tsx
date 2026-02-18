@@ -90,6 +90,151 @@ export interface FacultyDetail {
   subjectTeach: string;
 }
 
+export interface Course {
+  // --- SECTION 1: COMMON BASE FIELDS ---
+  id: number;
+  _id?: string;
+  courseName: string;
+  aboutCourse: string;
+  courseDuration: string;
+  startDate: string;
+  endDate: string;
+  mode: string;
+  priceOfCourse: string;
+  locationURL: string;
+  state: string;
+  district: string;
+  town: string;
+  image: File | null;
+  imageUrl: string;
+  imagePreviewUrl: string;
+  brochure: File | null;
+  brochureUrl: string;
+  brochurePreviewUrl: string;
+  createdBranch: string;
+  aboutBranch: string;
+
+  // --- SECTION 2: COLLEGE & K12 FIELDS ---
+  collegeType: string;
+  collegeCategory: string;
+  specialization: string;
+  year: string;
+  intermediateImage: File | null;
+  intermediateImagePreviewUrl: string;
+  intermediateImageUrl?: string;
+
+  // --- SECTION 3: SCHOOL & KINDERGARTEN FIELDS ---
+  schoolType: string;
+  curriculumType: string;
+  schoolCategory: string;
+  classType: string;
+  classSizeRatio?: string;
+  extendedCare: string;
+  mealsProvided: string;
+  schoolImage: File | null;
+  schoolImagePreviewUrl: string;
+  schoolImageUrl?: string;
+  kindergartenImage: File | null;
+  kindergartenImagePreviewUrl: string;
+  kindergartenImageUrl?: string;
+
+  // --- SECTION 4: COACHING & UG/PG FIELDS ---
+  categoriesType: string;
+  domainType: string;
+  subDomainType: string;
+  classTiming: string;
+  courselanguage: string;
+  branchDescription: string;
+  classlanguage: string;
+  certification: string;
+  placementDrives: string;
+  totalStudentsPlaced: string | number;
+  highestPackage: string;
+  averagePackage: string;
+  mockInterviews: string;
+  resumeBuilding: string;
+  linkedinOptimization: string;
+  mockTests: string;
+  studyMaterial: string;
+  centerImage: File | null;
+  centerImagePreviewUrl: string;
+  centerImageUrl?: string;
+  entranceExam: string;
+  managementQuota: string;
+  totalNumberRequires: string | number;
+  collegeImage: File | null;
+  collegeImagePreviewUrl: string;
+  collegeImageUrl?: string;
+
+  // --- SECTION 5: STUDY ABROAD FIELDS ---
+  consultancyName: string;
+  studentAdmissions: string;
+  countriesOffered: string;
+  academicOfferings: string;
+  budget: string | number;
+  studentsSent: string | number;
+  applicationAssistance: string;
+  visaProcessingSupport: string;
+  preDepartureOrientation: string;
+  accommodationAssistance: string;
+  educationLoans: string;
+  postArrivalSupport: string;
+  partTimeHelp: string;
+  consultancyImage: File | null;
+  consultancyImagePreviewUrl: string;
+  consultancyImageUrl?: string;
+  businessProof: File | null;
+  businessProofPreviewUrl: string;
+  businessProofUrl: string;
+  panAadhaar: File | null;
+  panAadhaarPreviewUrl: string;
+  panAadhaarUrl: string;
+
+  // --- SECTION 6: TUITION & ACADEMIC ARRAYS ---
+  subject: string;
+  tuitionType: string;
+  instructorProfile: string;
+  academicDetails: AcademicDetail[];
+  facultyDetails: FacultyDetail[];
+  tuitionImage: File | null;
+  tuitionImagePreviewUrl: string;
+  tuitionImageUrl?: string;
+
+  // --- SECTION 7: STUDY HALL & SEATING FIELDS ---
+  hallName?: string;
+  seatingOption: string;
+  totalSeats: string;
+  availableSeats: string;
+  pricePerSeat: string;
+  hasWifi: string;
+  hasChargingPoints: string;
+  hasAC: string;
+  hasPersonalLocker: string;
+
+  // --- SECTION 8: SHARED OPERATIONAL & FACILITIES ---
+  operationalDays: string[];
+  openingTime: string;
+  closingTime: string;
+  openingTimePeriod: string;
+  closingTimePeriod: string;
+  playground: string;
+  busService: string;
+  hostelFacility: string;
+  emioptions: string;
+  installments: string;
+  partlyPayment: string;
+  graduationType: string;
+  courseType: string;
+  streamType: string;
+  selectBranch: string;
+  educationType: string;
+  classSize: string;
+  eligibilityCriteria: string;
+  ownershipType: string;
+  affiliationType: string;
+  library: string;
+}
+
 // --- COMMON BASE FIELDS ---
 export interface BaseCourse {
   id: number;

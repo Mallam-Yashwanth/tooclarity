@@ -348,7 +348,7 @@ export default function TuitionCenterForm({
           <IconInput icon={<Book size={18} />}>
             <input
               name="subject"
-              value={(currentCourse.subject as unknown as string) || ""}
+              value={currentCourse.subject || ""}
               onChange={handleCourseChange}
               placeholder="Enter subject name"
               className={`w-full pl-10 pr-3 py-3 border rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all ${courseErrors.subject ? "border-red-500" : "border-gray-300"

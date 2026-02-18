@@ -238,7 +238,7 @@ export default function CollegeForm({
             value={currentCourse.headquatersAddress || ""}
             onChange={handleCourseChange}
             placeholder="2-3, Uppal Hills Colony, Peerzadiguda"
-            error={courseErrors.aboutBranch} // keep using aboutBranch error key if L2Dialog maps it, or change to headquatersAddress
+            error={courseErrors.headquatersAddress}
             required
             disabled={currentCourse.createdBranch === "Main"}
           />
@@ -323,7 +323,7 @@ export default function CollegeForm({
           </Button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
-          <InputField label="Year" name="yearString" value={(currentCourse as any).yearString || ""} onChange={handleCourseChange} isSelect options={["1st Year", "2nd Year"]} placeholder="select the year" />
+          <InputField label="Year" name="yearString" value={currentCourse.yearString || ""} onChange={handleCourseChange} isSelect options={["1st Year", "2nd Year"]} placeholder="select the year" />
           <InputField label="Class Type" name="classType" value={currentCourse.classType || ""} onChange={handleCourseChange} isSelect options={["Regular", "Vocational", "Honours", "Other"]} placeholder="Select Class type" required />
           <InputField label="Specialization" name="specialization" value={currentCourse.specialization || ""} onChange={handleCourseChange} isSelect options={["MPC", "BiPC", "CEC", "HEC", "MEC"]} placeholder="Select Specialization type" required />
           <InputField label="Fee's" name="priceOfCourse" value={currentCourse.priceOfCourse || ""} onChange={handleCourseChange} placeholder="Enter Fee's" type="number" required />

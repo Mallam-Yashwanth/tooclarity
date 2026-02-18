@@ -292,7 +292,7 @@ export default function TuitionCenterForm({
                   type="text"
                   name="openingTime"
                   placeholder="From"
-                  value={currentCourse.openingTime}
+                  value={currentCourse.openingTime || ""}
                   onChange={handleCourseChange}
                   className="w-full bg-transparent text-[15px] outline-none placeholder:text-[#9CA3AF]"
                 />
@@ -321,7 +321,7 @@ export default function TuitionCenterForm({
                   type="text"
                   name="closingTime"
                   placeholder="To"
-                  value={currentCourse.closingTime}
+                  value={currentCourse.closingTime || ""}
                   onChange={handleCourseChange}
                   className="w-full bg-transparent text-[15px] outline-none placeholder:text-[#9CA3AF]"
                 />
@@ -348,7 +348,7 @@ export default function TuitionCenterForm({
           <IconInput icon={<Book size={18} />}>
             <input
               name="subject"
-              value={(currentCourse.subject as unknown as string) || ""}
+              value={currentCourse.subject || ""}
               onChange={handleCourseChange}
               placeholder="Enter subject name"
               className={`w-full pl-10 pr-3 py-3 border rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all ${courseErrors.subject ? "border-red-500" : "border-gray-300"
@@ -422,7 +422,7 @@ export default function TuitionCenterForm({
         <SearchableSelect
           label="State"
           name="state"
-          value={currentCourse.state}
+          value={currentCourse.state || ""}
           onChange={handleCourseChange}
           options={STATE_OPTIONS}
           placeholder="Select state"
@@ -434,7 +434,7 @@ export default function TuitionCenterForm({
         <SearchableSelect
           label="District"
           name="district"
-          value={currentCourse.district}
+          value={currentCourse.district || ""}
           onChange={handleCourseChange}
           options={districtOptions}
           placeholder={currentCourse.state ? "Select district" : "Select state first"}
@@ -446,7 +446,7 @@ export default function TuitionCenterForm({
         <InputField
           label="Town"
           name="town"
-          value={currentCourse.town}
+          value={currentCourse.town || ""}
           onChange={handleCourseChange}
           placeholder="Medchal"
           error={courseErrors.town}

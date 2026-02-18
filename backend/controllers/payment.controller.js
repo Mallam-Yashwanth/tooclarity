@@ -9,7 +9,6 @@ const Subscription = require("../models/Subscription");
 const InstituteAdmin = require("../models/InstituteAdmin");
 const Coupon = require("../models/coupon");
 const RedisUtil = require("../utils/redis.util");
-const Course = require("../models/Course");
 const COURSE_MODEL_MAP = require("../utils/CourseMap.js")
 
 // CORRECT: Importing the job function
@@ -49,29 +48,6 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   }
   console.log("[Payment] Institution found:", institutionId);
 
-  // Helper Map (inline for now)
-  const INSTITUTION_TYPE_MAP = {
-    "Kindergarten/childcare center": "KINDERGARTEN",
-    "School's": "SCHOOL",
-    "Intermediate college(K12)": "INTERMEDIATE",
-    "Under Graduation/Post Graduation": "UG_PG",
-    "Exam Preparation": "EXAM_PREP",
-    "Upskilling": "UPSKILLING",
-    "Tution Center's": "TUTION_CENTER",
-    "Study Abroad": "STUDY_ABROAD",
-    "Coaching centers": "EXAM_PREP",
-    "Study Halls": "UPSKILLING",
-  };
-
-  // Resolve Institution Type (Frontend or DB Fallback)
-  let resolvedInstitutionType = institutionType;
-  if (!resolvedInstitutionType && institutionDoc?.institution?.instituteType) {
-    resolvedInstitutionType = INSTITUTION_TYPE_MAP[institutionDoc.institution.instituteType];
-  }
-
-  // ✅ Step 2: Determine valid selected course IDs
-  // If courseIds explicit provided: validate them
-  // If not provided (signup flow): fetch ALL inactive courses
   let validSelectedCourseIds = [];
 
   if (Array.isArray(courseIds) && courseIds.length) {
@@ -84,13 +60,13 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
       .filter(Boolean);
 
     if (objectIds.length) {
-      if (!resolvedInstitutionType || !COURSE_MODEL_MAP[resolvedInstitutionType]) {
+      if (!COURSE_MODEL_MAP[institutionType]) {
         console.error("Invalid institution type:", resolvedInstitutionType);
         return next(new AppError("Invalid institution type or mapping failed", 400));
       }
 
       // Resolve model (Direct access since CourseMap exports models)
-      const CourseModel = COURSE_MODEL_MAP[resolvedInstitutionType];
+      const CourseModel = COURSE_MODEL_MAP[institutionType];
 
       const foundCourses = await CourseModel.find({
         _id: { $in: objectIds },
@@ -117,7 +93,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
 
     const session = await mongoose.startSession();
     session.startTransaction();
-    const CourseModel = COURSE_MODEL_MAP[resolvedInstitutionType];
+    const CourseModel = COURSE_MODEL_MAP[institutionType];
 
     try {
       const now = new Date();
@@ -238,7 +214,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
       institution: institutionId,
       status: "pending",
       razorpayOrderId: order.id,
-      amount: amount / 100, // stored in rupees
+      amount: amount, // stored in rupees
       planType: planType,
       courseIds: validSelectedCourseIds,
     });
@@ -261,7 +237,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
         pricePerCourse: planPrice,
         couponCode: couponCode || null,
         couponCode: couponCode || null,
-        institutionType: resolvedInstitutionType,
+        institutionType: institutionType,
         noOfMonths: noOfMonths,
       },
       PAYMENT_CONTEXT_TTL
@@ -349,13 +325,6 @@ const activateSubscription = async ({ orderId, paymentId, session, paymentContex
     console.log(`[Activation] Coupon use count incremented`);
   }
 
-  // 5. Update Institute Payment Status
-  // await InstituteAdmin.updateOne(
-  //   { institution: subscription.institution },
-  //   { $set: { isPaymentDone: true } },
-  //   { session }
-  // );
-
   // 6. Activate Selected Courses
   let coursesActivated = 0;
   // Determine courses to activate (Redis Context OR DB Fallback)
@@ -375,7 +344,7 @@ const activateSubscription = async ({ orderId, paymentId, session, paymentContex
     };
 
     // Resolve CourseModel dynamically
-    const CourseModel = COURSE_MODEL_MAP[paymentContext.institutionType];
+    const CourseModel = COURSE_MODEL_MAP[institutionType];
 
     const courseUpdateResult = await CourseModel.updateMany(
       courseMatch,
@@ -425,32 +394,6 @@ exports.verifyPayment = asyncHandler(async (req, res, next) => {
     console.warn(`[Payment Webhook] ⚠️ Payment context missing for order: ${order_id}`);
   }
 
-  // Resolve Institution Type if missing in context
-  let resolvedInstitutionType = paymentContext?.institutionType;
-
-  if (!resolvedInstitutionType) {
-    try {
-      const sub = await Subscription.findOne({ razorpayOrderId: order_id }).populate("institution").lean();
-      if (sub && sub.institution?.instituteType) {
-        const INSTITUTION_TYPE_MAP = {
-          "Kindergarten/childcare center": "KINDERGARTEN",
-          "School's": "SCHOOL",
-          "Intermediate college(K12)": "INTERMEDIATE",
-          "Under Graduation/Post Graduation": "UG_PG",
-          "Exam Preparation": "EXAM_PREP",
-          "Upskilling": "UPSKILLING",
-          "Tution Center's": "TUTION_CENTER",
-          "Study Abroad": "STUDY_ABROAD",
-          "Coaching centers": "EXAM_PREP",
-          "Study Halls": "UPSKILLING",
-        };
-        resolvedInstitutionType = INSTITUTION_TYPE_MAP[sub.institution.instituteType];
-      }
-    } catch (dbErr) {
-      console.error("[Payment Webhook] Failed to resolve institution type from DB:", dbErr);
-    }
-  }
-
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -461,7 +404,7 @@ exports.verifyPayment = asyncHandler(async (req, res, next) => {
       paymentId: payment_id,
       session,
       paymentContext,
-      institutionType: resolvedInstitutionType,
+      institutionType: paymentContext.institutionType,
     });
 
     await session.commitTransaction();

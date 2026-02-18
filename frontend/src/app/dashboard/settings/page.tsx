@@ -6,7 +6,8 @@ import { authAPI } from "@/lib/api";
 import { dashboardAPI } from "@/lib/dashboard_api";
 import { toast } from 'react-toastify';
 import axios from 'axios';
-import { cacheGet, cacheSet } from "@/lib/localDb";
+import { useDashboardHealth } from "@/lib/hooks/dashboard-hooks";
+import { useQueryClient } from "@tanstack/react-query";
 import L2DialogBox from "@/components/auth/L2DialogBox";
 import AppSelect from "@/components/ui/AppSelect";
 import { useSearchParams } from "next/navigation";
@@ -67,10 +68,18 @@ const SettingsPage: React.FC = () => {
     const [formData, setFormData] = useState<AdminFormData>({ currentEmail: "", newPassword: "", confirmPassword: "" });
     
     // Course editing state
-    const [allCourses, setAllCourses] = useState<Record<string, unknown>[]>([]);
     const [selectedCourse, setSelectedCourse] = useState<Record<string, unknown> | null>(null);
-    const [institutionData, setInstitutionData] = useState<Record<string, unknown> | null>(null);
     const [courseError, setCourseError] = useState("");
+    const queryClient = useQueryClient();
+
+    // Use unified dashboard health hook - fetches all data once and caches it
+    const { data: dashboardHealth, isLoading: healthLoading, error: healthError } = useDashboardHealth();
+    
+    // Extract courses and institution data from dashboard health
+    const allCourses = dashboardHealth?.branchesWithCourses.flatMap((b: Record<string, unknown>) => 
+        (b.courses as Record<string, unknown>[]) || []
+    ) || [];
+    const institutionData = dashboardHealth?.institution || null;
 
     // Handle editProgram query parameter
     useEffect(() => {
@@ -103,43 +112,17 @@ const SettingsPage: React.FC = () => {
         fetchInitialData();
     }, []);
 
+    // Update loading and error states based on dashboard health hook
     useEffect(() => {
-        if (activeTab !== "course") return;
-
-        const fetchFullData = async () => {
-            setPageLoading(true);
-            setCourseError("");
-            try {
-                const cachedData = await cacheGet("fullDashboardData");
-                if (cachedData && typeof cachedData === 'object' && 'branchesWithCourses' in cachedData) {
-                    const courses = (cachedData as { branchesWithCourses: { courses: Record<string, unknown>[] }[] }).branchesWithCourses.flatMap((b: { courses: Record<string, unknown>[] }) => b.courses);
-                    setAllCourses(courses);
-                    setInstitutionData((cachedData as unknown as { institution: Record<string, unknown> }).institution);
-                    return;
-                }
-
-                const fileOrBlob = await dashboardAPI.getFullDashboardDetails();
-                if ((fileOrBlob as unknown) instanceof Blob || (fileOrBlob as unknown) instanceof File) {
-                    const textData = await fileOrBlob.text();
-                    const data = JSON.parse(textData) as { branchesWithCourses: { courses: Record<string, unknown>[] }[]; institution: Record<string, unknown> };
-
-                    await cacheSet("fullDashboardData", data, 5 * 60 * 1000); // 5 minutes cache
-
-                    const courses = data.branchesWithCourses.flatMap((b: { courses: Record<string, unknown>[] }) => b.courses);
-                    setAllCourses(courses);
-                    setInstitutionData(data.institution);
-                } else {
-                    setCourseError("Unexpected response type from backend.");
-                }
-            } catch (error) {
-                setCourseError(error instanceof Error ? error.message : "An unknown error occurred.");
-            } finally {
-                setPageLoading(false);
+        if (activeTab === "course") {
+            setPageLoading(healthLoading);
+            if (healthError) {
+                setCourseError(healthError instanceof Error ? healthError.message : "An unknown error occurred.");
+            } else {
+                setCourseError("");
             }
-        };
-
-        fetchFullData();
-    }, [activeTab]);
+        }
+    }, [activeTab, healthLoading, healthError]);
 
     // --- FORM HANDLERS ---
     const handleInputChange = (field: keyof AdminFormData, value: string) =>
@@ -153,23 +136,8 @@ const SettingsPage: React.FC = () => {
     const handleEditSuccess = () => {
         toast.success("Program updated successfully!");
         setSelectedCourse(null);
-        // Refresh the data
-        const refreshData = async () => {
-            try {
-                const fileOrBlob = await dashboardAPI.getFullDashboardDetails();
-                if ((fileOrBlob as unknown) instanceof Blob || (fileOrBlob as unknown) instanceof File) {
-                    const textData = await fileOrBlob.text();
-                    const data = JSON.parse(textData) as { branchesWithCourses: { courses: Record<string, unknown>[] }[]; institution: Record<string, unknown> };
-                    await cacheSet("fullDashboardData", data, 5 * 60 * 1000);
-                    const courses = data.branchesWithCourses.flatMap((b: { courses: Record<string, unknown>[] }) => b.courses);
-                    setAllCourses(courses);
-                    setInstitutionData(data.institution);
-                }
-            } catch {
-                console.error("Failed to refresh data");
-            }
-        };
-        refreshData();
+        // Invalidate dashboard health cache to trigger refetch
+        queryClient.invalidateQueries({ queryKey: ['dashboard-health'] });
     };
     
     // --- ACTION HANDLERS (SAVE, OTP, etc.) ---
@@ -266,7 +234,7 @@ const SettingsPage: React.FC = () => {
                     <div className="border-b border-gray-200 dark:border-gray-800 mb-6">
                         <nav className="flex space-x-8">
                             <button onClick={() => setActiveTab("admin")} className={`py-2 px-1 border-b-2 font-medium text-base transition-colors duration-200 ${activeTab === "admin" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"}`}>Admin Details</button>
-                            <button onClick={() => setActiveTab("course")} className={`py-2 px-1 border-b-2 font-medium text-base transition-colors duration-200 ${activeTab === "course" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"}`}>Edit Program</button>
+                            {/* <button onClick={() => setActiveTab("course")} className={`py-2 px-1 border-b-2 font-medium text-base transition-colors duration-200 ${activeTab === "course" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"}`}>Edit Program</button> */}
                         </nav>
                     </div>
 

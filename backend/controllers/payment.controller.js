@@ -9,7 +9,7 @@ const Subscription = require("../models/Subscription");
 const InstituteAdmin = require("../models/InstituteAdmin");
 const Coupon = require("../models/coupon");
 const RedisUtil = require("../utils/redis.util");
-const Course = require("../models/Course");
+const COURSE_MODEL_MAP = require("../utils/CourseMap.js")
 
 // CORRECT: Importing the job function
 const { addPaymentSuccessEmailJob } = require('../jobs/email.job.js');
@@ -26,41 +26,30 @@ const PAYMENT_CONTEXT_TTL = 60 * 60; // 60 minutes to survive delayed webhooks
 
 
 exports.createOrder = asyncHandler(async (req, res, next) => {
-  const { planType = "yearly", couponCode, courseIds = [] } = req.body;
+  const { planType, couponCode, courseIds = [], listingType, noOfMonths, institutionType } = req.body;
   const userId = req.userId;
+  const isFreeListingRequest = listingType === "free" || req.body.amount === 0;
 
   console.log("[Payment] Create order request received:", {
     userId,
     planType,
     couponCode,
+    isFreeListingRequest,
+    noOfMonths
   });
 
-  // ✅ Step 1: Get institution linked to admin
-  const institutionDoc = await InstituteAdmin.findById(userId).select("institution");
-  const institutionId = institutionDoc?.institution;
+  // ✅ Step 1: Get institution linked to admin (and populate to get type)
+  const institutionDoc = await InstituteAdmin.findById(userId).populate("institution");
+  const institutionId = institutionDoc?.institution?._id || institutionDoc?.institution;
+
   if (!institutionId) {
     console.error("[Payment] Institution not found for user:", userId);
     return next(new AppError("Institution not found", 404));
   }
   console.log("[Payment] Institution found:", institutionId);
 
-  // ✅ Step 2: Capture snapshot of currently inactive courses (used for pricing + enforcement)
-  const inactiveCourseDocs = await Course.find({
-    institution: institutionId,
-    status: { $in: ["Inactive", "inactive"] },
-  })
-    .select("_id")
-    .lean();
-  const inactiveSnapshotIds = inactiveCourseDocs.map((doc) =>
-    doc._id.toString()
-  );
-
-  const totalInactiveCourses = inactiveSnapshotIds.length;
-  console.log("[Payment] Inactive course count:", totalInactiveCourses);
-
-  // ✅ Step 2a: Narrow down to explicitly selected course IDs (if any)
-  // If courseIds not provided, use all inactive courses (for signup flow)
   let validSelectedCourseIds = [];
+
   if (Array.isArray(courseIds) && courseIds.length) {
     const normalizedIds = [...new Set(courseIds.filter((id) => typeof id === "string" && id.trim()))];
     const objectIds = normalizedIds
@@ -71,7 +60,15 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
       .filter(Boolean);
 
     if (objectIds.length) {
-      const foundCourses = await Course.find({
+      if (!COURSE_MODEL_MAP[institutionType]) {
+        console.error("Invalid institution type:", resolvedInstitutionType);
+        return next(new AppError("Invalid institution type or mapping failed", 400));
+      }
+
+      // Resolve model (Direct access since CourseMap exports models)
+      const CourseModel = COURSE_MODEL_MAP[institutionType];
+
+      const foundCourses = await CourseModel.find({
         _id: { $in: objectIds },
         institution: institutionId,
         status: { $in: ["Inactive", "inactive"] },
@@ -81,9 +78,8 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
       validSelectedCourseIds = foundCourses.map((course) => course._id);
     }
   } else {
-    // If no courseIds provided, use all inactive courses (signup flow)
-    validSelectedCourseIds = inactiveCourseDocs.map((doc) => doc._id);
-    console.log("[Payment] No courseIds provided, using all inactive courses:", validSelectedCourseIds.length);
+    // If no courseIds provided, do NOT auto-select all courses.
+    console.log("[Payment] No courseIds provided. Request will be rejected.");
   }
 
   if (!validSelectedCourseIds.length) {
@@ -91,6 +87,79 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     return next(new AppError("No inactive courses available to activate", 400));
   }
 
+  // ✅ FREE LISTING FLOW: Skip Razorpay, activate courses directly with limited features
+  if (isFreeListingRequest) {
+    console.log("[Payment] Processing FREE LISTING for courses:", validSelectedCourseIds.length);
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    const CourseModel = COURSE_MODEL_MAP[institutionType];
+
+    try {
+      const now = new Date();
+      // Free listings get 30 days validity
+      const endDate = new Date(now);
+      endDate.setDate(endDate.getDate() + 30);
+
+      // Create subscription record for free listing
+      const freeSubscription = await Subscription.create(
+        [{
+          institution: institutionId,
+          status: "active",
+          razorpayOrderId: `free_${Date.now()}`,
+          razorpayPaymentId: null,
+          razorpayPaymentId: null,
+          amount: 0,
+          courseIds: validSelectedCourseIds,
+        }],
+        { session }
+      );
+      console.log("[Payment] Free subscription created:", freeSubscription[0]._id);
+
+
+      // Activate selected courses with FREE listing type
+      const courseUpdateResult = await CourseModel.updateMany(
+        {
+          institution: institutionId,
+          status: { $in: ["Inactive", "inactive"] },
+          _id: { $in: validSelectedCourseIds },
+        },
+        {
+          $set: {
+            status: "Active",
+            listingType: "free", // Mark as free listing with limited features
+            courseSubscriptionStartDate: new Date(),
+            courseSubscriptionEndDate: endDate,
+          },
+        },
+        { session }
+      );
+
+      console.log(`[Payment] ✅ Activated ${courseUpdateResult.modifiedCount} courses with FREE listing`);
+
+      await session.commitTransaction();
+      session.endSession();
+
+      // Return success response for free listing
+      return res.status(200).json({
+        status: "success",
+        message: "Free listing activated successfully",
+        listingType: "free",
+        planType: "free",
+        totalActivatedCourses: courseUpdateResult.modifiedCount,
+        validUntil: endDate,
+        orderId: freeSubscription[0].razorpayOrderId,
+        amount: 0,
+      });
+    } catch (err) {
+      await session.abortTransaction();
+      session.endSession();
+      console.error("[Payment] Free listing activation failed:", err);
+      return next(new AppError("Failed to activate free listing", 500));
+    }
+  }
+
+  // ✅ PAID FLOW: Continue with Razorpay
   // ✅ Step 3: Validate plan type and get base amount
   const planPrice = PLANS[planType.toLowerCase()];
   if (!planPrice) {
@@ -100,7 +169,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
 
   const effectiveCourseCount = validSelectedCourseIds.length;
 
-  let amount = effectiveCourseCount * planPrice;
+  let amount = effectiveCourseCount * planPrice * noOfMonths;
   console.log("[Payment] Base amount (before coupon):", amount);
 
   // ✅ Step 4: Check coupon validity and apply discount if applicable
@@ -123,7 +192,8 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
       couponCode,
       discountPercentage: coupon.discountPercentage,
       discount,
-      finalAmount: amount,
+      amount: amount,
+      courseIds: validSelectedCourseIds,
     });
   }
 
@@ -138,6 +208,17 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   try {
     order = await razorpay.orders.create(options);
     console.log("[Payment] Razorpay order created:", order);
+
+    // ✅ Create Pending Subscription (Persistent Record)
+    await Subscription.create({
+      institution: institutionId,
+      status: "pending",
+      razorpayOrderId: order.id,
+      amount: amount, // stored in rupees
+      planType: planType,
+      courseIds: validSelectedCourseIds,
+    });
+
   } catch (err) {
     console.error("[Payment] Razorpay order creation failed:", err);
     return next(new AppError("Failed to create order with Razorpay", 500));
@@ -150,12 +231,14 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
       {
         institution: institutionId.toString(),
         selectedCourseIds: validSelectedCourseIds.map((id) => id.toString()),
-        inactiveSnapshot: inactiveSnapshotIds,
         totalCourses: effectiveCourseCount,
         totalAmount: amount,
         planType,
         pricePerCourse: planPrice,
         couponCode: couponCode || null,
+        couponCode: couponCode || null,
+        institutionType: institutionType,
+        noOfMonths: noOfMonths,
       },
       PAYMENT_CONTEXT_TTL
     );
@@ -168,12 +251,10 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     const subscription = await Subscription.create(
       {
         institution: institutionId,
-        planType,
         status: "pending",
+        planType,
         razorpayOrderId: order.id,
         razorpayPaymentId: null,
-        startDate: null,
-        endDate: null,
         amount,
       },
     );
@@ -198,6 +279,92 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
 });
 
 
+/**
+ * Shared Helper: Activate Subscription & Courses
+ * Handles the logic for updating subscription, institute admin, coupon, and courses.
+ */
+const activateSubscription = async ({ orderId, paymentId, session, paymentContext, institutionType }) => {
+  // 1. Fetch Subscription
+  console.log(`[Activation] Fetching subscription for order: ${orderId}`);
+  const subscription = await Subscription.findOne({ razorpayOrderId: orderId }).session(session);
+
+  if (!subscription) {
+    throw new Error(`Subscription not found for orderId: ${orderId}`);
+  }
+
+  // Idempotency Check
+  if (subscription.status === "active") {
+    console.log(`[Activation] Subscription already active for order: ${orderId}`);
+    return { alreadyActive: true, subscription };
+  }
+
+  // 2. Calculate End Date
+  const now = new Date();
+  // Ensure we use the noOfMonths from payment context, default to 1 if missing
+  const noOfMonths = parseInt(paymentContext?.noOfMonths || 1, 10);
+
+  const endDate =
+    subscription.planType === "yearly"
+      ? new Date(now.setFullYear(now.getFullYear() + 1))
+      : new Date(now.setMonth(now.getMonth() + noOfMonths));
+
+  // 3. Update Subscription Status
+  subscription.status = "active";
+  subscription.razorpayPaymentId = paymentId;
+  subscription.startDate = new Date();
+  subscription.endDate = endDate;
+  await subscription.save({ session });
+
+  // 4. Increment Coupon Usage (if applicable)
+  if (subscription.coupon) {
+    await Coupon.updateOne(
+      { _id: subscription.coupon },
+      { $inc: { useCount: 1 } },
+      { session }
+    );
+    console.log(`[Activation] Coupon use count incremented`);
+  }
+
+  // 6. Activate Selected Courses
+  let coursesActivated = 0;
+  // Determine courses to activate (Redis Context OR DB Fallback)
+  const courseIdsToActivate =
+    paymentContext?.selectedCourseIds ||
+    (subscription.courseIds ? subscription.courseIds.map(id => id.toString()) : []);
+
+  const validCourseObjectIds = (Array.isArray(courseIdsToActivate) ? courseIdsToActivate : [])
+    .filter((id) => mongoose.Types.ObjectId.isValid(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
+
+  if (validCourseObjectIds.length > 0) {
+    const courseMatch = {
+      institution: subscription.institution,
+      status: { $in: ["Inactive", "inactive"] },
+      _id: { $in: validCourseObjectIds },
+    };
+
+    // Resolve CourseModel dynamically
+    const CourseModel = COURSE_MODEL_MAP[institutionType];
+
+    const courseUpdateResult = await CourseModel.updateMany(
+      courseMatch,
+      {
+        $set: {
+          status: "Active",
+          listingType: "paid",
+          courseSubscriptionStartDate: new Date(),
+          courseSubscriptionEndDate: endDate,
+        },
+      },
+      { session }
+    );
+    coursesActivated = courseUpdateResult.modifiedCount;
+  }
+
+  console.log(`[Activation] Success. Activated ${coursesActivated} courses.`);
+  return { alreadyActive: false, subscription, coursesActivated };
+};
+
 exports.verifyPayment = asyncHandler(async (req, res, next) => {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
@@ -221,195 +388,126 @@ exports.verifyPayment = asyncHandler(async (req, res, next) => {
 
   const { order_id, id: payment_id, amount } = payload.payment.entity;
 
+  // Retrieve Context
   const paymentContext = await RedisUtil.getPaymentContext(order_id);
-  const redisCourseIds = Array.isArray(paymentContext?.selectedCourseIds)
-    ? paymentContext.selectedCourseIds
-    : [];
-  const inactiveSnapshotIds = Array.isArray(paymentContext?.inactiveSnapshot)
-    ? paymentContext.inactiveSnapshot
-    : [];
-  const validCourseObjectIds = redisCourseIds
-    .filter((id) => mongoose.Types.ObjectId.isValid(id))
-    .map((id) => new mongoose.Types.ObjectId(id));
-
-  if (!validCourseObjectIds.length) {
-    console.log(
-      `[Payment Webhook] ⚠️ Missing or invalid course selection in Redis for order_id: ${order_id}`
-    );
-    return next(new AppError("Missing course selection for payment context", 422));
-  }
-
-  // ✅ 3. Find subscription (minimal projection)
-  const subscription = await Subscription.findOne({ razorpayOrderId: order_id })
-    .select("status institution planType coupon")
-    .lean();
-
-  if (!subscription) {
-    console.log(`[Payment Webhook] ⚠️ No subscription found for order_id: ${order_id}`);
-    return res.status(200).send("OK");
-  }
-
-  // ✅ Idempotency guard
-  if (subscription.status === "active") {
-    console.log(`[Payment Webhook] ⚠️ Subscription already active for order_id: ${order_id}`);
-    return res.status(200).send("OK");
+  if (!paymentContext) {
+    console.warn(`[Payment Webhook] ⚠️ Payment context missing for order: ${order_id}`);
   }
 
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const now = new Date();
-    const endDate =
-      subscription.planType === "yearly"
-        ? new Date(now.setFullYear(now.getFullYear() + 1))
-        : new Date(now.setMonth(now.getMonth() + 1));
-
-    // ✅ Activate subscription
-    await Subscription.updateOne(
-      { razorpayOrderId: order_id },
-      {
-        $set: {
-          status: "active",
-          razorpayPaymentId: payment_id,
-          startDate: new Date(),
-          endDate,
-        },
-      },
-      { session }
-    );
-
-    // ✅ Increment coupon usage if applied
-    if (subscription.coupon) {
-      await Coupon.updateOne(
-        { _id: subscription.coupon },
-        { $inc: { useCount: 1 } },
-        { session }
-      );
-      console.log(`[Payment Webhook] 🎟️ Coupon ${subscription.coupon} usage incremented`);
-    }
-
-    // ✅ Mark payment done for institute admin
-    await InstituteAdmin.updateOne(
-      { institution: subscription.institution },
-      { $set: { isPaymentDone: true } },
-      { session }
-    );
-    console.log(`[Payment Webhook] ✅ Institute payment marked as done`);
-
-    // ✅ Activate relevant inactive courses
-    const courseMatch = {
-      institution: subscription.institution,
-      status: { $in: ["Inactive", "inactive"] },
-      _id: { $in: validCourseObjectIds },
-    };
-
-    const courseUpdateResult = await Course.updateMany(
-      courseMatch,
-      {
-        $set: {
-          status: "Active",
-          courseSubscriptionStartDate: new Date(),
-          courseSubscriptionEndDate: endDate,
-        },
-      },
-      { session }
-    );
-
-    console.log(
-      `[Payment Webhook] ✅ Activated ${courseUpdateResult.modifiedCount} inactive courses for institution ${subscription.institution}`
-    );
-
-    // ✅ Reapply inactive status to snapshot courses that weren't part of this payment
-    const selectedIdSet = new Set(
-      validCourseObjectIds.map((id) => id.toString())
-    );
-    const reapplyInactiveIds = inactiveSnapshotIds
-      .filter(
-        (id) =>
-          mongoose.Types.ObjectId.isValid(id) && !selectedIdSet.has(id)
-      )
-      .map((id) => new mongoose.Types.ObjectId(id));
-
-    if (reapplyInactiveIds.length) {
-      await Course.updateMany(
-        {
-          institution: subscription.institution,
-          _id: { $in: reapplyInactiveIds },
-        },
-        {
-          $set: { status: "Inactive" },
-          $unset: {
-            courseSubscriptionStartDate: "",
-            courseSubscriptionEndDate: "",
-          },
-        },
-        { session }
-      );
-      console.log(
-        `[Payment Webhook] 🔁 Reverted ${reapplyInactiveIds.length} unselected inactive courses`
-      );
-    }
-
-    // ✅ Cache subscription status
-    // await RedisUtil.setex(
-    //   `sub_status:${subscription.institution.toString()}`,
-    //   3600,
-    //   "active"
-    // );
+    // ✅ CALL SHARED ACTIVATION HELPER
+    const result = await activateSubscription({
+      orderId: order_id,
+      paymentId: payment_id,
+      session,
+      paymentContext,
+      institutionType: paymentContext.institutionType,
+    });
 
     await session.commitTransaction();
     session.endSession();
 
-    console.log(
-      `[Payment Webhook] ✅ Subscription + course updates completed successfully for order_id: ${order_id}`
-    );
-
-    // ✅ Send email (non-critical, outside session)
-    const admin = await InstituteAdmin.findOne({
-      institution: subscription.institution,
-    })
-      .select("name email")
-      .lean();
-
-    if (admin?.email) {
-      await addPaymentSuccessEmailJob({
-        name: admin.name,
-        email: admin.email,
-        planType: subscription.planType,
-        amount: amount / 100, // paise → INR
-        orderId: order_id,
-        startDate: new Date(),
-        endDate,
-      });
-
-      console.log(`[Payment Webhook] 📧 Payment success email queued for ${admin.email}`);
-    } else {
-      console.log(`[Payment Webhook] ⚠️ No email found for institution admin.`);
+    if (result.alreadyActive) {
+      console.log(`[Payment Webhook] Payment already processed for ${order_id}`);
+      return res.status(200).json({ status: "already_active" });
     }
 
+    console.log(`[Payment Webhook] ✅ Activation complete for ${order_id}`);
+
+    // ✅ Post-activation: Send Email (Non-transactional)
+    try {
+      const admin = await InstituteAdmin.findOne({ institution: result.subscription.institution }).select("name email").lean();
+      if (admin?.email) {
+        await addPaymentSuccessEmailJob({
+          name: admin.name,
+          email: admin.email,
+          planType: result.subscription.planType,
+          amount: amount / 100, // Use amount from webhook payload (paise -> INR)
+          orderId: order_id,
+          startDate: result.subscription.startDate,
+          endDate: result.subscription.endDate,
+        });
+        console.log(`[Payment Webhook] 📧 Email queued for ${admin.email}`);
+      }
+    } catch (emailErr) {
+      console.error("[Payment Webhook] ⚠️ Failed to queue email:", emailErr);
+    }
+
+    // Cleanup
     await RedisUtil.deletePaymentContext(order_id);
 
     return res.status(200).json({ status: "success" });
+
   } catch (err) {
     await session.abortTransaction();
     session.endSession();
-    console.log("[Payment Webhook] ❌ Transaction failed:", err);
-    return next(new AppError("Payment verification failed.", 500));
+    console.error(`[Payment Webhook] ❌ Transaction failed for order ${order_id}: ${err.message}`);
+
+    // Check if error is due to missing subscription (404)
+    if (err.message.includes("Subscription not found")) {
+      return res.status(404).json({ status: "error", message: "Subscription not found" });
+    }
+
+    return next(new AppError("Payment verification failed", 500));
   }
 });
-
-
 
 exports.pollSubscriptionStatus = asyncHandler(async (req, res) => {
   try {
     const userId = req.userId;
-    const { orderId } = req.query;
+    const { orderId, paymentId, signature, institutionType } = req.query;
 
     if (!userId) {
-      return res
-        .status(400)
-        .json({ status: "error", message: "Missing userId" });
+      return res.status(400).json({ status: "error", message: "Missing userId" });
+    }
+
+    // ✅ MANUAL VERIFICATION (Immediate Activation)
+    if (orderId && paymentId && signature) {
+      const generated_signature = crypto
+        .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+        .update(orderId + "|" + paymentId)
+        .digest("hex");
+
+      if (generated_signature === signature) {
+        console.log(`[Poll Status] ✅ Signature verified for order ${orderId}`);
+
+        const paymentContext = await RedisUtil.getPaymentContext(orderId);
+
+        // Manual verification fallback for institution type
+        let manualResolvedType = paymentContext?.institutionType || institutionType;
+
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+          // ✅ CALL SHARED ACTIVATION HELPER
+          await activateSubscription({
+            orderId,
+            paymentId,
+            session,
+            paymentContext,
+            institutionType: manualResolvedType
+          });
+
+          await session.commitTransaction();
+          console.log(`[Poll Status] ✅ Manual activation successful for ${orderId}`);
+
+          await RedisUtil.deletePaymentContext(orderId);
+
+        } catch (actErr) {
+          await session.abortTransaction();
+          console.error(`[Poll Status] ❌ Manual activation failed: ${actErr.message}`);
+          // Fall through to return status (it might have been successful but errored on email or cleanup?)
+          // Or if activation failed, status is still pending/expired.
+        } finally {
+          session.endSession();
+        }
+      } else {
+        console.warn(`[Poll Status] ⚠️ Invalid signature for order ${orderId}`);
+      }
     }
 
     const subscription = await Subscription.aggregate([
@@ -439,130 +537,21 @@ exports.pollSubscriptionStatus = asyncHandler(async (req, res) => {
       },
     ]);
 
-    if (!subscription || subscription.length === 0) {
-      return res.status(404).json({ success: false, message: "pending" });
-    }
+    // Filter to the specific order if multiple exist or just find the relevant one
+    const sub = subscription.find(s => s.razorpayOrderId === orderId) || subscription[0];
 
-    const sub = subscription[0];
-    const status = sub.status;
-
-    // ✅ If subscription is active and orderId is provided, activate selected courses
-    if (status === "active" && orderId) {
-      try {
-        // Get payment context from Redis
-        const paymentContext = await RedisUtil.getPaymentContext(orderId);
-        
-        if (paymentContext && paymentContext.selectedCourseIds && paymentContext.selectedCourseIds.length > 0) {
-          // Verify institution matches
-          if (paymentContext.institution === sub.institution.toString()) {
-            const redisCourseIds = Array.isArray(paymentContext.selectedCourseIds)
-              ? paymentContext.selectedCourseIds
-              : [];
-            
-            const validCourseObjectIds = redisCourseIds
-              .filter((id) => mongoose.Types.ObjectId.isValid(id))
-              .map((id) => new mongoose.Types.ObjectId(id));
-
-            if (validCourseObjectIds.length > 0) {
-              const now = new Date();
-              const endDate =
-                sub.planType === "yearly"
-                  ? new Date(now.setFullYear(now.getFullYear() + 1))
-                  : new Date(now.setMonth(now.getMonth() + 1));
-
-              const session = await mongoose.startSession();
-              session.startTransaction();
-
-              try {
-                // Mark payment done for institute admin
-                await InstituteAdmin.updateOne(
-                  { institution: sub.institution },
-                  { $set: { isPaymentDone: true } },
-                  { session }
-                );
-                console.log(`[Poll Status] ✅ Institute payment marked as done`);
-
-                // Activate selected courses
-                const courseMatch = {
-                  institution: sub.institution,
-                  status: { $in: ["Inactive", "inactive"] },
-                  _id: { $in: validCourseObjectIds },
-                };
-
-                const courseUpdateResult = await Course.updateMany(
-                  courseMatch,
-                  {
-                    $set: {
-                      status: "Active",
-                      courseSubscriptionStartDate: new Date(),
-                      courseSubscriptionEndDate: endDate,
-                    },
-                  },
-                  { session }
-                );
-
-                console.log(
-                  `[Poll Status] ✅ Activated ${courseUpdateResult.modifiedCount} courses for institution ${sub.institution}`
-                );
-
-                // Reapply inactive status to unselected courses from snapshot
-                const inactiveSnapshotIds = Array.isArray(paymentContext?.inactiveSnapshot)
-                  ? paymentContext.inactiveSnapshot
-                  : [];
-
-                const selectedIdSet = new Set(
-                  validCourseObjectIds.map((id) => id.toString())
-                );
-                const reapplyInactiveIds = inactiveSnapshotIds
-                  .filter(
-                    (id) =>
-                      mongoose.Types.ObjectId.isValid(id) && !selectedIdSet.has(id)
-                  )
-                  .map((id) => new mongoose.Types.ObjectId(id));
-
-                if (reapplyInactiveIds.length) {
-                  await Course.updateMany(
-                    {
-                      institution: sub.institution,
-                      _id: { $in: reapplyInactiveIds },
-                    },
-                    {
-                      $set: { status: "Inactive" },
-                      $unset: {
-                        courseSubscriptionStartDate: "",
-                        courseSubscriptionEndDate: "",
-                      },
-                    },
-                    { session }
-                  );
-                  console.log(
-                    `[Poll Status] 🔁 Reverted ${reapplyInactiveIds.length} unselected inactive courses`
-                  );
-                }
-
-                await session.commitTransaction();
-                session.endSession();
-
-                // Delete payment context after successful activation
-                await RedisUtil.deletePaymentContext(orderId);
-              } catch (activateErr) {
-                await session.abortTransaction();
-                session.endSession();
-                console.error("[Poll Status] ❌ Course activation failed:", activateErr);
-                // Continue to return status even if activation fails
-              }
-            }
-          }
-        }
-      } catch (contextErr) {
-        console.error("[Poll Status] ⚠️ Error checking payment context:", contextErr);
-        // Continue to return status even if context check fails
+    if (!sub) {
+      if (subscription.length === 0) {
+        return res.status(404).json({ success: false, message: "pending" });
       }
     }
 
+    // Safe check if sub is undefined
+    if (!sub) return res.status(404).json({ success: false, message: "pending" });
+
     return res
       .status(200)
-      .json({ success: true, message: status });
+      .json({ success: true, message: sub.status });
   } catch (err) {
     console.error("[Poll Subscription] ❌ Error:", err);
     return res
@@ -581,11 +570,40 @@ exports.getPayableAmount = asyncHandler(async (req, res) => {
 
   try {
     // Aggregation: get institution and count inactive courses
+    // 1. Get Admin and Institution Type to determine Collection Name
+    const admin = await InstituteAdmin.findById(userId).populate("institution");
+    if (!admin || !admin.institution) {
+      return res.status(404).json({ status: "error", message: "InstituteAdmin or Institution not found" });
+    }
+
+    const INSTITUTION_TYPE_MAP = {
+      "Kindergarten/childcare center": "KINDERGARTEN",
+      "School's": "SCHOOL",
+      "Intermediate college(K12)": "INTERMEDIATE",
+      "Under Graduation/Post Graduation": "UG_PG",
+      "Exam Preparation": "EXAM_PREP",
+      "Upskilling": "UPSKILLING",
+      "Tution Center's": "TUTION_CENTER",
+      "Study Abroad": "STUDY_ABROAD",
+      "Coaching centers": "EXAM_PREP",
+      "Study Halls": "UPSKILLING",
+    };
+
+    const instType = admin.institution.instituteType;
+    const mappedType = INSTITUTION_TYPE_MAP[instType];
+
+    // Resolve Model and Collection Name
+    let collectionName = "courses"; // Default
+    if (mappedType && COURSE_MODEL_MAP[mappedType]) {
+      const Model = COURSE_MODEL_MAP[mappedType];
+      collectionName = Model.collection.name;
+    }
+
     const result = await InstituteAdmin.aggregate([
       { $match: { _id: new mongoose.Types.ObjectId(userId) } },
       {
         $lookup: {
-          from: "courses",
+          from: collectionName,
           let: { institutionId: "$institution" },
           pipeline: [
             {
@@ -619,13 +637,7 @@ exports.getPayableAmount = asyncHandler(async (req, res) => {
     ]);
 
     const data = result[0];
-    if (!data) {
-      return res
-        .status(404)
-        .json({ status: "error", message: "InstituteAdmin not found" });
-    }
-
-    const { totalInactiveCourses } = data;
+    const { totalInactiveCourses } = data || { totalInactiveCourses: 0 };
 
     // Get price per plan
     const planPrice = PLANS[planType];

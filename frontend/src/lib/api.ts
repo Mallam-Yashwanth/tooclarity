@@ -1,5 +1,7 @@
 // API configuration and methods for authentication
 
+import { AcademicDetail, FacultyDetail } from "@/components/auth/L2DialogBox";
+
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
 // Types for API requests and responses
@@ -10,7 +12,7 @@ export interface SignUpData {
   contactNumber: string;
   designation?: string;
   linkedin?: string;
-  password: string;
+  password?: string;
   type?: "admin" | "institution" | "student";
 }
 
@@ -25,6 +27,7 @@ export interface OTPData {
   email?: string;
   contactNumber?: string;
   otp: string;
+  isLogin?: boolean
 }
 
 export interface resendOtpData {
@@ -58,43 +61,181 @@ export interface InstitutionData {
 
 // L2DialogBox Types
 export interface CourseData {
+  // id: number;
+  // courseName: string;
+  // aboutCourse: string;
+  // courseDuration: string;
+  // mode: string;
+  // priceOfCourse: string;
+  // location: string;
+  // image?: File | null;
+  // brochure?: File | null;
+  // // Additional fields for Under Graduate/Post graduate
+  // graduationType?: string;
+  // streamType?: string;
+  // selectBranch?: string;
+  // aboutBranch?: string;
+  // educationType?: string;
+  // classSize?: string;
+  // // Additional fields for Coaching centers
+  // categoriesType?: string;
+  // domainType?: string;
+  // subDomainType?: string;
+  // courseHighlights?: string;
+  // // Additional fields for Study Hall
+  // seatingOption?: string;
+  // openingTime?: string;
+  // closingTime?: string;
+  // operationalDays?: string[];
+  // totalSeats?: string;
+  // availableSeats?: string;
+  // pricePerSeat?: string;
+  // hasWifi?: boolean;
+  // hasChargingPoints?: boolean;
+  // hasAC?: boolean;
+  // hasPersonalLocker?: boolean;
+  // // Additional fields for Tuition Centers
+  // tuitionType?: string;
+  // instructorProfile?: string;
+  // subject?: string;
+
   id: number;
   courseName: string;
   aboutCourse: string;
   courseDuration: string;
+  startDate: string;
+  endDate: string;
   mode: string;
   priceOfCourse: string;
-  location: string;
-  image?: File | null;
-  brochure?: File | null;
-  // Additional fields for Under Graduate/Post graduate
-  graduationType?: string;
-  streamType?: string;
-  selectBranch?: string;
-  aboutBranch?: string;
-  educationType?: string;
-  classSize?: string;
-  // Additional fields for Coaching centers
-  categoriesType?: string;
-  domainType?: string;
-  subDomainType?: string;
-  courseHighlights?: string;
-  // Additional fields for Study Hall
-  seatingOption?: string;
-  openingTime?: string;
-  closingTime?: string;
-  operationalDays?: string[];
-  totalSeats?: string;
-  availableSeats?: string;
-  pricePerSeat?: string;
-  hasWifi?: boolean;
-  hasChargingPoints?: boolean;
-  hasAC?: boolean;
-  hasPersonalLocker?: boolean;
-  // Additional fields for Tuition Centers
-  tuitionType?: string;
-  instructorProfile?: string;
-  subject?: string;
+  locationURL: string;
+  state: string;
+  district: string;
+  town: string;
+  image: File | null;
+  imageUrl: string;
+  imagePreviewUrl: string;
+  brochureUrl: string;
+  brochurePreviewUrl: string;
+  brochure: File | null;
+  graduationType: string;
+  streamType: string;
+  selectBranch: string;
+  aboutBranch: string;
+  educationType: string;
+  classSize: string;
+  classSizeRatio?: string;
+  categoriesType: string;
+  domainType: string;
+  subDomainType: string;
+  courseHighlights: string;
+  seatingOption: string;
+  openingTime: string;
+  closingTime: string;
+  openingTimePeriod: string;
+  closingTimePeriod: string;
+  hallName?: string;
+  operationalDays: string[];
+  totalSeats: string;
+  availableSeats: string;
+  pricePerSeat: string;
+  hasWifi: string;
+  hasChargingPoints: string;
+  hasAC: string;
+  hasPersonalLocker: string;
+  eligibilityCriteria: string;
+  tuitionType: string;
+  instructorProfile: string;
+  subject: string;
+  createdBranch: string;
+  consultancyName: string;
+  studentAdmissions: string;
+  countriesOffered: string;
+  academicOfferings: string;
+  businessProof: File | null;
+  businessProofPreviewUrl: string;
+  businessProofUrl: string;
+  panAadhaar: File | null;
+  panAadhaarPreviewUrl: string;
+  panAadhaarUrl: string;
+  consultancyImage: File | null;
+  consultancyImagePreviewUrl: string;
+  consultancyImageUrl?: string;
+  centerImage: File | null;
+  centerImagePreviewUrl: string;
+  centerImageUrl?: string;
+
+  // --- MERGED L3 FIELDS ---
+  collegeType: string;
+  collegeCategory: string;
+  schoolType: string;
+  curriculumType: string;
+  schoolCategory: string;
+  hostelFacility: string;
+  playground: string;
+  busService: string;
+  otherActivities: string;
+  extendedCare: string;
+  mealsProvided: string;
+  outdoorPlayArea: string;
+  placementDrives: string;
+  mockInterviews: string;
+  resumeBuilding: string;
+  linkedinOptimization: string;
+  exclusiveJobPortal: string;
+  certification: string;
+  ownershipType: string;
+  affiliationType: string;
+  library: string;
+  entranceExam: string;
+  managementQuota: string;
+  applicationAssistance: string;
+  visaProcessingSupport: string;
+  testOperation: string;
+  preDepartureOrientation: string;
+  accommodationAssistance: string;
+  educationLoans: string;
+  postArrivalSupport: string;
+  emioptions: string;
+  installments: string;
+  totalNumberRequires: string | number;
+  totalStudentsPlaced: string | number;
+  highestPackage: string;
+  averagePackage: string;
+  budget: string | number;
+  studentsSent: string | number;
+  partTimeHelp: string;
+  academicDetails: AcademicDetail[];
+  facultyDetails: FacultyDetail[];
+  qualification?: string;
+  experience?: string;
+  specialization: string;
+  subjectTeach?: string;
+  monthlyFees?: string | number;
+  classTiming?: string;
+  courselanguage: string;
+  classlanguage: string;
+  mockTests: string;
+  collegeImage: File | null;
+  collegeImagePreviewUrl: string;
+  collegeImageUrl?: string;
+  tuitionImage: File | null;
+  tuitionImagePreviewUrl: string;
+  tuitionImageUrl?: string;
+  partlyPayment: string;
+  kindergartenImage: File | null;
+  kindergartenImagePreviewUrl: string;
+  kindergartenImageUrl?: string;
+
+  schoolImage: File | null;
+  schoolImagePreviewUrl: string;
+  schoolImageUrl?: string;
+  classType: string;
+
+  intermediateImage: File | null;      // ✅ Unique key for campus photos
+  intermediateImagePreviewUrl: string;
+  intermediateImageUrl?: string;
+  year: string;
+  studyMaterial: string;
 }
 
 export interface BranchData {
@@ -170,6 +311,8 @@ export interface PaymentInitPayload {
   planType?: string; // e.g., "yearly" | "monthly"
   couponCode?: string | null;
   courseIds?: string[];
+  noOfMonths?: number;
+  institutionType?: string;
   // institutionId: string;
 }
 
@@ -180,6 +323,7 @@ export interface PaymentVerifyPayload {
   planType?: string;
   coupon?: string | null;
   amount?: number;
+  institutionType?: string;
 }
 
 export async function apiRequest<T>(
@@ -288,7 +432,7 @@ export const authAPI = {
   resendOTP: async (resendOtpData: resendOtpData): Promise<ApiResponse> => {
     return apiRequest("/v1/auth/resend-otp", {
       method: "POST",
-      body: JSON.stringify( resendOtpData),
+      body: JSON.stringify(resendOtpData),
     });
   },
 
@@ -329,7 +473,7 @@ export const authAPI = {
       body: JSON.stringify(passwordData),
     });
   },
-  
+
 };
 
 // Institution API methods
@@ -351,6 +495,21 @@ export const institutionAPI = {
     return apiRequest("/v1/institutions/upload", {
       method: "POST",
       body: formData,
+    });
+  },
+
+
+
+  saveL1Details: async (formData: any, logoUrl: string): Promise<ApiResponse> => {
+    const payload = {
+      ...formData,
+      logoUrl: logoUrl,
+    };
+
+    // Use the base apiRequest helper
+    return apiRequest("/v1/institutions", {
+      method: "POST",
+      body: JSON.stringify(payload),
     });
   },
 };
@@ -519,16 +678,24 @@ export const courseAPI = {
    */
   createCourses: async (
     coursesData: CourseData[],
-    institutionId?: string
   ): Promise<ApiResponse> => {
-    return courseAPI.createCourse(coursesData, institutionId);
+    const response = {
+      courses: coursesData
+    }
+    return apiRequest(`/v1/course/create`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(response),
+    });
   },
 
   // Update course
   updateCourse: async (
     courseId: number,
     courseData: Partial<CourseData>
-  ): Promise<ApiResponse> => {  
+  ): Promise<ApiResponse> => {
     const formData = new FormData();
 
     Object.entries(courseData).forEach(([key, value]) => {
@@ -616,25 +783,39 @@ export const branchAPI = {
 
   // Update branch
   updateBranch: async (
-    branchId: number,
-    branchData: Partial<BranchData>
+    branchId: string,
+    branchData: Partial<BranchData>,
+    institutionId: string,
   ): Promise<ApiResponse> => {
-    return apiRequest(`/v1/branches/${branchId}`, {
+    return apiRequest(`/v1/institutions/${institutionId}/branches/${branchId}`, {
       method: "PUT",
       body: JSON.stringify(branchData),
     });
   },
 
   // Get branches
-  getBranches: async (): Promise<ApiResponse> => {
-    return apiRequest("/v1/branches", {
+  getBranches: async (institutionId: string): Promise<ApiResponse> => {
+    return apiRequest("/v1/institutions/${institutionId}/branches", {
+      method: "GET",
+    });
+  },
+
+  getBranchesWithCursor: async (institutionId: string, cursor?: string | null, limit: number = 10) => {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      ...(cursor && { cursor }),
+    });
+    return apiRequest(`/v1/institutions/${institutionId}/branches?${params.toString()}`, {
       method: "GET",
     });
   },
 
   // Delete branch
-  deleteBranch: async (branchId: number): Promise<ApiResponse> => {
-    return apiRequest(`/v1/branches/${branchId}`, {
+  deleteBranch: async (
+    branchId: number,
+    institutionId: string
+  ): Promise<ApiResponse> => {
+    return apiRequest(`/v1/institutions/${institutionId}/branches/${branchId}`, {
       method: "DELETE",
     });
   },
@@ -689,7 +870,7 @@ export const getMyInstitution = async (forceRefresh = false): Promise<unknown> =
     if (!forceRefresh && __myInstitutionCache && (Date.now() - __myInstitutionCacheAt) < CACHE_DURATION) {
       return __myInstitutionCache;
     }
-    
+
     const res = await apiRequest<unknown>("/v1/institutions/me", { method: "GET" });
     const payload = res as { data?: unknown };
     const data = payload?.data || payload;
@@ -740,6 +921,18 @@ export const analyticsAPI = {
   },
   getSummaryPrevious: async (range: TimeRangeParam = "weekly"): Promise<ApiResponse> => {
     return apiRequest(`/v1/analytics/summary?range=${range}&compare=prev`, { method: "GET" });
+  },
+  // Unified analytics endpoint using AnalyticsDaily model
+  getInstitutionAnalytics: async (
+    metric: 'views' | 'comparisons' | 'leads',
+    type: 'weekly' | 'monthly' | 'yearly'
+  ): Promise<ApiResponse> => {
+    // Note: Using POST method as GET requests cannot have a body in fetch API
+    // Backend route should be changed from GET to POST to match this
+    return apiRequest(`/v1/analytics/institution`, {
+      method: "POST",
+      body: JSON.stringify({ metric, type }),
+    });
   }
 };
 
@@ -748,83 +941,83 @@ const metricsCache = new Map<string, { data: unknown; timestamp: number }>();
 const METRICS_CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
 
 export const metricsAPI = {
-  increment: async (institutionId: string, courseId: string, metric: 'views'|'comparisons'): Promise<ApiResponse> => {
+  increment: async (institutionId: string, courseId: string, metric: 'views' | 'comparisons'): Promise<ApiResponse> => {
     return apiRequest(`/v1/institutions/${institutionId}/courses/${courseId}/metrics?metric=${metric}`, { method: "POST" });
   },
   // Accept optional institutionId; if missing, resolve via getMyInstitution()
-  getInstitutionAdminSummary: async (metric: 'views'|'comparisons', institutionId?: string): Promise<ApiResponse> => {
+  getInstitutionAdminSummary: async (metric: 'views' | 'comparisons', institutionId?: string): Promise<ApiResponse> => {
     let iid = institutionId;
     if (!iid) {
-      try { 
+      try {
         const inst = await getMyInstitution() as { _id?: string; data?: { _id?: string } };
-        iid = inst?._id || inst?.data?._id; 
-      } catch (err) { 
-        if (process.env.NODE_ENV === 'development') console.error('metricsAPI.getInstitutionAdminSummary: resolve institution failed', err); 
+        iid = inst?._id || inst?.data?._id;
+      } catch (err) {
+        if (process.env.NODE_ENV === 'development') console.error('metricsAPI.getInstitutionAdminSummary: resolve institution failed', err);
       }
     }
     if (!iid) throw new Error('institutionId not available');
     return apiRequest(`/v1/institutions/${iid}/courses/summary/metrics/institution-admin?metric=${metric}`, { method: "GET" });
   },
   getInstitutionAdminByRange: async (
-    metric: 'views'|'comparisons'|'leads' | string,
-    range: 'weekly'|'monthly'|'yearly',
+    metric: 'views' | 'comparisons' | 'leads' | string,
+    range: 'weekly' | 'monthly' | 'yearly',
     institutionId?: string
   ): Promise<ApiResponse> => {
     let iid = institutionId as string | undefined;
     if (!iid) {
-      try { 
+      try {
         const inst = await getMyInstitution() as { _id?: string; data?: { _id?: string } };
-        iid = inst?._id || inst?.data?._id; 
-      } catch (err) { 
-        if (process.env.NODE_ENV === 'development') console.error('metricsAPI.getInstitutionAdminByRange: resolve institution failed', err); 
+        iid = inst?._id || inst?.data?._id;
+      } catch (err) {
+        if (process.env.NODE_ENV === 'development') console.error('metricsAPI.getInstitutionAdminByRange: resolve institution failed', err);
       }
     }
     if (!iid) throw new Error('institutionId not available');
-    
+
     // Check cache first
     const cacheKey = `range_${iid}_${metric}_${range}`;
     const cached = metricsCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < METRICS_CACHE_DURATION) {
       return cached.data as ApiResponse<unknown>;
     }
-    
+
     const response = await apiRequest(`/v1/institutions/${iid}/courses/summary/metrics/institution-admin/range?metric=${metric}&range=${range}`, { method: "GET" });
-    
+
     // Cache the response
     metricsCache.set(cacheKey, { data: response, timestamp: Date.now() });
-    
+
     return response;
   },
   getInstitutionAdminSeries: async (
-    metric: 'views'|'comparisons'|'leads',
+    metric: 'views' | 'comparisons' | 'leads',
     year?: number,
     institutionId?: string
   ): Promise<ApiResponse> => {
     const currentYear = year || new Date().getFullYear();
     let iid = institutionId;
     if (!iid) {
-      try { 
+      try {
         const inst = await getMyInstitution() as { _id?: string; data?: { _id?: string } };
-        iid = inst?._id || inst?.data?._id; 
-      } catch (err) { 
-        if (process.env.NODE_ENV === 'development') console.error('metricsAPI.getInstitutionAdminSeries: resolve institution failed', err); 
+        iid = inst?._id || inst?.data?._id;
+      } catch (err) {
+        if (process.env.NODE_ENV === 'development') console.error('metricsAPI.getInstitutionAdminSeries: resolve institution failed', err);
       }
     }
     if (!iid) throw new Error('institutionId not available');
-    
+
     // Check cache first
     const cacheKey = `series_${iid}_${metric}_${currentYear}`;
     const cached = metricsCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < METRICS_CACHE_DURATION) {
       return cached.data as ApiResponse<unknown>;
     }
-    
+
     const q = [`metric=${metric}`, `year=${currentYear}`];
     const response = await apiRequest(`/v1/institutions/${iid}/courses/summary/metrics/institution-admin/series?${q.join('&')}`, { method: "GET" });
-    
+
     // Cache the response
     metricsCache.set(cacheKey, { data: response, timestamp: Date.now() });
-    
+
     return response;
   }
 };
@@ -840,7 +1033,7 @@ export const enquiriesAPI = {
     if (cached && (Date.now() - cached.timestamp) < ENQUIRIES_CACHE_DURATION) {
       return cached.data;
     }
-    
+
     const response = await apiRequest(`/v1/enquiries/summary/leads`, { method: "GET" });
     enquiriesCache.set(cacheKey, { data: response, timestamp: Date.now() });
     return response;
@@ -852,7 +1045,7 @@ export const enquiriesAPI = {
     if (cached && (Date.now() - cached.timestamp) < ENQUIRIES_CACHE_DURATION) {
       return cached.data;
     }
-    
+
     const yearParam = year ? `?year=${year}` : "";
     const response = await apiRequest(`/v1/enquiries/chart${yearParam}`, { method: "GET" });
     enquiriesCache.set(cacheKey, { data: response, timestamp: Date.now() });
@@ -864,7 +1057,7 @@ export const enquiriesAPI = {
     if (cached && (Date.now() - cached.timestamp) < ENQUIRIES_CACHE_DURATION) {
       return cached.data;
     }
-    
+
     const response = await apiRequest(`/v1/enquiries/recent`, { method: "GET" });
     enquiriesCache.set(cacheKey, { data: response, timestamp: Date.now() });
     return response;
@@ -883,18 +1076,18 @@ export const enquiriesAPI = {
     const q = [`offset=${Math.max(0, offset)}`, `limit=${Math.max(1, Math.min(100, limit))}`].join('&');
     return apiRequest(`/v1/enquiries/students/by-enquiry/${encodeURIComponent(enquiryId)}?${q}`, { method: 'GET' });
   },
-  getTypeSummary: async (range: 'weekly'|'monthly'|'yearly'): Promise<ApiResponse> => {
+  getTypeSummary: async (range: 'weekly' | 'monthly' | 'yearly'): Promise<ApiResponse> => {
     const cacheKey = `type_summary_${range}`;
     const cached = enquiriesCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < ENQUIRIES_CACHE_DURATION) {
       return cached.data;
     }
-    
+
     const response = await apiRequest(`/v1/enquiries/summary/types?range=${range}`, { method: "GET" });
     enquiriesCache.set(cacheKey, { data: response, timestamp: Date.now() });
     return response;
   },
-  getTypeSummaryRollups: async (range: 'weekly'|'monthly'|'yearly', type?: 'callback'|'demo'): Promise<ApiResponse> => {
+  getTypeSummaryRollups: async (range: 'weekly' | 'monthly' | 'yearly', type?: 'callback' | 'demo'): Promise<ApiResponse> => {
     const q = [`range=${range}`];
     if (type) q.push(`type=${type}`);
     const cacheKey = `type_rollups_${range}_${type || 'all'}`;
@@ -902,7 +1095,7 @@ export const enquiriesAPI = {
     if (cached && (Date.now() - cached.timestamp) < ENQUIRIES_CACHE_DURATION) {
       return cached.data;
     }
-    
+
     const response = await apiRequest(`/v1/enquiries/summary/types/range?${q.join('&')}`, { method: "GET" });
     enquiriesCache.set(cacheKey, { data: response, timestamp: Date.now() });
     return response;
@@ -912,8 +1105,10 @@ export const enquiriesAPI = {
     institution: string;
     programInterest: string;
     enquiryType: string;
+    courseId?: string;
+    listingType?: "paid" | "free";
   }): Promise<ApiResponse> => {
-    return apiRequest(`/v1/enquiries/createEnquiry`, { 
+    return apiRequest(`/v1/enquiries/createEnquiry`, {
       method: "POST",
       body: JSON.stringify(enquiryData)
     });
@@ -937,9 +1132,12 @@ export const programsAPI = {
   create: async (payload: Record<string, unknown>): Promise<ApiResponse> => {
     const institutionId = String(payload.institution || '');
     if (!institutionId) throw new Error('institution required');
-    const normalized = { ...payload, type: payload?.type || 'PROGRAM' };
-    const wrapper = { totalCourses: 1, courses: [normalized] };
-    return apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses`, { method: 'POST', body: JSON.stringify(wrapper) });
+    // Send institutionType and courses at root level to match backend validator expectations
+    const requestBody = {
+      institutionType: payload.institutionType,
+      courses: payload.courses,
+    };
+    return apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses`, { method: 'POST', body: JSON.stringify(requestBody) });
   },
   list: async (institutionId: string): Promise<ApiResponse> => {
     const cacheKey = `programs_${institutionId}`;
@@ -949,7 +1147,7 @@ export const programsAPI = {
     const payload = res as { data?: unknown; courses?: unknown };
     const raw = payload?.data || payload?.courses || [];
     const arr = Array.isArray(raw) ? raw : Array.isArray((raw as { data?: unknown })?.data) ? (raw as { data: unknown[] }).data : [];
-    const programs = arr.map((c: Record<string, unknown>) => ({ ...c, programName: c.programName || c.courseName }));
+    const programs = arr.map((c: Record<string, unknown>) => ({ ...c, programName: c.programName || c.courseName || c.selectBranch }));
     const shaped = { success: true, data: { programs } } as ApiResponse;
     programsCache.set(cacheKey, { data: shaped, timestamp: Date.now() });
     return shaped;
@@ -987,7 +1185,7 @@ export const programsAPI = {
     const qs = new URLSearchParams({ metric: 'views' }).toString();
     return apiRequest(`/v1/institutions/${encodeURIComponent(institutionId)}/courses/${encodeURIComponent(programId)}/metrics?${qs}`, { method: 'POST' });
   },
-  summaryViews: async (institutionId: string, range: 'weekly'|'monthly'|'yearly'): Promise<ApiResponse> => {
+  summaryViews: async (institutionId: string, range: 'weekly' | 'monthly' | 'yearly'): Promise<ApiResponse> => {
     const cacheKey = `program_summary_${institutionId}_${range}`;
     const cached = programsCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < PROGRAMS_CACHE_DURATION) return cached.data as ApiResponse<unknown>;
@@ -996,7 +1194,7 @@ export const programsAPI = {
     programsCache.set(cacheKey, { data: res, timestamp: Date.now() });
     return res;
   },
-  summaryComparisons: async (institutionId: string, range: 'weekly'|'monthly'|'yearly'): Promise<ApiResponse> => {
+  summaryComparisons: async (institutionId: string, range: 'weekly' | 'monthly' | 'yearly'): Promise<ApiResponse> => {
     const cacheKey = `program_cmp_${institutionId}_${range}`;
     const cached = programsCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < PROGRAMS_CACHE_DURATION) return cached.data as ApiResponse<unknown>;
@@ -1015,6 +1213,7 @@ export const programsAPI = {
     programsCache.set(cacheKey, { data: res, timestamp: Date.now() });
     return res;
   },
+
   subscriptionHistory: async (institutionId: string): Promise<ApiResponse> => {
     // Use unified institutions scope with single controller/routes; fallback safe
     try {
@@ -1046,7 +1245,7 @@ export const programsAPI = {
 // Notifications API helpers
 export const notificationsAPI = {
   list: async (params: {
-    scope?: 'student'|'institution'|'branch'|'admin';
+    scope?: 'student' | 'institution' | 'branch' | 'admin';
     studentId?: string;
     institutionId?: string;
     branchId?: string;
@@ -1065,7 +1264,7 @@ export const notificationsAPI = {
     return apiRequest(`/v1/notifications${qs}`, { method: 'GET' });
   },
   listCursor: async (params: {
-    scope?: 'student'|'institution'|'branch'|'admin';
+    scope?: 'student' | 'institution' | 'branch' | 'admin';
     studentId?: string;
     institutionId?: string;
     branchId?: string;
@@ -1086,7 +1285,7 @@ export const notificationsAPI = {
     title: string;
     description?: string;
     category?: string;
-    recipientType: 'STUDENT'|'INSTITUTION'|'BRANCH'|'ADMIN'|'SYSTEM';
+    recipientType: 'STUDENT' | 'INSTITUTION' | 'BRANCH' | 'ADMIN' | 'SYSTEM';
     student?: string;
     institution?: string;
     branch?: string;
@@ -1100,6 +1299,14 @@ export const notificationsAPI = {
   },
   remove: async (ids: string[]): Promise<ApiResponse> => {
     return apiRequest(`/v1/notifications`, { method: 'DELETE', body: JSON.stringify({ ids }) });
+  },
+  // Get count of unread notifications for current user
+  getUnreadCount: async (): Promise<ApiResponse<{ count: number }>> => {
+    return apiRequest(`/v1/notifications/unread-count`, { method: 'GET' });
+  },
+  // Mark all notifications as read for current user
+  markAllRead: async (): Promise<ApiResponse<{ modifiedCount: number }>> => {
+    return apiRequest(`/v1/notifications/mark-all-read`, { method: 'PATCH' });
   }
 };
 
@@ -1144,12 +1351,32 @@ export const paymentAPI = {
   },
 
   /**
+   * Initiate a FREE listing (₹0 payment) for selected courses
+   * - Creates a Razorpay order with amount 0
+   * - Courses will be activated with limited features
+   */
+  initiateFreeListing: async (
+    payload: { courseIds: string[]; institutionType?: string }
+  ): Promise<ApiResponse> => {
+    return apiRequest("/v1/payment/create-order", {
+      method: "POST",
+      body: JSON.stringify({
+        amount: 0,
+        planType: "free",
+        courseIds: payload.courseIds,
+        listingType: "free", // Backend will use this to mark courses as limited
+        institutionType: payload.institutionType,
+      }),
+    });
+  },
+
+  /**
    * Apply coupon to get discount amount from backend
    */
-  applyCoupon: async (code: string): Promise<ApiResponse<{ discountAmount: number }>> => {
+  applyCoupon: async (code: string, institutionType?: string): Promise<ApiResponse<{ discountAmount: number }>> => {
     return apiRequest("/v1/coupon/apply-coupon", {
       method: "POST",
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, institutionType }),
     });
   },
 
@@ -1182,6 +1409,7 @@ export const paymentAPI = {
         ...(payload.planType ? { planType: payload.planType } : {}),
         ...(payload.coupon ? { coupon: String(payload.coupon) } : {}),
         ...(typeof payload.amount !== "undefined" ? { amount: String(payload.amount) } : {}),
+        ...(payload.institutionType ? { institutionType: String(payload.institutionType) } : {}),
       }).toString();
       const endpoint = `/v1/payment/verify-payment?${qs}`;
 

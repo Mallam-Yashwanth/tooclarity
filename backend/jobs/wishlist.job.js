@@ -5,12 +5,7 @@ const InstituteAdmin = require('../models/InstituteAdmin');
 
 const QUEUE_NAME = 'wishlist-processing';
 
-const redisConnection = new IORedis({
-  host: process.env.REDIS_HOST || '127.0.0.1',
-  port: Number(process.env.REDIS_PORT || 6379),
-  password: process.env.REDIS_PASSWORD || '',
-  maxRetriesPerRequest: null,
-});
+const redisConnection = require('../config/redisConfig');
 
 const wishlistQueue = new Queue(QUEUE_NAME, {
   connection: redisConnection,

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, ChangeEvent, FormEvent } from "react";
+import { useState, useEffect, ChangeEvent, FormEvent, useMemo } from "react";
 import React from "react";
-import { programsAPI } from "@/lib/api";
+import { branchAPI, programsAPI } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
@@ -31,29 +31,32 @@ import {
   addCoursesGroupToDB,
   getCoursesGroupsByBranchName,
   updateCoursesGroupInDB,
+  getAllInstitutionsFromDB, // Added
 } from "@/lib/localDb";
-//import CoachingCourseForm from "./L2DialogBoxParts/Course/CoachingCourseForm";
 
 // ✅ New imports for split forms
 import CoachingCourseForm from "./L2DialogBoxParts/Course/CoachingCourseForm";
+import ExamPrepCourseForm from "./L2DialogBoxParts/Course/ExamPrepCourseForm";
+import UpskillingCourseForm from "./L2DialogBoxParts/Course/UpskillingCourseForm";
 import StudyHallForm from "./L2DialogBoxParts/Course/StudyHallForm";
 import TuitionCenterForm from "./L2DialogBoxParts/Course/TuitionCenterForm";
 import UnderPostGraduateForm from "./L2DialogBoxParts/Course/UnderPostGraduateForm";
 import BasicCourseForm from "./L2DialogBoxParts/Course/BasicCourseForm";
 import FallbackCourseForm from "./L2DialogBoxParts/Course/FallbackCourseForm";
 import StudyAbroadForm from "./L2DialogBoxParts/Course/StudyAbroadForm";
+import KindergartenForm from "./L3DialogBoxParts/KindergartenForm";
+import CollegeForm from "./L3DialogBoxParts/CollegeForm";
 import StateDistrictFields from "./L2DialogBoxParts/Course/common/StateDistrictFields";
 import BranchForm from "./L2DialogBoxParts/Branch/BranchForm";
-// import { error } from "console";
 import {
   exportAndUploadInstitutionAndCourses,
-  // exportInstitutionAndCoursesToFile,
 } from "@/lib/utility";
 import { L2Schemas } from "@/lib/validations/L2Schema";
-// import { createdBranchRule } from "@/lib/validations/ValidationRules";
 import { uploadToS3 } from "@/lib/awsUpload";
 import AppSelect from "@/components/ui/AppSelect";
 import { toast } from "react-toastify";
+import SchoolForm from "./L3DialogBoxParts/SchoolForm";
+import { sub } from "date-fns";
 
 interface L2DialogBoxProps {
   trigger?: React.ReactNode;
@@ -62,23 +65,36 @@ interface L2DialogBoxProps {
   onSuccess?: () => void;
   onPrevious?: () => void;
   initialSection?: "course" | "branch";
-  // New: render inline (non-_Dialog) for subscription page usage
   renderMode?: "_Dialog" | "inline";
-  // New: subscription mode for Program creation flow on Subscription page
   mode?: "default" | "subscriptionProgram" | "settingsEdit";
   institutionId?: string;
-  // New: for editing existing programs in settings
   editMode?: boolean;
   existingCourseData?: Partial<Course> & { _id?: string; branch?: string };
   onEditSuccess?: () => void;
-  // New: institutionType prop to override localStorage (for subscription/settings mode)
+  onLoading?: (loading: boolean) => void;
   institutionType?: string;
-  // New: institution-admin flow toggle (skips L1/L3, direct persist)
   adminFlow?: boolean;
-  // Test-only overrides to avoid localStorage dependency
 }
+
+
+export interface AcademicDetail {
+  subject: string;
+  classTiming: string;
+  specialization: string;
+  monthlyFees: string | number;
+}
+
+export interface FacultyDetail {
+  name: string;
+  qualification: string;
+  experience: string;
+  subjectTeach: string;
+}
+
 export interface Course {
+  // --- SECTION 1: COMMON BASE FIELDS ---
   id: number;
+  _id?: string;
   courseName: string;
   aboutCourse: string;
   courseDuration: string;
@@ -86,65 +102,451 @@ export interface Course {
   endDate: string;
   mode: string;
   priceOfCourse: string;
-  location: string;
+  locationURL: string;
   state: string;
   district: string;
+  town: string;
   image: File | null;
   imageUrl: string;
   imagePreviewUrl: string;
+  brochure: File | null;
   brochureUrl: string;
   brochurePreviewUrl: string;
-  brochure: File | null;
-  graduationType: string;
-  streamType: string;
-  selectBranch: string;
+  createdBranch: string;
   aboutBranch: string;
-  educationType: string;
-  classSize: string;
+  headquatersAddress: string;
+
+  // --- SECTION 2: COLLEGE & K12 FIELDS ---
+  collegeType: string;
+  collegeCategory: string;
+  specialization: string;
+  year: string;
+  intermediateName?: string;
+  intermediateType?: string;
+  intermediateImage: File | null;
+  intermediateImagePreviewUrl: string;
+  intermediateImageUrl?: string;
+
+  // --- SECTION 3: SCHOOL & KINDERGARTEN FIELDS ---
+  schoolName: string;
+  schoolType: string;
+  curriculumType: string;
+  schoolCategory: string;
+  classType: string;
   classSizeRatio?: string;
+  extendedCare: string;
+  mealsProvided: string;
+  pickupDropService: string;
+  schoolImage: File | null;
+  schoolImagePreviewUrl: string;
+  schoolImageUrl?: string;
+  teacherStudentRatio?: string;
+  kindergartenImage: File | null;
+  kindergartenImagePreviewUrl: string;
+  kindergartenImageUrl?: string;
+
+  // --- SECTION 4: COACHING & UG/PG FIELDS ---
   categoriesType: string;
   domainType: string;
   subDomainType: string;
-  courseHighlights: string;
-  seatingOption: string;
-  openingTime: string;
-  closingTime: string;
-  hallName?: string;
-  operationalDays: string[];
-  totalSeats: string;
-  availableSeats: string;
-  pricePerSeat: string;
-  hasWifi: string; // Changed from null
-  hasChargingPoints: string; // Changed from null
-  hasAC: string; // Changed from null
-  hasPersonalLocker: string; // Changed from null
-  eligibilityCriteria: string; // Add this line
-  tuitionType: string;
-  instructorProfile: string;
-  subject: string;
-  createdBranch: string;
+  classTiming: string;
+  courselanguage: string;
+  branchDescription: string;
+  classlanguage: string;
+  classLanguage?: string;
+  certification: string;
+  placementDrives: string;
+  totalStudentsPlaced: string | number;
+  highestPackage: string;
+  averagePackage: string;
+  mockInterviews: string;
+  resumeBuilding: string;
+  linkedinOptimization: string;
+  mockTests: string;
+  studyMaterial: string;
+  centerImage: File | null;
+  centerImagePreviewUrl: string;
+  centerImageUrl?: string;
+  entranceExam: string;
+  managementQuota: string;
+  totalNumberRequires: string | number;
+  collegeImage: File | null;
+  collegeImagePreviewUrl: string;
+  collegeImageUrl?: string;
+  library: string;
+  libraryFacility?: string;
+
+  // --- SECTION 5: STUDY ABROAD FIELDS ---
   consultancyName: string;
   studentAdmissions: string;
   countriesOffered: string;
   academicOfferings: string;
+  budget: string | number;
+  studentsSent: string | number;
+  applicationAssistance: string;
+  visaProcessingSupport: string;
+  preDepartureOrientation: string;
+  accommodationAssistance: string;
+  educationLoans: string;
+  educationLoan?: string;
+  postArrivalSupport: string;
+  partTimeHelp: string;
+  partTimeOpportunities?: string;
+  consultancyImage: File | null;
+  consultancyImagePreviewUrl: string;
+  consultancyImageUrl?: string;
   businessProof: File | null;
   businessProofPreviewUrl: string;
   businessProofUrl: string;
   panAadhaar: File | null;
   panAadhaarPreviewUrl: string;
   panAadhaarUrl: string;
+
+  // --- SECTION 6: TUITION & ACADEMIC ARRAYS ---
+  tutionCenterName?: string;
+  subject: string;
+  tuitionType: string;
+  instructorProfile: string;
+  academicDetails: AcademicDetail[];
+  facultyDetails: FacultyDetail[];
+  tuitionImage: File | null;
+  tuitionImagePreviewUrl: string;
+  tuitionImageUrl?: string;
+
+  // --- SECTION 7: STUDY HALL & SEATING FIELDS ---
+  hallName?: string;
+  seatingOption: string;
+  totalSeats: string;
+  availableSeats: string;
+  pricePerSeat: string;
+  hasWifi: string;
+  hasChargingPoints: string;
+  hasAC: string;
+  hasPersonalLocker: string;
+
+  // --- SECTION 8: SHARED OPERATIONAL & FACILITIES ---
+  operationalDays: string[];
+  openingTime: string;
+  closingTime: string;
+  openingTimePeriod: string;
+  closingTimePeriod: string;
+  playground: string;
+  busService: string;
+  hostelFacility: string;
+  emioptions: string;
+  installments: string;
+  partlyPayment: string;
+  graduationType: string;
+  courseType: string;
+  streamType: string;
+  selectBranch: string;
+  educationType: string;
+  classSize: string;
+  eligibilityCriteria: string;
+  ownershipType: string;
+  affiliationType: string;
+
+  // Legacy fields kept for compatibility or not mentioned but likely needed
+  listingType?: "free" | "paid";
+  contactInfo?: string;
+  yearString?: string; // Kept for compatibility with CollegeForm
+  classes?: any[]; // Kept for safety if used dynamically
+  subjectList?: any[];
+  countries?: any[]; // Kept for safety
+  faculty?: any[];
+  campusImage?: string;
+  campusPhoto?: string;
 }
 
-// Branch shape used locally in this component; dbId tracks IndexedDB id
+const FORM_WHITELISTS: Record<string, (keyof Course)[]> = {
+  "Intermediate college(K12)": [
+    "intermediateName", "courseName", "mode", "courseDuration", "startDate", "classlanguage",
+    "ownershipType", "collegeType", "curriculumType", "operationalDays", "openingTime", "openingTimePeriod", "closingTime", "closingTimePeriod", "year", "classType", "specialization", "priceOfCourse", "createdBranch", "aboutBranch", "headquatersAddress", "state", "district", "town", "locationURL", "playground", "busService", "pickupDropService", "hostelFacility", "emioptions", "partlyPayment", "intermediateImageUrl", "campusPhoto", "imageUrl", "brochureUrl"
+  ],
+  "School's": [
+    "courseName", "schoolName", "mode", "courseDuration", "startDate", "classlanguage", "classLanguage", "ownershipType", "schoolType", "curriculumType", "openingTime", "openingTimePeriod", "closingTime", "closingTimePeriod", "createdBranch", "aboutBranch", "headquatersAddress", "state", "district", "town", "locationURL", "classType", "priceOfCourse", "playground", "busService", "pickupDropService", "hostelFacility", "emioptions", "partlyPayment", "schoolImageUrl", "imageUrl", "brochureUrl"
+  ],
+  "Coaching centers": [
+    "categoriesType", "domainType", "classSize", "subDomainType", "courseName", "mode", "courseDuration", "startDate", "createdBranch", "aboutBranch", "headquatersAddress", "state", "district", "town", "locationURL", "classTiming", "courselanguage", "classlanguage", "certification", "placementDrives", "totalStudentsPlaced", "highestPackage", "averagePackage", "mockInterviews", "resumeBuilding", "linkedinOptimization", "mockTests", "library", "libraryFacility", "studyMaterial", "priceOfCourse", "installments", "emioptions", "centerImageUrl", "imageUrl", "brochureUrl"
+  ],
+  "Exam Preparation": [
+    "categoriesType", "domainType", "classSize", "subDomainType", "courseName", "mode", "courseDuration", "startDate", "createdBranch", "aboutBranch", "headquatersAddress", "state", "district", "town", "locationURL", "classTiming", "courselanguage", "classlanguage", "certification", "placementDrives", "totalStudentsPlaced", "highestPackage", "averagePackage", "mockInterviews", "resumeBuilding", "linkedinOptimization", "mockTests", "library", "libraryFacility", "studyMaterial", "priceOfCourse", "installments", "emioptions", "centerImageUrl", "imageUrl", "brochureUrl"
+  ],
+  "Upskilling": [
+    "categoriesType", "domainType", "classSize", "subDomainType", "courseName", "mode", "courseDuration", "startDate", "createdBranch", "aboutBranch", "headquatersAddress", "state", "district", "town", "locationURL", "classTiming", "courselanguage", "classlanguage", "certification", "placementDrives", "totalStudentsPlaced", "highestPackage", "averagePackage", "mockInterviews", "resumeBuilding", "linkedinOptimization", "mockTests", "library", "libraryFacility", "studyMaterial", "priceOfCourse", "installments", "emioptions", "centerImageUrl", "imageUrl", "brochureUrl"
+  ],
+  "Kindergarten/childcare center": [
+    "courseName", "courseType", "categoriesType", "priceOfCourse", "createdBranch", "aboutBranch", "headquatersAddress", "state", "district", "town", "locationURL", "aboutCourse", "courseDuration", "mode", "classSize", "classSizeRatio", "curriculumType", "ownershipType", "operationalDays", "openingTime", "openingTimePeriod", "closingTime", "closingTimePeriod", "extendedCare", "mealsProvided", "playground", "pickupDropService", "teacherStudentRatio", "installments", "emioptions", "kindergartenImageUrl", "imageUrl", "brochureUrl"
+  ],
+  "Study Abroad": [
+    "consultancyName", "studentAdmissions", "createdBranch", "aboutBranch", "headquatersAddress", "state", "district", "town", "locationURL", "countriesOffered", "academicOfferings", "budget", "studentsSent", "applicationAssistance", "visaProcessingSupport", "preDepartureOrientation", "accommodationAssistance", "educationLoans", "educationLoan", "postArrivalSupport", "partTimeHelp", "partTimeOpportunities", "consultancyImageUrl", "imageUrl", "brochureUrl", "businessProofUrl", "panAadhaarUrl"
+  ],
+  "Tution Center's": [
+    "courseName", "tutionCenterName", "mode", "operationalDays", "openingTime", "openingTimePeriod", "closingTime", "closingTimePeriod", "subject", "classSize", "createdBranch", "aboutBranch", "headquatersAddress", "state", "district", "town", "locationURL", "academicDetails", "facultyDetails", "partlyPayment", "tuitionImageUrl", "campusImage", "imageUrl", "brochureUrl"
+  ],
+  "Study Halls": [
+    "hallName", "seatingOption", "totalSeats", "availableSeats", "pricePerSeat", "openingTime", "closingTime", "operationalDays", "startDate", "endDate", "hasWifi", "hasChargingPoints", "hasAC", "hasPersonalLocker", "imageUrl", "brochureUrl", "state", "district", "town", "locationURL"
+  ],
+  "Under Graduation/Post Graduation": [
+    "graduationType", "streamType", "selectBranch", "branchDescription", "createdBranch", "aboutBranch", "headquatersAddress", "state", "district", "town", "locationURL", "educationType", "mode", "classSize", "eligibilityCriteria", "ownershipType", "collegeCategory", "affiliationType", "courseDuration", "library", "hostelFacility", "entranceExam", "managementQuota", "playground", "busService", "pickupDropService", "placementDrives", "totalNumberRequires", "highestPackage", "averagePackage", "totalStudentsPlaced", "mockInterviews", "resumeBuilding", "linkedinOptimization", "priceOfCourse", "installments", "emioptions", "collegeImageUrl", "imageUrl", "brochureUrl"
+  ]
+};
+
+const SMART_COPY_FORMS = [
+  "Kindergarten/childcare center",
+  "School's",
+  "Intermediate college(K12)",
+  "Study Abroad",
+  "Tution Center's"
+];
+
+const BLUE_BOX_FIELDS: Record<string, (keyof Course)[]> = {
+  "Intermediate college(K12)": ["year", "classType", "specialization", "priceOfCourse"],
+  "School's": ["classType", "priceOfCourse"],
+  "Kindergarten/childcare center": ["categoriesType", "priceOfCourse",],
+  "Study Abroad": ["countriesOffered", "academicOfferings", "budget", "studentsSent"],
+  "Tution Center's": ["academicDetails", "facultyDetails"]
+};
+
+export const getInitialCourseData = (
+  id: number,
+  type: string | null,
+  existing?: Record<string, unknown>
+): Course => {
+  const base: Course = {
+    id,
+    _id: typeof existing?._id === "string" ? existing._id : undefined,
+    courseName: (existing?.courseName as string) || (existing?.programName as string) || (existing?.hallName as string) || (existing?.consultancyName as string) || "",
+    schoolName: (existing?.schoolName as string) || "",
+    intermediateName: (existing?.intermediateName as string) || "",
+    tutionCenterName: (existing?.tutionCenterName as string) || "",
+    aboutCourse: (existing?.aboutCourse as string) || "",
+    courseDuration: (existing?.courseDuration as string) || "",
+    startDate: typeof existing?.startDate === "string" ? existing.startDate.split('T')[0] : "",
+    endDate: typeof existing?.endDate === "string" ? existing.endDate.split('T')[0] : "",
+    mode: (existing?.mode as string) || "Offline",
+    priceOfCourse: String(existing?.priceOfCourse || ""),
+    state: (existing?.state as string) || "",
+    district: (existing?.district as string) || "",
+    town: (existing?.town as string) || "",
+    locationURL: (existing?.locationURL as string) || (existing?.locationUrl as string) || "",
+    headquatersAddress: (existing?.headquatersAddress as string) || "",
+
+    // --- DATABASE URLS ---
+    imageUrl: (existing?.imageUrl as string) || "",
+    brochureUrl: (existing?.brochureUrl as string) || "",
+    businessProofUrl: (existing?.businessProofUrl as string) || "",
+    panAadhaarUrl: (existing?.panAadhaarUrl as string) || "",
+    intermediateImageUrl: (existing?.intermediateImageUrl as string) || "",
+    schoolImageUrl: (existing?.schoolImageUrl as string) || "",
+    kindergartenImageUrl: (existing?.kindergartenImageUrl as string) || "",
+    centerImageUrl: (existing?.centerImageUrl as string) || "",
+    consultancyImageUrl: (existing?.consultancyImageUrl as string) || "",
+    collegeImageUrl: (existing?.collegeImageUrl as string) || "",
+    tuitionImageUrl: (existing?.tuitionImageUrl as string) || "",
+    campusImage: (existing?.campusImage as string) || "",
+    campusPhoto: (existing?.campusPhoto as string) || "",
+
+    createdBranch: (existing?.createdBranch as string) || "",
+    aboutBranch: (existing?.aboutBranch as string) || "",
+    image: null,
+    brochure: null,
+
+    // --- UI PREVIEW MAPPING ---
+    imagePreviewUrl: (existing?.imageUrl as string) || "",
+    brochurePreviewUrl: (existing?.brochureUrl as string) || "",
+    businessProofPreviewUrl: (existing?.businessProofUrl as string) || "",
+    panAadhaarPreviewUrl: (existing?.panAadhaarUrl as string) || "",
+    intermediateImagePreviewUrl: (existing?.intermediateImageUrl as string) || "",
+    schoolImagePreviewUrl: (existing?.schoolImageUrl as string) || "",
+    kindergartenImagePreviewUrl: (existing?.kindergartenImageUrl as string) || "",
+    centerImagePreviewUrl: (existing?.centerImageUrl as string) || "",
+    consultancyImagePreviewUrl: (existing?.consultancyImageUrl as string) || "",
+    collegeImagePreviewUrl: (existing?.collegeImageUrl as string) || "",
+    tuitionImagePreviewUrl: (existing?.tuitionImageUrl as string) || "",
+
+    collegeType: (existing?.collegeType as string) || "",
+    collegeCategory: (existing?.collegeCategory as string) || "",
+    specialization: (existing?.specialization as string) || "",
+
+    // year defaults to string
+    year: (existing?.year as string) || "",
+    // Compatibility fields
+    yearString: (existing?.yearString as string) || (existing?.year as string) || "",
+
+    branchDescription: (existing?.branchDescription as string) || "",
+    classTiming: (existing?.classTiming as string) || "",
+    intermediateImage: null,
+    schoolType: (existing?.schoolType as string) || "",
+    curriculumType: (existing?.curriculumType as string) || "",
+    schoolCategory: (existing?.schoolCategory as string) || "",
+    classType: (existing?.classType as string) || "",
+
+    // classes: Array.isArray(existing?.classes) ? existing.classes as any[] : [], // removed from interface but kept safe below
+    classes: Array.isArray(existing?.classes) ? existing.classes as any[] : [],
+
+    courseType: (existing?.courseType as string) || "",
+    extendedCare: (existing?.extendedCare as string) || "No",
+    mealsProvided: (existing?.mealsProvided as string) || "No",
+    pickupDropService: (existing?.pickupDropService as string) || "No",
+    schoolImage: null,
+    kindergartenImage: null,
+    categoriesType: (existing?.categoriesType as string) || (type === "Exam Preparation" ? "Exam Preparation" : type === "Upskilling" ? "Upskilling" : ""),
+    domainType: (existing?.domainType as string) || "",
+    subDomainType: (existing?.subDomainType as string) || "",
+    courselanguage: (existing?.courselanguage as string) || "",
+    classlanguage: (existing?.classlanguage as string) || (existing?.classLanguage as string) || "",
+    classLanguage: (existing?.classLanguage as string) || (existing?.classlanguage as string) || "",
+    certification: (existing?.certification as string) || "No",
+    placementDrives: (existing?.placementDrives as string) || "No",
+    totalStudentsPlaced: String(existing?.totalStudentsPlaced || ""),
+    highestPackage: (existing?.highestPackage as string) || "",
+    averagePackage: (existing?.averagePackage as string) || "",
+    mockInterviews: (existing?.mockInterviews as string) || "No",
+    resumeBuilding: (existing?.resumeBuilding as string) || "No",
+    linkedinOptimization: (existing?.linkedinOptimization as string) || "No",
+    mockTests: (existing?.mockTests as string) || "No",
+    studyMaterial: (existing?.studyMaterial as string) || "",
+    centerImage: null,
+    consultancyName: (existing?.consultancyName as string) || "",
+    studentAdmissions: String(existing?.studentAdmissions || ""),
+    countriesOffered: (existing?.countriesOffered as string) || "",
+
+    countries: Array.isArray(existing?.countries) ? existing.countries : [], // kept for safety
+
+    academicOfferings: (existing?.academicOfferings as string) || "",
+    budget: String(existing?.budget || ""),
+    studentsSent: String(existing?.studentsSent || ""),
+    applicationAssistance: (existing?.applicationAssistance as string) || "No",
+    visaProcessingSupport: (existing?.visaProcessingSupport as string) || "No",
+    preDepartureOrientation: (existing?.preDepartureOrientation as string) || "No",
+    accommodationAssistance: (existing?.accommodationAssistance as string) || "No",
+    educationLoans: (existing?.educationLoans as string) || "No",
+    educationLoan: (existing?.educationLoan as string) || "No",
+    postArrivalSupport: (existing?.postArrivalSupport as string) || "No",
+    partTimeHelp: (existing?.partTimeHelp as string) || "No",
+    partTimeOpportunities: (existing?.partTimeOpportunities as string) || "No",
+    consultancyImage: null,
+    businessProof: null,
+    panAadhaar: null,
+
+    // subject defaults to string
+    subject: (existing?.subject as string) || "",
+
+    tuitionType: (existing?.tuitionType as string) || "",
+    instructorProfile: (existing?.instructorProfile as string) || "",
+    academicDetails: Array.isArray(existing?.academicDetails) ? existing.academicDetails as AcademicDetail[] : [],
+    facultyDetails: Array.isArray(existing?.facultyDetails) ? existing.facultyDetails as FacultyDetail[] : [],
+    subjectList: Array.isArray(existing?.subjectList) ? existing.subjectList as any[] : [],
+    faculty: Array.isArray(existing?.faculty) ? existing.faculty as any[] : [],
+    tuitionImage: null,
+    hallName: (existing?.hallName as string) || "",
+    seatingOption: (existing?.seatingOption as string) || "",
+    totalSeats: String(existing?.totalSeats || ""),
+    availableSeats: String(existing?.availableSeats || ""),
+    pricePerSeat: String(existing?.pricePerSeat || ""),
+    hasWifi: (existing?.hasWifi as string) || "No",
+    hasChargingPoints: (existing?.hasChargingPoints as string) || "No",
+    hasAC: (existing?.hasAC as string) || "No",
+    hasPersonalLocker: (existing?.hasPersonalLocker as string) || "No",
+    operationalDays: Array.isArray(existing?.operationalDays) ? existing.operationalDays as string[] : [],
+    openingTime: (existing?.openingTime as string) || "",
+    closingTime: (existing?.closingTime as string) || "",
+    openingTimePeriod: (existing?.openingTimePeriod as string) || "AM",
+    closingTimePeriod: (existing?.closingTimePeriod as string) || "PM",
+    playground: (existing?.playground as string) || "No",
+    busService: (existing?.busService as string) || "No",
+    hostelFacility: (existing?.hostelFacility as string) || "No",
+    emioptions: (existing?.emioptions as string) || "No",
+    installments: (existing?.installments as string) || "No",
+    partlyPayment: (existing?.partlyPayment as string) || "No",
+    graduationType: (existing?.graduationType as string) || "",
+    streamType: (existing?.streamType as string) || "",
+    selectBranch: (existing?.selectBranch as string) || "",
+    educationType: (existing?.educationType as string) || "Full time",
+    classSize: (existing?.classSize as string) || "",
+    classSizeRatio: (existing?.classSizeRatio as string) || "",
+    eligibilityCriteria: (existing?.eligibilityCriteria as string) || "",
+    ownershipType: (existing?.ownershipType as string) || "",
+    affiliationType: (existing?.affiliationType as string) || "",
+    library: (existing?.library as string) || "No",
+    entranceExam: (existing?.entranceExam as string) || "No",
+    managementQuota: (existing?.managementQuota as string) || "No",
+    totalNumberRequires: String(existing?.totalNumberRequires || ""),
+    collegeImage: null,
+  };
+
+  return base;
+};
+
 interface Branch {
-  id: number; // local UI id
+  id: number;
   branchName: string;
   branchAddress: string;
   contactInfo: string;
   locationUrl: string;
   contactCountryCode?: string;
-  dbId?: number; // IndexedDB generated id when persisted
+  dbId?: number;
 }
+
+// Define the shape of the branch objects coming from the API
+interface RemoteBranch {
+  _id: string;
+  branchName?: string;
+  branchAddress?: string;
+  locationUrl?: string;
+  contactInfo?: string;
+}
+
+// Define the shape of the response from programsAPI.listBranchesForInstitutionAdmin
+interface BranchListResponse {
+  data: {
+    branches: RemoteBranch[];
+  };
+}
+
+// Define the shape of the S3 upload result
+interface S3UploadResult {
+  success: boolean;
+  fileUrl?: string;
+}
+
+// Define the shape of the export result
+interface ExportResponse {
+  success: boolean;
+  message?: string;
+}
+
+interface BranchGroup {
+  branchName: string;
+  branchAddress: string;
+  contactInfo: string;
+  locationUrl: string;
+  courses: import("@/lib/localDb").CourseRecord[];
+}
+
+export const convertBooleansToStrings = (record: Record<string, unknown>): Record<string, unknown> => {
+  const facilityKeys = [
+    "hasWifi", "hasChargingPoints", "hasAC", "hasPersonalLocker",
+    "hostelFacility", "playground", "busService", "extendedCare", "mealsProvided",
+    "outdoorPlayArea", "placementDrives", "mockInterviews", "resumeBuilding",
+    "linkedinOptimization", "exclusiveJobPortal", "certification", "library",
+    "entranceExam", "managementQuota", "applicationAssistance", "visaProcessingSupport",
+    "testOperation", "preDepartureOrientation", "accommodationAssistance",
+    "educationLoans", "postArrivalSupport", "installments", "emioptions",
+    "mockTests", "libraryFacility", "partTimeHelp", "partlyPayment"
+  ];
+
+  const converted = { ...record };
+
+  facilityKeys.forEach((key) => {
+    if (typeof converted[key] === "boolean") {
+      converted[key] = converted[key] ? "Yes" : "No";
+    }
+  });
+
+  return converted;
+};
 
 export default function L2DialogBox({
   trigger,
@@ -152,7 +554,6 @@ export default function L2DialogBox({
   onOpenChange,
   onSuccess,
   onPrevious,
-
   initialSection: initialSectionProp,
   renderMode = "_Dialog",
   mode = "default",
@@ -160,60 +561,192 @@ export default function L2DialogBox({
   editMode = false,
   existingCourseData,
   onEditSuccess,
+  onLoading,
   institutionType: institutionTypeProp,
   adminFlow = false,
 }: L2DialogBoxProps) {
   const router = useRouter();
   const [isCoursrOrBranch, setIsCourseOrBranch] = useState<string | null>(null);
   const [institutionType, setInstitutionType] = useState<string | null>(null);
-  // const isCoursrOrBranch = localStorage.getItem("selected");
-  // const institutionType = localStorage.getItem("institutionType");
 
-  useEffect(() => {
-    setIsCourseOrBranch(localStorage.getItem("selected"));
-    // Use prop if provided (for subscription/settings mode), otherwise fall back to localStorage
-    if (institutionTypeProp) {
-      setInstitutionType(institutionTypeProp);
-    } else {
-      setInstitutionType(localStorage.getItem("institutionType"));
-    }
-  }, [institutionTypeProp]);
-  const isUnderPostGraduate =
-    institutionType === "Under Graduation/Post Graduation";
+  // Default initial values for the merged L3 fields
+  const mergedL3Defaults: Omit<Course, "id"> = {
+    courseName: "",
+    aboutCourse: "",
+    courseDuration: "",
+    startDate: "",
+    endDate: "",
+    mode: "Offline",
+    priceOfCourse: "",
+    locationURL: "",
+    state: "",
+    district: "",
+    town: "",
+    image: null,
+    imageUrl: "",
+    imagePreviewUrl: "",
+    brochureUrl: "",
+    brochure: null,
+    brochurePreviewUrl: "",
+    createdBranch: "",
+    aboutBranch: "",
+
+    // Specialized Fields
+    schoolName: "",
+    intermediateName: "",
+    tutionCenterName: "",
+    headquatersAddress: "",
+    pickupDropService: "No",
+    teacherStudentRatio: "",
+    classes: [],
+    faculty: [],
+    campusImage: "",
+    campusPhoto: "",
+    collegeType: "",
+    collegeCategory: "",
+    specialization: "",
+    year: "",
+    intermediateImage: null,
+    intermediateImagePreviewUrl: "",
+    intermediateImageUrl: "",
+    schoolType: "",
+    curriculumType: "",
+    schoolCategory: "",
+    classType: "",
+    courseType: "",
+    classSizeRatio: "",
+    extendedCare: "No",
+    mealsProvided: "No",
+    schoolImage: null,
+    schoolImagePreviewUrl: "",
+    kindergartenImage: null,
+    kindergartenImagePreviewUrl: "",
+    kindergartenImageUrl: "",
+    categoriesType: "",
+    domainType: "",
+    subDomainType: "",
+    classTiming: "",
+    branchDescription: "",
+    courselanguage: "",
+    classlanguage: "",
+    classLanguage: "",
+    certification: "No",
+    placementDrives: "No",
+    totalStudentsPlaced: "",
+    highestPackage: "",
+    averagePackage: "",
+    mockInterviews: "No",
+    resumeBuilding: "No",
+    linkedinOptimization: "No",
+    mockTests: "No",
+    studyMaterial: "",
+    centerImage: null,
+    centerImagePreviewUrl: "",
+    centerImageUrl: "",
+    consultancyName: "",
+    studentAdmissions: "",
+    countriesOffered: "",
+    academicOfferings: "",
+    budget: "",
+    studentsSent: "",
+    applicationAssistance: "No",
+    visaProcessingSupport: "No",
+    preDepartureOrientation: "No",
+    accommodationAssistance: "No",
+    educationLoans: "No",
+    postArrivalSupport: "No",
+    partTimeHelp: "No",
+    consultancyImage: null,
+    consultancyImagePreviewUrl: "",
+    consultancyImageUrl: "",
+    businessProof: null,
+    businessProofPreviewUrl: "",
+    businessProofUrl: "",
+    panAadhaar: null,
+    panAadhaarPreviewUrl: "",
+    panAadhaarUrl: "",
+    subject: "",
+    tuitionType: "",
+    instructorProfile: "",
+    academicDetails: [],
+    facultyDetails: [],
+    tuitionImage: null,
+    tuitionImagePreviewUrl: "",
+    tuitionImageUrl: "",
+    hallName: "",
+    seatingOption: "",
+    totalSeats: "",
+    availableSeats: "",
+    pricePerSeat: "",
+    hasWifi: "No",
+    hasChargingPoints: "No",
+    hasAC: "No",
+    hasPersonalLocker: "No",
+    operationalDays: [],
+    openingTime: "",
+    closingTime: "",
+    openingTimePeriod: "AM",
+    closingTimePeriod: "PM",
+    playground: "No",
+    busService: "No",
+    hostelFacility: "No",
+    emioptions: "No",
+    installments: "No",
+    partlyPayment: "No",
+    graduationType: "",
+    streamType: "",
+    selectBranch: "",
+    educationType: "Full time",
+    classSize: "",
+    eligibilityCriteria: "",
+    ownershipType: "",
+    affiliationType: "",
+    library: "No",
+    entranceExam: "No",
+    managementQuota: "No",
+    totalNumberRequires: "",
+    collegeImage: null,
+    collegeImagePreviewUrl: "",
+
+  };
+
+  const isUnderPostGraduate = institutionType === "Under Graduation/Post Graduation";
   const isCoachingCenter = institutionType === "Coaching centers";
+  const isExamPrep = institutionType === "Exam Preparation";
+  const isUpskilling = institutionType === "Upskilling";
   const isStudyHall = institutionType === "Study Halls";
   const isTutionCenter = institutionType === "Tution Center's";
   const isKindergarten = institutionType === "Kindergarten/childcare center";
   const isSchool = institutionType === "School's";
   const isIntermediateCollege = institutionType === "Intermediate college(K12)";
   const isStudyAbroad = institutionType === "Study Abroad";
-
-  // Basic course form (only common fields) for these institution types
   const isBasicCourseForm = isKindergarten || isSchool || isIntermediateCollege;
-
-  // Institution types that should skip L3DialogBox and go directly to dashboard
-  const shouldSkipL3 = isStudyHall || isTutionCenter;
+  const isCoachingOrUGPG = isCoachingCenter || isExamPrep || isUpskilling || isUnderPostGraduate;
 
   const [isOpen, setIsOpen] = useState(false);
-  // Remove tab state; we will decide via parent selection
   const [isLoading, setIsLoading] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState(1);
   const [showCourseAfterBranch, setShowCourseAfterBranch] = useState(false);
   const [branchOptions, setBranchOptions] = useState<string[]>([]);
-  const [remoteBranches, setRemoteBranches] = useState<
-    Array<{ _id: string; branchName: string }>
-  >([]);
-  const [selectedBranchIdForProgram, setSelectedBranchIdForProgram] =
-    useState<string>("");
+  const [remoteBranches, setRemoteBranches] = useState<Array<{
+    _id: string;
+    branchName: string;
+    branchAddress: string;
+    locationUrl: string
+  }>>([]);
+  const [selectedBranchIdForProgram, setSelectedBranchIdForProgram] = useState<string>("");
   const [programBranchError, setProgramBranchError] = useState<string>("");
-  const [assetPreview, setAssetPreview] = useState<
-    { type: "image" | "brochure"; url: string } | null
-  >(null);
+  const [assetPreview, setAssetPreview] = useState<{ type: "image" | "brochure"; url: string } | null>(null);
 
   const uniqueRemoteBranches = React.useMemo(() => {
     const seenNames = new Set<string>();
     const seenIds = new Set<string>();
-    const result: Array<{ _id: string; branchName: string }> = [];
+    const result: Array<{
+      _id: string;
+      branchName: string;
+      branchAddress: string;
+      locationUrl: string;
+    }> = [];
     for (const b of remoteBranches) {
       const id = String(b?._id || "");
       const name = (b?.branchName || "Branch").trim();
@@ -221,7 +754,12 @@ export default function L2DialogBox({
       if (!id || seenIds.has(id) || seenNames.has(keyName)) continue;
       seenIds.add(id);
       seenNames.add(keyName);
-      result.push({ _id: id, branchName: name });
+      result.push({
+        _id: id,
+        branchName: name,
+        branchAddress: b.branchAddress || "",
+        locationUrl: b.locationUrl || "",
+      });
     }
     return result.sort((a, b) => a.branchName.localeCompare(b.branchName));
   }, [remoteBranches]);
@@ -229,676 +767,429 @@ export default function L2DialogBox({
   const toInputDateValue = (value?: string | null) => {
     if (!value) return "";
     const trimmed = value.trim();
-    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-      return trimmed;
-    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
     const parsed = new Date(trimmed);
-    return isNaN(parsed.getTime())
-      ? trimmed
-      : parsed.toISOString().slice(0, 10);
+    return isNaN(parsed.getTime()) ? trimmed : parsed.toISOString().slice(0, 10);
   };
 
-  const sanitizeCourseForLocalDb = (
-    course: Course | Record<string, unknown>
-  ): import("@/lib/localDb").CourseRecord =>
-    Object.fromEntries(
-      Object.entries(course as Record<string, unknown>).filter(
-        ([, value]) =>
-          value !== null &&
-          value !== "" &&
-          !(Array.isArray(value) && value.length === 0) &&
-          value !== false
-      )
-    ) as import("@/lib/localDb").CourseRecord;
+  const sanitizeCourseForLocalDb = (course: Course): import("@/lib/localDb").CourseRecord => {
+    // 1. Identify facility keys that we want to ensure stay as "Yes" or "No"
+    const facilityKeys = [
+      "hasWifi", "hasChargingPoints", "hasAC", "hasPersonalLocker",
+      "hostelFacility", "playground", "busService", "extendedCare", "mealsProvided",
+      "outdoorPlayArea", "placementDrives", "mockInterviews", "resumeBuilding",
+      "linkedinOptimization", "exclusiveJobPortal", "certification", "library",
+      "entranceExam", "managementQuota", "applicationAssistance", "visaProcessingSupport",
+      "testOperation", "preDepartureOrientation", "accommodationAssistance",
+      "educationLoans", "postArrivalSupport", "installments", "emioptions",
+      "mockTests", "libraryFacility", "partTimeHelp", "partlyPayment"
+    ];
+
+    // 2. Process the entries
+    const entries = Object.entries(course).map(([key, value]) => {
+      // Force facility fields to "Yes"/"No" strings if they aren't already
+      if (facilityKeys.includes(key)) {
+        return [key, value === "Yes" ? "Yes" : "No"];
+      }
+      return [key, value];
+    });
+
+    // 3. Filter out data that IndexedDB cannot or should not store
+    const filteredEntries = entries.filter(([, value]) => {
+      return (
+        value !== null &&
+        value !== "" &&
+        value !== undefined &&
+        !(value instanceof File) && // Files must be uploaded to S3 first
+        !(Array.isArray(value) && value.length === 0)
+      );
+    });
+
+    return Object.fromEntries(filteredEntries) as import("@/lib/localDb").CourseRecord;
+  };
 
   const resolveLocalBranchName = () => {
     if (selectedBranchIdForProgram) {
-      const match = uniqueRemoteBranches.find(
-        (b) => b._id === selectedBranchIdForProgram
-      );
-      if (match?.branchName) {
-        return match.branchName;
-      }
+      const match = uniqueRemoteBranches.find((b) => b._id === selectedBranchIdForProgram);
+      if (match?.branchName) return match.branchName;
     }
     return "Main Institution";
   };
 
   const persistAdminProgramsToIndexedDb = async (coursesToPersist: Course[]) => {
     const branchName = resolveLocalBranchName();
-    const sanitizedCourses = coursesToPersist.map((course) =>
-      sanitizeCourseForLocalDb(course)
-    );
-
+    const sanitizedCourses = coursesToPersist.map((course) => sanitizeCourseForLocalDb(course));
     const existingGroups = await getCoursesGroupsByBranchName(branchName);
     if (existingGroups.length) {
       const current = existingGroups[0];
-      await updateCoursesGroupInDB({
-        ...current,
-        branchName,
-        courses: sanitizedCourses,
-      });
+      await updateCoursesGroupInDB({ ...current, branchName, courses: sanitizedCourses });
     } else {
-      await addCoursesGroupToDB({
-        branchName,
-        courses: sanitizedCourses,
-      });
+      await addCoursesGroupToDB({ branchName, courses: sanitizedCourses });
     }
   };
-  const isSubscriptionProgram =
-    adminFlow || mode === "subscriptionProgram" || mode === "settingsEdit";
 
-  // Handle controlled open state
-  const DialogOpen =
-    renderMode === "inline" ? true : open !== undefined ? open : isOpen;
+  const isSubscriptionProgram = adminFlow || mode === "subscriptionProgram" || mode === "settingsEdit";
+  const DialogOpen = renderMode === "inline" ? true : open !== undefined ? open : isOpen;
   const setDialogOpen = onOpenChange || setIsOpen;
 
-  // Load institution type from localStorage when _Dialog opens (skip if overrides already provided)
+  // ✅ New DB Sync Logic
   useEffect(() => {
-    if (DialogOpen) {
-      setIsCourseOrBranch(localStorage.getItem("selected"));
-      // Use prop if provided (for subscription/settings mode), otherwise fall back to localStorage
-      if (institutionTypeProp) {
-        setInstitutionType(institutionTypeProp);
-      } else {
+    const syncInstitutionData = async () => {
+      try {
+        const institutions = await getAllInstitutionsFromDB();
+        const latestInstitution =
+          institutions.length > 0
+            ? institutions.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0]
+            : null;
+
+        if (latestInstitution) {
+          // Use instituteType from DB (as per your InstitutionRecord interface)
+          const type = latestInstitution.instituteType || latestInstitution.instituteType;
+          console.log("🏢 Database Sync - Institute Type Found:", type);
+          setInstitutionType(type || null);
+        } else if (institutionTypeProp) {
+          setInstitutionType(institutionTypeProp);
+        } else {
+          setInstitutionType(localStorage.getItem("institutionType"));
+        }
+        setIsCourseOrBranch(localStorage.getItem("selected"));
+      } catch (err) {
+        console.error("❌ DB sync failed:", err);
         setInstitutionType(localStorage.getItem("institutionType"));
       }
+    };
+
+    if (DialogOpen) {
+      syncInstitutionData();
     }
-  }, [DialogOpen, institutionId, isSubscriptionProgram, institutionTypeProp]);
-  // Load remote branches for subscription programs
+  }, [DialogOpen, institutionTypeProp]);
+
+
   useEffect(() => {
     if (!DialogOpen || !isSubscriptionProgram) return;
-
     (async () => {
       try {
-        const res = await programsAPI.listBranchesForInstitutionAdmin(
-          String(institutionId || "")
-        );
-        const branches =
-          (
-            res as {
-              data?: { branches?: Array<{ _id: string; branchName?: string }> };
-            }
-          )?.data?.branches || [];
-        setRemoteBranches(
-          branches.map((b) => ({
-            _id: String(b._id),
-            branchName: b.branchName || "Branch",
-          }))
-        );
+        const res = await programsAPI.listBranchesForInstitutionAdmin(String(institutionId || "")) as BranchListResponse;
+        const branches = res?.data?.branches || [];
+
+        setRemoteBranches(branches.map((b) => ({
+          _id: String(b._id),
+          branchName: b.branchName || "Branch",
+          branchAddress: b.branchAddress || "",
+          contactInfo: b.contactInfo || "",
+          locationUrl: b.locationUrl || ""
+        })));
       } catch (e) {
-        console.log("Error loading branches:", e);
+        console.error("Error loading branches:", e);
       }
     })();
   }, [DialogOpen, institutionId, isSubscriptionProgram]);
 
-  // Auto-select branch for edit mode
-  useEffect(() => {
-    if (editMode && existingCourseData && existingCourseData.branch) {
-      setSelectedBranchIdForProgram(String(existingCourseData.branch));
-    }
-  }, [editMode, existingCourseData]);
-
-  // Get institution type from localStorage
-  const [courses, setCourses] = useState(() => {
+  const [courses, setCourses] = useState<Course[]>(() => {
     if (editMode && existingCourseData) {
-      // Convert existing course data to the expected format
-      return [
-        {
-          id: 1,
-          courseName: existingCourseData.courseName || "",
-          aboutCourse: existingCourseData.aboutCourse || "",
-          courseDuration: existingCourseData.courseDuration || "",
-          startDate: toInputDateValue(existingCourseData.startDate || ""),
-          endDate: toInputDateValue(existingCourseData.endDate || ""),
-          mode: existingCourseData.mode || "Offline",
-          priceOfCourse: existingCourseData.priceOfCourse || "",
-          eligibilityCriteria: existingCourseData.eligibilityCriteria || "",
-          location: existingCourseData.location || "",
-          state: existingCourseData.state || "",
-          district: existingCourseData.district || "",
-          image: null as File | null,
-          imageUrl: existingCourseData.imageUrl || "",
-          imagePreviewUrl: existingCourseData.imagePreviewUrl || "",
-          brochureUrl: existingCourseData.brochureUrl || "",
-          brochure: null as File | null,
-          brochurePreviewUrl: existingCourseData.brochurePreviewUrl || "",
-          // Additional fields for Under Graduate/Post graduate
-          graduationType: existingCourseData.graduationType || "",
-          streamType: existingCourseData.streamType || "",
-          selectBranch: existingCourseData.selectBranch || "",
-          aboutBranch: existingCourseData.aboutBranch || "",
-          educationType: existingCourseData.educationType || "Full time",
-          classSize: existingCourseData.classSize || "",
-          // Additional fields for Coaching centers
-          categoriesType: existingCourseData.categoriesType || "",
-          domainType: existingCourseData.domainType || "",
-          subDomainType: existingCourseData.subDomainType || "",
-          courseHighlights: existingCourseData.courseHighlights || "",
-          // Additional fields for Study Hall
-          seatingOption: existingCourseData.seatingOption || "",
-          openingTime: existingCourseData.openingTime || "",
-          closingTime: existingCourseData.closingTime || "",
-          operationalDays: existingCourseData.operationalDays || [],
-          totalSeats: existingCourseData.totalSeats || "",
-          availableSeats: existingCourseData.availableSeats || "",
-          pricePerSeat: existingCourseData.pricePerSeat || "",
-          hasWifi: existingCourseData.hasWifi || "",
-          hasChargingPoints: existingCourseData.hasChargingPoints || "",
-          hasAC: existingCourseData.hasAC || "",
-          hasPersonalLocker: existingCourseData.hasPersonalLocker || "",
-          // Additional fields for Tuition Centers
-          tuitionType: existingCourseData.tuitionType || "",
-          instructorProfile: existingCourseData.instructorProfile || "",
-          subject: existingCourseData.subject || "",
-          createdBranch: existingCourseData.createdBranch || "",
-          // Additional fields for Study Abroad
-          consultancyName: existingCourseData.consultancyName || "",
-          studentAdmissions: existingCourseData.studentAdmissions || "",
-          countriesOffered: existingCourseData.countriesOffered || "",
-          academicOfferings: existingCourseData.academicOfferings || "",
-          businessProof: null as File | null,
-          businessProofPreviewUrl: existingCourseData.businessProofPreviewUrl || "",
-          businessProofUrl: existingCourseData.businessProofUrl || "",
-          panAadhaar: null as File | null,
-          panAadhaarPreviewUrl: existingCourseData.panAadhaarPreviewUrl || "",
-          panAadhaarUrl: existingCourseData.panAadhaarUrl || "",
-        },
-      ];
+      const rawData = existingCourseData as unknown as Record<string, unknown>;
+      const initial = getInitialCourseData(1, institutionType, rawData);
+
+      // ✅ 1. Standard Previews
+      initial.imagePreviewUrl = (rawData.imageUrl as string) || (rawData.imageURL as string) || "";
+      initial.brochurePreviewUrl = (rawData.brochureUrl as string) || (rawData.brochureURL as string) || "";
+
+      // ✅ 2. Specialized Previews (Map these directly without 'if' checks)
+      // This ensures that if the data exists in rawData, it MOVES to the Preview field
+      initial.intermediateImagePreviewUrl = (rawData.intermediateImageUrl as string) || "";
+      initial.schoolImagePreviewUrl = (rawData.schoolImageUrl as string) || "";
+      initial.kindergartenImagePreviewUrl = (rawData.kindergartenImageUrl as string) || "";
+      initial.centerImagePreviewUrl = (rawData.centerImageUrl as string) || "";
+      initial.tuitionImagePreviewUrl = (rawData.tuitionImageUrl as string) || "";
+      initial.consultancyImagePreviewUrl = (rawData.consultancyImageUrl as string) || "";
+      initial.collegeImagePreviewUrl = (rawData.collegeImageUrl as string) || "";
+
+      return [initial];
     }
 
-    // Default initialization for new courses
-    return [
-      {
-        id: 1,
-        courseName: "",
-        aboutCourse: "",
-        courseDuration: "",
-        startDate: "",
-        endDate: "",
-        mode: "Offline",
-        priceOfCourse: "",
-        eligibilityCriteria: "",
-        location: "",
-        state: "",
-        district: "",
-        image: null as File | null,
-        imageUrl: "",
-        imagePreviewUrl: "",
-        brochureUrl: "",
-        brochure: null as File | null,
-        brochurePreviewUrl: "",
-        // Additional fields for Under Graduate/Post graduate
-        graduationType: "",
-        streamType: "",
-        selectBranch: "",
-        aboutBranch: "",
-        educationType: "Full time",
-        classSize: "",
-        // Additional fields for Coaching centers
-        categoriesType: "",
-        domainType: "",
-        subDomainType: "",
-        courseHighlights: "",
-        // Additional fields for Study Hall
-        seatingOption: "",
-        openingTime: "",
-        closingTime: "",
-        operationalDays: [] as string[],
-        totalSeats: "",
-        availableSeats: "",
-        pricePerSeat: "",
-        hasWifi: "",
-        hasChargingPoints: "",
-        hasAC: "",
-        hasPersonalLocker: "",
-        // Additional fields for Tuition Centers
-        tuitionType: "",
-        instructorProfile: "",
-        subject: "",
-        createdBranch: "",
-        // Additional fields for Study Abroad
-        consultancyName: "",
-        studentAdmissions: "",
-        countriesOffered: "",
-        academicOfferings: "",
-        businessProof: null as File | null,
-        businessProofPreviewUrl: "",
-        businessProofUrl: "",
-        panAadhaar: null as File | null,
-        panAadhaarPreviewUrl: "",
-        panAadhaarUrl: "",
-      },
-    ];
+    return [getInitialCourseData(1, institutionType)];
   });
 
-  // ✅ Load existing courses from IndexedDB when dialog opens
+  // 1. Add this useEffect to handle "Resetting" the form when props change
+  useEffect(() => {
+    if (editMode && existingCourseData) {
+      const rawData = existingCourseData as any;
+
+      if (rawData.courses && Array.isArray(rawData.courses)) {
+        // Re-construct the full course objects for the React state
+        const reconstructedCourses = rawData.courses.map((subCourse: any, index: number) => {
+          return {
+            ...getInitialCourseData(index + 1, institutionType, { ...rawData, ...subCourse }),
+            _id: rawData._id // Share the parent ID
+          };
+        });
+
+        setCourses(reconstructedCourses);
+        setSelectedCourseId(1);
+      } else {
+        // Fallback for flat data
+        const mapped = getInitialCourseData(1, institutionType, rawData);
+        mapped._id = rawData._id;
+        setCourses([mapped]);
+      }
+
+      if (rawData.branch) setSelectedBranchIdForProgram(String(rawData.branch));
+    }
+  }, [existingCourseData, editMode, institutionType]);
+  // Triggers every time you click "Edit" on a different listing
+
   useEffect(() => {
     if (DialogOpen && !editMode && !isSubscriptionProgram) {
       const loadCoursesFromDB = async () => {
         try {
-          // Fetch all course groups
           const groups = await getCoursesGroupsByBranchName();
-
           const loadedCourses: Course[] = [];
 
-          // Helper to map DB record to UI Course state
+          /**
+           * Internal mapper to transform DB records into full Course objects
+           */
           const mapRecordToCourse = (record: import("@/lib/localDb").CourseRecord, index: number): Course => {
-            return {
-              id: index + 1, // Re-index for UI session
-              courseName: record.courseName || "",
-              aboutCourse: record.aboutCourse || "",
-              courseDuration: record.courseDuration || "",
-              startDate: toInputDateValue(record.startDate),
-              endDate: toInputDateValue(record.endDate),
-              mode: record.mode || "Offline",
-              priceOfCourse: record.priceOfCourse || "",
-              eligibilityCriteria: record.eligibilityCriteria || "",
-              location: record.location || "",
-              state: record.state || "",
-              district: record.district || "",
-              image: null, // Files cannot be restored from DB, only URLs
-              imageUrl: record.imageUrl || "",
-              imagePreviewUrl: record.imageUrl || "", // Use URL as preview
-              brochureUrl: record.brochureUrl || "",
-              brochure: null,
-              brochurePreviewUrl: record.brochureUrl || "",
-              graduationType: record.graduationType || "",
-              streamType: record.streamType || "",
-              selectBranch: record.selectBranch || "",
-              aboutBranch: record.aboutBranch || "",
-              educationType: record.educationType || "Full time",
-              classSize: record.classSize || "",
-              categoriesType: record.categoriesType || "",
-              domainType: record.domainType || "",
-              subDomainType: record.subDomainType || "",
-              courseHighlights: record.courseHighlights || "",
-              seatingOption: record.seatingOption || "",
-              openingTime: record.openingTime || "",
-              closingTime: record.closingTime || "",
-              operationalDays: record.operationalDays || [],
-              totalSeats: record.totalSeats || "",
-              availableSeats: record.availableSeats || "",
-              pricePerSeat: record.pricePerSeat || "",
-              hasWifi: typeof record.hasWifi === 'boolean' ? (record.hasWifi ? "Yes" : "No") : (record.hasWifi || ""),
-              hasChargingPoints: typeof record.hasChargingPoints === 'boolean' ? (record.hasChargingPoints ? "Yes" : "No") : (record.hasChargingPoints || ""),
-              hasAC: typeof record.hasAC === 'boolean' ? (record.hasAC ? "Yes" : "No") : (record.hasAC || ""),
-              hasPersonalLocker: typeof record.hasPersonalLocker === 'boolean' ? (record.hasPersonalLocker ? "Yes" : "No") : (record.hasPersonalLocker || ""),
-              tuitionType: record.tuitionType || "",
-              instructorProfile: record.instructorProfile || "",
-              subject: record.subject || "",
-              createdBranch: record.createdBranch || "",
-              consultancyName: record.consultancyName || "",
-              studentAdmissions: record.studentAdmissions ? String(record.studentAdmissions) : "",
-              countriesOffered: record.countriesOffered || "",
-              academicOfferings: record.academicOfferings || "",
-              businessProof: null,
-              businessProofPreviewUrl: record.businessProofPreviewUrl || "",
-              businessProofUrl: record.businessProofUrl || "", // Assuming these might not be in CourseRecord yet or need mapping
-              panAadhaar: null,
-              panAadhaarPreviewUrl: record.panAadhaarPreviewUrl || "",
-              panAadhaarUrl: record.panAadhaarUrl || "",
-            } as Course;
+            // 1. Cast the database record to a generic object to allow processing
+            const rawRecord = record as unknown as Record<string, unknown>;
+
+            // 2. Convert boolean fields (true/false) to UI strings ("Yes"/"No")
+            const stringifiedRecord = convertBooleansToStrings(rawRecord);
+
+            // 3. Use the factory to generate a complete Course object
+            // This fills in all 80+ properties required by the interface
+            const course = getInitialCourseData(index + 1, institutionType, stringifiedRecord);
+
+            // 4. Map existing cloud URLs to the UI Preview fields
+            course.imagePreviewUrl = record.imageUrl || "";
+            course.brochurePreviewUrl = record.brochureUrl || "";
+
+            // 5. Handle specialized form image previews
+            // Using type narrowing checks to see if property exists in record
+            if (record.collegeImageUrl) course.collegeImagePreviewUrl = record.collegeImageUrl as string;
+            if (record.schoolImageUrl) course.schoolImagePreviewUrl = record.schoolImageUrl as string;
+            if (record.centerImageUrl) course.centerImagePreviewUrl = record.centerImageUrl as string;
+            if (record.tuitionImageUrl) course.tuitionImagePreviewUrl = record.tuitionImageUrl as string;
+            if (record.kindergartenImageUrl) course.kindergartenImagePreviewUrl = record.kindergartenImageUrl as string;
+            if (record.intermediateImageUrl) course.intermediateImagePreviewUrl = record.intermediateImageUrl as string;
+            if (record.consultancyImageUrl) course.consultancyImagePreviewUrl = record.consultancyImageUrl as string;
+
+            return course;
           };
 
+          // Iterate through branch groups and flatten courses into a single list
           let globalIndex = 0;
-          groups.forEach(group => {
+          groups.forEach((group) => {
             if (group.courses && group.courses.length > 0) {
-              group.courses.forEach(c => {
+              group.courses.forEach((c) => {
                 loadedCourses.push(mapRecordToCourse(c, globalIndex++));
               });
             }
           });
 
           if (loadedCourses.length > 0) {
-            console.log("✅ Loaded courses from DB:", loadedCourses);
             setCourses(loadedCourses);
-            setSelectedCourseId(1);
-          } else {
-            // Fallback: Reset to default empty course if no data found
-            setCourses([{
-              id: 1,
-              courseName: "",
-              aboutCourse: "",
-              courseDuration: "",
-              startDate: "",
-              endDate: "",
-              mode: "Offline",
-              priceOfCourse: "",
-              eligibilityCriteria: "",
-              location: "",
-              state: "",
-              district: "",
-              image: null,
-              imageUrl: "",
-              imagePreviewUrl: "",
-              brochureUrl: "",
-              brochure: null,
-              brochurePreviewUrl: "",
-              graduationType: "",
-              streamType: "",
-              selectBranch: "",
-              aboutBranch: "",
-              educationType: "Full time",
-              classSize: "",
-              categoriesType: "",
-              domainType: "",
-              subDomainType: "",
-              courseHighlights: "",
-              seatingOption: "",
-              openingTime: "",
-              closingTime: "",
-              operationalDays: [],
-              totalSeats: "",
-              availableSeats: "",
-              pricePerSeat: "",
-              hasWifi: "",
-              hasChargingPoints: "",
-              hasAC: "",
-              hasPersonalLocker: "",
-              tuitionType: "",
-              instructorProfile: "",
-              subject: "",
-              createdBranch: "",
-              consultancyName: "",
-              studentAdmissions: "",
-              countriesOffered: "",
-              academicOfferings: "",
-              businessProof: null,
-              businessProofPreviewUrl: "",
-              businessProofUrl: "",
-              panAadhaar: null,
-              panAadhaarPreviewUrl: "",
-              panAadhaarUrl: "",
-            }]);
             setSelectedCourseId(1);
           }
         } catch (err) {
-          console.error("Failed to load courses from DB", err);
+          console.error("❌ Failed to load courses from DB:", err);
+          toast.error("Could not load saved data.");
         }
       };
 
       loadCoursesFromDB();
     }
-  }, [DialogOpen, editMode, isSubscriptionProgram]);
+  }, [DialogOpen, editMode, isSubscriptionProgram, institutionType]);
 
-  // DialogOpen and setDialogOpen are declared above with useEffect hooks
-
-  // Get current course
-  const currentCourse =
-    courses.find((c) => c.id === selectedCourseId) || courses[0];
-
-  // Branch state
+  const currentCourse = courses.find((c) => c.id === selectedCourseId) || courses[0];
   const [selectedBranchId, setSelectedBranchId] = useState(1);
   const [branches, setBranches] = useState<Branch[]>([
-    {
-      id: 1,
-      branchName: "",
-      branchAddress: "",
-      contactInfo: "",
-      locationUrl: "",
-      dbId: undefined,
-    },
+    { id: 1, branchName: "", branchAddress: "", contactInfo: "", locationUrl: "" },
   ]);
 
-  // ✅ 1. Add state to hold validation errors for each branch
-  const [branchErrors, setBranchErrors] = useState<
-    Record<number, Record<string, string>>
-  >({});
+  const [branchErrors, setBranchErrors] = useState<Record<number, Record<string, string>>>({});
+  const initialSection = (isCoursrOrBranch as "course" | "branch") || initialSectionProp || "course";
+  const [courseErrorsById, setCourseErrorsById] = useState<Record<number, Record<string, string>>>({});
 
-  // Get current branch
-  // const currentBranch =
-  //   branches.find((b) => b.id === selectedBranchId) || branches[0];
-
-  // Which section to show: "course" or "branch"; prioritize localStorage 'selected', fallback to prop, then 'course'
-  const initialSection: "course" | "branch" =
-    isCoursrOrBranch === "course" || isCoursrOrBranch === "branch"
-      ? (isCoursrOrBranch as "course" | "branch")
-      : initialSectionProp || "course";
-
-  type UploadField = {
-    label: string;
-    type: "image" | "brochure";
-    accept: string;
-  };
-
-  const uploadFields: UploadField[] = [
+  const uploadFields: Array<{ label: string; type: "image" | "brochure"; accept: string }> = [
     { label: "Add Image", type: "image", accept: "image/*" },
     { label: "Add Brochure", type: "brochure", accept: "application/pdf" },
   ];
 
-  // Handlers
-  // L2DialogBox.tsx
-
-  const handleCourseChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >
-  ) => {
-    const { name, value } = e.target;
-
+  const handleCourseChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name: originalName, value } = e.target;
+    const name = originalName === "locationUrl" ? "locationURL" : originalName;
     const courseToUpdate = courses.find((c) => c.id === selectedCourseId);
     if (!courseToUpdate) return;
 
-    const updatedCourse = {
-      ...courseToUpdate,
-      [name]: value,
-      ...(name === "state" ? { district: "" } : {}),
-    };
+    let updatedCourse: Course;
 
-    setCourses(
-      courses.map((course) =>
-        course.id === selectedCourseId ? updatedCourse : course
-      )
-    );
+    // 1. Handle Nested Array Updates (e.g., academicDetails.0.subject)
+    if (name.includes(".")) {
+      const [arrayName, indexStr, fieldName] = name.split(".");
+      const index = parseInt(indexStr);
 
+      const key = arrayName as keyof Course;
+      const currentArray = (courseToUpdate[key] as AcademicDetail[] | FacultyDetail[]) || [];
+      const updatedArray = [...currentArray];
+      updatedArray[index] = {
+        ...updatedArray[index],
+        [fieldName]: value,
+      };
+
+      updatedCourse = {
+        ...courseToUpdate,
+        [arrayName]: updatedArray,
+      };
+    } else {
+      // 2. Standard Top-level Updates
+      updatedCourse = {
+        ...courseToUpdate,
+        [name]: value,
+        ...(name === "state" ? { district: "" } : {})
+      };
+    }
+
+    setCourses(courses.map((course) => (course.id === selectedCourseId ? updatedCourse : course)));
     const schema = L2Schemas[getSchemaKey()];
     if (!schema) return;
 
-    const { error } = schema.validate(updatedCourse, {
-      abortEarly: false,
-      allowUnknown: true,
+    const { error } = schema.validate(updatedCourse, { abortEarly: false, allowUnknown: true });
+
+    const fieldError = error?.details.find((detail) => {
+      const pathString = detail.path.join('.');
+      return pathString.toLowerCase() === name.toLowerCase() || detail.path[0] === name;
     });
 
-    const fieldError = error?.details.find((detail) => detail.path[0] === name);
-
-    // ✅ CORRECTED ERROR HANDLING TO FIX TYPESCRIPT ERROR
     setCourseErrorsById((prevErrors) => {
-      // Get a copy of the errors for the current course
-      const updatedErrorsForCourse = {
-        ...(prevErrors[selectedCourseId] || {}),
-      };
-
+      const updatedErrorsForCourse = { ...(prevErrors[selectedCourseId] || {}) };
       if (fieldError) {
-        // If there's a new error, add or update it
         updatedErrorsForCourse[name] = fieldError.message;
       } else {
-        // If the field is now valid, remove the error key from the object
         delete updatedErrorsForCourse[name];
       }
-
-      // Return the updated state
-      return {
-        ...prevErrors,
-        [selectedCourseId]: updatedErrorsForCourse,
-      };
+      return { ...prevErrors, [selectedCourseId]: updatedErrorsForCourse };
     });
   };
 
   const handleFileChange = (
     e: ChangeEvent<HTMLInputElement>,
-    type: "image" | "brochure" | "businessProof" | "panAadhaar"
+    type:
+      | "image" | "brochure" | "businessProof" | "panAadhaar"
+      | "centerImage" | "consultancyImage" | "collegeImage"
+      | "tuitionImage" | "kindergartenImage" | "schoolImage"
+      | "intermediateImage"
   ) => {
     const files = e.target.files;
     if (!files || !files[0]) return;
-
     const selectedFile = files[0];
-    const courseId = selectedCourseId;
 
-    // Allowed file types
     const allowedImageTypes = ["image/png", "image/jpg", "image/jpeg"];
     const allowedPdfTypes = ["application/pdf"];
-
     let errorMessage = "";
 
-    // 🔍 File type validation
-    if ((type === "image" || type === "businessProof") && !allowedImageTypes.includes(selectedFile.type)) {
-      errorMessage = "Only PNG, JPG, or JPEG images are allowed.";
-    } else if (
-      (type === "brochure" || type === "panAadhaar") &&
-      !allowedPdfTypes.includes(selectedFile.type)
-    ) {
-      errorMessage = "Only PDF files are allowed.";
+    // 1. Unified Validation Logic
+    // Fields that MUST be PDF
+    const pdfFields = ["brochure", "panAadhaar"];
+
+    if (pdfFields.includes(type)) {
+      if (!allowedPdfTypes.includes(selectedFile.type)) {
+        errorMessage = "Only PDF files are allowed.";
+      }
+    } else {
+      // All other fields (image, businessProof, and all 7 specialized campus images)
+      if (!allowedImageTypes.includes(selectedFile.type)) {
+        errorMessage = "Only PNG, JPG, or JPEG images are allowed.";
+      }
     }
 
-    // 📏 File size validation (max 4 MB)
-    const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4 MB
-    if (selectedFile.size > MAX_FILE_SIZE) {
+    // 2. Size Validation
+    if (selectedFile.size > 4 * 1024 * 1024) {
       errorMessage = "File size must be 4 MB or less.";
     }
 
-    // ❌ If validation failed → show error inline & stop further execution
+    // 3. Handle Error State
     if (errorMessage) {
       setCourseErrorsById((prev) => ({
         ...prev,
-        [courseId]: {
-          ...(prev[courseId] || {}),
-          [`${type}Url`]: errorMessage,
-        },
+        [selectedCourseId]: {
+          ...(prev[selectedCourseId] || {}),
+          [`${type}Url`]: errorMessage
+        }
       }));
+      toast.error(errorMessage);
       return;
     }
 
-    // ✅ If valid → clear previous error for this file type
+    // 4. Clear existing errors on success
     setCourseErrorsById((prev) => {
-      const updated = { ...(prev[courseId] || {}) };
+      const updated = { ...(prev[selectedCourseId] || {}) };
       delete updated[`${type}Url`];
-      return { ...prev, [courseId]: updated };
+      return { ...prev, [selectedCourseId]: updated };
     });
 
-    // ✅ Create a local preview URL
+    // 5. Update Course State with File and Preview URL
     const previewUrl = URL.createObjectURL(selectedFile);
 
-    // ✅ Update selected course state
     setCourses((prevCourses) =>
       prevCourses.map((course) =>
-        course.id === courseId
+        course.id === selectedCourseId
           ? {
             ...course,
-            [`${type}`]: selectedFile,
-            [`${type}PreviewUrl`]: previewUrl,
+            [type]: selectedFile,
+            [`${type}PreviewUrl`]: previewUrl
           }
           : course
       )
     );
   };
 
-  // L2DialogBox.tsx
-
   const handleOperationalDayChange = (day: string) => {
-    // Find the current course to get its existing days
     const courseToUpdate = courses.find((c) => c.id === selectedCourseId);
     if (!courseToUpdate) return;
-
-    // Calculate the new array of operational days
     const newOperationalDays = courseToUpdate.operationalDays.includes(day)
       ? courseToUpdate.operationalDays.filter((d: string) => d !== day)
       : [...courseToUpdate.operationalDays, day];
 
-    // 1. Update the state for the UI
-    setCourses(
-      courses.map((course) =>
-        course.id === selectedCourseId
-          ? { ...course, operationalDays: newOperationalDays }
-          : course
-      )
-    );
-
-    // 2. Get the correct Joi schema (works for both Study Hall and Tuition Center)
+    setCourses(courses.map((course) => course.id === selectedCourseId ? { ...course, operationalDays: newOperationalDays } : course));
     const schema = L2Schemas[getSchemaKey()];
     let validationError = "";
-
-    // 3. Validate just the operationalDays field with the new value
     if (schema && schema.extract("operationalDays")) {
-      const { error } = schema
-        .extract("operationalDays")
-        .validate(newOperationalDays);
-      if (error) {
-        validationError = error.details[0].message;
-      }
+      const { error } = schema.extract("operationalDays").validate(newOperationalDays);
+      if (error) validationError = error.details[0].message;
     }
-
-    // 4. Update the error state for this specific field
-    setCourseErrorsById((prevErrors) => ({
-      ...prevErrors,
-      [selectedCourseId]: {
-        ...(prevErrors[selectedCourseId] || {}),
-        operationalDays: validationError, // If validation passed, this will be empty
-      },
-    }));
+    setCourseErrorsById((prevErrors) => ({ ...prevErrors, [selectedCourseId]: { ...(prevErrors[selectedCourseId] || {}), operationalDays: validationError } }));
   };
 
   const addNewCourse = () => {
-    const newId = Math.max(...courses.map((c) => c.id)) + 1;
-    const newCourse = {
-      id: newId,
-      courseName: "",
-      aboutCourse: "",
-      courseDuration: "",
-      startDate: "",
-      endDate: "",
-      mode: "Offline",
-      priceOfCourse: "",
-      state: "",
-      district: "",
-      location: "",
-      image: null as File | null,
-      imagePreviewUrl: "",
-      imageUrl: "",
-      brochureUrl: "",
-      brochurePreviewUrl: "",
-      brochure: null as File | null,
-      // Additional fields for Under Graduate/Post graduate
-      graduationType: "",
-      streamType: "",
-      selectBranch: "",
-      aboutBranch: "",
-      educationType: "Full time",
-      classSize: "",
-      // Additional fields for Coaching centers
-      categoriesType: "",
-      domainType: "",
-      eligibilityCriteria: "",
-      subDomainType: "",
-      courseHighlights: "",
-      // Additional fields for Study Hall
-      seatingOption: "",
-      openingTime: "",
-      closingTime: "",
-      operationalDays: [] as string[],
-      totalSeats: "",
-      availableSeats: "",
-      pricePerSeat: "",
-      hasWifi: "", // Changed from null
-      hasChargingPoints: "", // Changed from null
-      hasAC: "", // Changed from null
-      hasPersonalLocker: "", // Changed from null
-      // Additional fields for Tuition Centers
-      tuitionType: "",
-      instructorProfile: "",
-      subject: "",
-      createdBranch: "",
-      // Additional fields for Study Abroad
-      consultancyName: "",
-      studentAdmissions: "",
-      countriesOffered: "",
-      academicOfferings: "",
-      businessProof: null as File | null,
-      businessProofPreviewUrl: "",
-      businessProofUrl: "",
-      panAadhaar: null as File | null,
-      panAadhaarPreviewUrl: "",
-      panAadhaarUrl: "",
-    };
+    const current = courses.find((c) => c.id === selectedCourseId) || courses[0];
+    const newId = courses.length > 0 ? Math.max(...courses.map((c) => c.id)) + 1 : 1;
+    const type = institutionType || "";
+
+    let newCourse: Course;
+
+    if (SMART_COPY_FORMS.includes(type)) {
+      newCourse = {
+        ...current,
+        id: newId,
+        _id: undefined
+      };
+      const fieldsToReset = BLUE_BOX_FIELDS[type] || [];
+      const freshDefaults = getInitialCourseData(newId, type);
+
+      fieldsToReset.forEach((field) => {
+        (newCourse[field] as any) = freshDefaults[field];
+      });
+
+      if (type === "Tution Center's") {
+        newCourse.academicDetails = [];
+        newCourse.facultyDetails = [];
+      }
+
+
+    } else {
+      newCourse = getInitialCourseData(newId, type);
+    }
+
     setCourses([...courses, newCourse]);
     setSelectedCourseId(newId);
   };
@@ -907,766 +1198,364 @@ export default function L2DialogBox({
     if (courses.length > 1) {
       const updatedCourses = courses.filter((c) => c.id !== courseId);
       setCourses(updatedCourses);
-      if (selectedCourseId === courseId) {
-        setSelectedCourseId(updatedCourses[0].id);
-      }
+      if (selectedCourseId === courseId) setSelectedCourseId(updatedCourses[0].id);
     }
   };
 
   const addNewBranch = () => {
     setBranches((prev) => {
-      const newId =
-        prev.length > 0 ? Math.max(...prev.map((b) => b.id)) + 1 : 1;
-      const newBranch: Branch = {
-        id: newId,
-        branchName: "",
-        branchAddress: "",
-        contactInfo: "",
-        locationUrl: "",
-        dbId: undefined,
-      };
-      // Select the newly added branch
+      const newId = prev.length > 0 ? Math.max(...prev.map((b) => b.id)) + 1 : 1;
       setSelectedBranchId(newId);
-      return [...prev, newBranch];
+      return [...prev, { id: newId, branchName: "", branchAddress: "", contactInfo: "", locationUrl: "", dbId: undefined }];
     });
   };
 
   const deleteBranch = (branchId: number) => {
     setBranches((prev) => {
-      if (prev.length <= 1) return prev; // keep at least one branch
+      if (prev.length <= 1) return prev;
       const updated = prev.filter((b) => b.id !== branchId);
-      if (selectedBranchId === branchId) {
-        setSelectedBranchId(updated[0].id);
-      }
+      if (selectedBranchId === branchId) setSelectedBranchId(updated[0].id);
       return updated;
     });
   };
 
-  const [courseErrorsById, setCourseErrorsById] = useState<
-    Record<number, Record<string, string>>
-  >({});
+  const getCleanedPayload = (course: Course): Partial<Course> => {
+    const type = institutionType || "";
+    const allowedKeys = FORM_WHITELISTS[type] || [];
 
-  const getRequiredFields = () => {
-    const locationFields = ["state", "district"];
-    switch (true) {
-      case isStudyAbroad:
-        // Study Abroad is international, no state/district needed
-        return [
-          "consultancyName",
-          "studentAdmissions",
-          "countriesOffered",
-          "academicOfferings",
-        ];
-
-      case isBasicCourseForm:
-        return [
-          ...locationFields,
-          "courseName",
-          "aboutCourse",
-          "courseDuration",
-          "priceOfCourse",
-          "location",
-          "startDate",
-          "endDate",
-        ];
-
-      case isUnderPostGraduate:
-        return [
-          ...locationFields,
-          "graduationType",
-          "streamType",
-          "selectBranch",
-          "aboutBranch",
-          "courseDuration",
-          "startDate",
-          "endDate",
-          "priceOfCourse",
-          "classSize",
-          "eligibilityCriteria",
-        ];
-
-      case isCoachingCenter:
-        return [
-          ...locationFields,
-          "categoriesType",
-          "domainType",
-          "subDomainType",
-          "startDate",
-          "endDate",
-          "courseName",
-          "courseDuration",
-          "priceOfCourse",
-          "classSize",
-          "location",
-        ];
-
-      case isTutionCenter:
-        return [
-          ...locationFields,
-          "tuitionType",
-          "instructorProfile",
-          "subject",
-          "openingTime",
-          "closingTime",
-          "totalSeats",
-          "availableSeats",
-          "operationalDays",
-          "startDate",
-          "endDate",
-          "pricePerSeat",
-        ];
-
-      case isStudyHall:
-        return [
-          ...locationFields,
-          "hallName",
-          "seatingOption",
-          "openingTime",
-          "closingTime",
-          "operationalDays",
-          "startDate",
-          "endDate",
-          "totalSeats",
-          "availableSeats",
-          "pricePerSeat",
-          "hasPersonalLocker",
-          "hasWifi",
-          "hasChargingPoints",
-          "hasAC",
-        ];
-
-      default:
-        return [
-          ...locationFields,
-          "courseName",
-          "courseDuration",
-          "priceOfCourse",
-          "location",
-        ];
+    // Use Record type to allow dynamic string indexing safely
+    const cleaned: Record<string, unknown> = {};
+    if (course._id) {
+      cleaned._id = course._id;
     }
+
+    allowedKeys.forEach((key) => {
+      const value = course[key];
+
+      // Logic: Only include data that is not "empty"
+      // This keeps your database records small and searchable
+      if (value === "Yes" || value === "No") {
+        cleaned[key as string] = value;
+        return;
+      }
+
+      if (
+        value !== undefined &&
+        value !== null &&
+        value !== "" &&
+        !(Array.isArray(value) && value.length === 0)
+      ) {
+        cleaned[key as string] = value;
+      }
+    });
+
+    return cleaned as Partial<Course>;
   };
 
-  // ✅ Move your validation inside a function
-  const validateCourses = () => {
-  const requiredFields = getRequiredFields();
+  const handleSaveAndAddAnother = () => {
+    // Validate ONLY the current tab's data
+    const currentCourseToValidate = courses.filter(c => c.id === selectedCourseId);
+    const validationError = validateCourses(currentCourseToValidate);
 
-  for (const course of courses) {
-    console.log("🔍 Validating course:", course.courseName || "Unnamed");
-
-    // Basic required fields
-    for (const field of requiredFields) {
-      if (
-        !course[field as keyof typeof course] ||
-        String(course[field as keyof typeof course]).trim() === ""
-      ) {
-        return `Please fill in the ${field} field for course: ${
-          course.courseName || "Unnamed course"
-        }`;
-      }
+    if (validationError) {
+      toast.error(validationError);
+      return;
     }
 
-    // 🚨 IMAGE REQUIRED (File or URL must exist)
-    const hasImage =
-      (course.image && course.image instanceof File) ||
-      (course.imageUrl && course.imageUrl.trim() !== "");
-
-    if (!hasImage) {
-      return `Please upload an image for course: ${
-        course.courseName || "Unnamed course"
-      }`;
-    }
-
-    // 🚨 BROCHURE REQUIRED (File or URL must exist)
-    const hasBrochure =
-      (course.brochure && course.brochure instanceof File) ||
-      (course.brochureUrl && course.brochureUrl.trim() !== "");
-
-    if (!hasBrochure) {
-      return `Please upload a brochure for course: ${
-        course.courseName || "Unnamed course"
-      }`;
-    }
-
-    // ==========================================
-    // Course Type Validations Below
-    // ==========================================
-
-    if (isUnderPostGraduate) {
-      if (
-        !course.graduationType ||
-        !course.streamType ||
-        !course.selectBranch
-      ) {
-        return `Please fill in all graduation details for course: ${
-          course.courseName || "Unnamed course"
-        }`;
-      }
-    }
-
-    if (isCoachingCenter) {
-      if (!course.categoriesType || !course.domainType) {
-        return `Please fill in all coaching details for course: ${
-          course.courseName || "Unnamed course"
-        }`;
-      }
-    }
-
-    if (isStudyHall) {
-      if (
-        !course.openingTime ||
-        !course.closingTime ||
-        !course.totalSeats ||
-        !course.availableSeats
-      ) {
-        return `Please fill in all study hall details for: ${
-          course.courseName || "Unnamed course"
-        }`;
-      }
-    }
-
-    if (isStudyAbroad) {
-      if (
-        !course.consultancyName ||
-        !course.studentAdmissions ||
-        !course.countriesOffered ||
-        !course.academicOfferings
-      ) {
-        return `Please fill in all study abroad details for ${
-          course.consultancyName || "Unnamed consultancy"
-        }`;
-      }
-
-      // 🚨 Business Proof Required (File or URL)
-      const hasBusinessProof =
-        (course.businessProof && course.businessProof instanceof File) ||
-        (course.businessProofUrl && course.businessProofUrl.trim() !== "");
-
-      if (!hasBusinessProof) {
-        return `Please upload business proof for: ${
-          course.consultancyName || "Unnamed consultancy"
-        }`;
-      }
-
-      // 🚨 PAN / Aadhaar Required
-      const hasPanAadhaar =
-        (course.panAadhaar && course.panAadhaar instanceof File) ||
-        (course.panAadhaarUrl && course.panAadhaarUrl.trim() !== "");
-
-      if (!hasPanAadhaar) {
-        return `Please upload PAN/Aadhaar for: ${
-          course.consultancyName || "Unnamed consultancy"
-        }`;
-      }
-    }
-
-    if (isTutionCenter) {
-      if (
-        !course.tuitionType ||
-        !course.instructorProfile ||
-        !course.subject ||
-        !course.openingTime ||
-        !course.closingTime ||
-        !course.totalSeats ||
-        !course.availableSeats
-      ) {
-        return `Please fill in all tuition center details for: ${
-          course.courseName || "Unnamed course"
-        }`;
-      }
-    }
-  }
-
-  return null; // No validation errors
-};
-  // Inside L2DialogBox.tsx
-
-  const getSchemaKey = (): keyof typeof L2Schemas => {
-    if (isStudyAbroad) {
-      return "studyAbroad";
-    }
-    if (isCoachingCenter) {
-      return "coaching";
-    }
-    if (isStudyHall) {
-      return "studyHall";
-    }
-    if (isTutionCenter) {
-      return "tuition";
-    }
-    if (isUnderPostGraduate) {
-      return "ugpg";
-    }
-    // Default for Kindergarten, School, etc.
-    return "basic";
+    addNewCourse();
+    toast.success("Course details saved locally. You can now add another!");
   };
 
   const handleCourseSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
-
-    const validationMessage = validateCourses();
-
-    if (validationMessage) {
-      console.error("❌ Validation failed:", validationMessage);
-      toast.error(validationMessage);
-      setIsLoading(false);
-      return;
-    }
+    onLoading?.(true);
 
     try {
-      console.log("🚀 Starting course submission...");
+      // --- STEP 1: PREPARE DATA ---
+      const preparedForValidation = courses.map((course) => {
+        if (course.createdBranch === "Main" && isSubscriptionProgram) {
+          const branch = uniqueRemoteBranches.find((b) => b._id === selectedBranchIdForProgram);
+          if (branch) {
+            return {
+              ...course,
+              aboutBranch: branch.branchAddress || course.aboutBranch || "",
+              locationURL: branch.locationUrl || course.locationURL || "",
+            };
+          }
+        }
+        return course;
+      });
+
+      // --- STEP 2: VALIDATE ALL COURSES ---
+      const validationMessage = validateCourses(preparedForValidation);
+      if (validationMessage) {
+        toast.error(validationMessage);
+        setIsLoading(false);
+        onLoading?.(false);
+        return;
+      }
+
+      // --- STEP 3: SMART S3 UPLOADS (With File Caching) ---
+      // This prevents re-uploading the same campus image multiple times
+      const fileCache = new Map<File, string>();
 
       const uploadedCourses = await Promise.all(
-        courses.map(async (course) => {
+        preparedForValidation.map(async (course) => {
           const updated = { ...course };
+          const fileFields: { file: File | null; urlKey: keyof Course }[] = [
+            { file: course.image, urlKey: "imageUrl" },
+            { file: course.brochure, urlKey: "brochureUrl" },
+            { file: course.centerImage, urlKey: "centerImageUrl" },
+            { file: course.tuitionImage, urlKey: "tuitionImageUrl" },
+            { file: course.kindergartenImage, urlKey: "kindergartenImageUrl" },
+            { file: course.schoolImage, urlKey: "schoolImageUrl" },
+            { file: course.intermediateImage, urlKey: "intermediateImageUrl" },
+            { file: course.collegeImage, urlKey: "collegeImageUrl" },
+            { file: course.consultancyImage, urlKey: "consultancyImageUrl" },
+          ];
 
-          // --- 🖼️ Image Upload ---
-          if (course.image instanceof File) {
-            const isNewLocalFile = !course.imageUrl || course.imageUrl.startsWith("blob:");
-            if (isNewLocalFile) {
-              console.log(`🪣 Uploading new image for: ${course.courseName}`);
-              try {
-                const uploadImage = await uploadToS3(course.image);
-                if (uploadImage.success && uploadImage.fileUrl) {
-                  updated.imageUrl = uploadImage.fileUrl;
-                  updated.imagePreviewUrl = URL.createObjectURL(course.image);
-                  console.log(`✅ Image uploaded for: ${course.courseName}`);
+          for (const item of fileFields) {
+            if (item.file instanceof File) {
+              // Check if this specific file was already uploaded in this session
+              if (fileCache.has(item.file)) {
+                (updated[item.urlKey] as string) = fileCache.get(item.file)!;
+              } else {
+                const res = (await uploadToS3(item.file)) as S3UploadResult;
+                if (res.success && res.fileUrl) {
+                  fileCache.set(item.file, res.fileUrl); // Store in cache
+                  (updated[item.urlKey] as string) = res.fileUrl;
                 }
-              } catch (err) {
-                console.error(
-                  `❌ Failed to upload image for ${course.courseName}:`,
-                  err
-                );
-                setIsLoading(false);
               }
-            } else {
-              console.log(`⚡ Skipping image upload (already uploaded): ${course.courseName}`);
             }
           }
-
-          // --- 📘 Brochure Upload ---
-          if (course.brochure instanceof File) {
-            const isNewLocalFile = !course.brochureUrl || course.brochureUrl.startsWith("blob:");
-            if (isNewLocalFile) {
-              console.log(
-                `🪣 Uploading new brochure for: ${course.courseName}`
-              );
-              try {
-                const uploadBrochure = await uploadToS3(course.brochure);
-                if (uploadBrochure.success && uploadBrochure.fileUrl) {
-                  updated.brochureUrl = uploadBrochure.fileUrl;
-                  updated.brochurePreviewUrl = URL.createObjectURL(
-                    course.brochure
-                  );
-                  console.log(`✅ Brochure uploaded for: ${course.courseName}`);
-                }
-              } catch (err) {
-                console.error(
-                  `❌ Failed to upload brochure for ${course.courseName}:`,
-                  err
-                );
-                setIsLoading(false);
-              }
-            } else {
-              console.log(`⚡ Skipping brochure upload (already uploaded): ${course.courseName}`);
-            }
-          }
-
-          // --- 📄 Study Abroad Documents ---
-          if (isStudyAbroad) {
-            // Business Proof Upload
-            if (course.businessProof instanceof File) {
-                try {
-                  const uploadResult = await uploadToS3(course.businessProof);
-                  if (uploadResult.success && uploadResult.fileUrl) {
-                    updated.businessProofUrl = uploadResult.fileUrl;
-                    updated.businessProofPreviewUrl = URL.createObjectURL(course.businessProof);
-                    console.log(`✅ Business proof uploaded`);
-                  }
-                } catch (err) {
-                  console.error(`❌ Failed to upload business proof:`, err);
-                }
-            }
-
-            // PAN/Aadhaar Upload
-            if (course.panAadhaar instanceof File) {
-              try {
-                  const uploadResult = await uploadToS3(course.panAadhaar);
-                  if (uploadResult.success && uploadResult.fileUrl) {
-                    updated.panAadhaarUrl = uploadResult.fileUrl;
-                    updated.panAadhaarPreviewUrl = URL.createObjectURL(course.panAadhaar);
-                    console.log(`✅ PAN/Aadhaar uploaded`);
-                  }
-                } catch (err) {
-                  console.error(`❌ Failed to upload PAN/Aadhaar:`, err);
-                }
-            }
-          }
-
           return updated;
         })
       );
 
+      // Sync state for UI consistency
       setCourses(uploadedCourses);
-      console.log("🪣 All uploads completed successfully.");
 
-      // --- 3️⃣ Custom Date Validation ---
-      const allCourseErrors: Record<number, Record<string, string>> = {};
-      let hasErrors = false;
-
-      // Custom date validation before Joi validation
-      // ✅ Skip date validation for Study Abroad (no start/end dates needed)
-      if (!isStudyAbroad) {
-        for (const course of uploadedCourses) {
-          const courseErrors: Record<string, string> = {};
-
-          // Validate startDate
-          if (!course.startDate || course.startDate.trim() === "") {
-            courseErrors.startDate = "Start date is required";
-            hasErrors = true;
-          } else {
-            const startDate = new Date(course.startDate);
-            if (isNaN(startDate.getTime())) {
-              courseErrors.startDate = "Start date must be a valid date";
-              hasErrors = true;
-            }
-          }
-
-          // Validate endDate
-          if (!course.endDate || course.endDate.trim() === "") {
-            courseErrors.endDate = "End date is required";
-            hasErrors = true;
-          } else {
-            const endDate = new Date(course.endDate);
-            if (isNaN(endDate.getTime())) {
-              courseErrors.endDate = "End date must be a valid date";
-              hasErrors = true;
-            } else if (course.startDate && course.startDate.trim() !== "") {
-              const startDate = new Date(course.startDate);
-              if (!isNaN(startDate.getTime()) && endDate <= startDate) {
-                courseErrors.endDate = "End date must be after start date";
-                hasErrors = true;
-              }
-            }
-          }
-
-          if (Object.keys(courseErrors).length > 0) {
-            allCourseErrors[course.id] = courseErrors;
-          }
-        }
-      }
-
-      // --- 4️⃣ Joi Validation ---
-      let schema = L2Schemas[getSchemaKey()];
-
-      if (!schema) {
-        toast.error("Configuration error: No validation schema found");
-        setIsLoading(false);
-        return;
-      }
-
-      if (!showCourseAfterBranch) {
-        const hasCreatedBranch = schema.$_terms?.keys?.some(
-          (k: { key: string }) => k.key === "createdBranch"
-        );
-
-        if (hasCreatedBranch) {
-          schema = schema.fork("createdBranch", (field) =>
-            field.optional().allow("")
-          );
-          console.warn("📍 Made createdBranch optional");
-        }
-      }
-
-      // STEP 4: Validate each course with schema
-      for (const course of uploadedCourses) {
-        const { error } = schema.validate(course, {
-          abortEarly: false,
-          allowUnknown: true,
-        });
-
-        if (error) {
-          console.error("❌ Schema validation error for course:", error.details);
-          hasErrors = true;
-          const fieldErrors = error.details.reduce((acc, detail) => {
-            const key = detail.path[0] as string;
-            acc[key] = detail.message;
-            return acc;
-          }, {} as Record<string, string>);
-
-          // Merge with existing custom date errors
-          const existingErrors = allCourseErrors[course.id] || {};
-          allCourseErrors[course.id] = { ...existingErrors, ...fieldErrors };
-          console.warn("❌ Validation errors:", allCourseErrors[course.id]);
-          setIsLoading(false);
-        } else {
-          console.log("✅ Course passed validation!");
-        }
-
-        console.groupEnd();
-      }
-
-      setCourseErrorsById(allCourseErrors);
-      if (hasErrors) {
-        console.error("🚫 Validation failed for one or more courses.");
-        setIsLoading(false);
-        return;
-      }
-
-      // --- 4️⃣ Prepare and Save in IndexedDB ---
-      // Subscription Program mode: create PROGRAMs via backend and exit
+      // --- STEP 4: API SUBMISSION (Subscription/Admin Flow) ---
       if (isSubscriptionProgram) {
-        console.log("📍 Handling subscription program mode...");
-        if (!institutionId) {
-          throw new Error("institutionId required for subscription program mode");
-        }
-        if (uniqueRemoteBranches.length > 0 && !selectedBranchIdForProgram) {
-          setProgramBranchError("Please select a branch");
-          setIsLoading(false);
-          return;
-        }
+        if (!institutionId) throw new Error("institutionId required");
 
-        type ProgramPayload = {
-          institution: string;
-          branch: string | null;
-          type: "PROGRAM";
-          mode?: string;
-          educationType?: string;
-          classSize?: string;
-          location?: string;
-          state?: string;
-          district?: string;
-          courseName: string;
-          aboutCourse?: string;
-          aboutBranch?: string;
-          courseDuration?: string;
-          startDate?: string;
-          endDate?: string;
-          priceOfCourse?: number;
-          graduationType?: string;
-          streamType?: string;
-          selectBranch?: string;
-          imageUrl?: string;
-          brochureUrl?: string;
+        // 1. Define Valid Backend Types mapping
+        const typeMapping: Record<string, string> = {
+          "Kindergarten/childcare center": "KINDERGARTEN",
+          "School's": "SCHOOL",
+          "Tution Center's": "TUTION_CENTER",
+          "Intermediate college(K12)": "INTERMEDIATE",
+          "Under Graduation/Post Graduation": "UG_PG",
+          "Study Abroad": "STUDY_ABROAD",
+          "Coaching centers": "EXAM_PREP", // Fallback or distinct
+          "Exam Preparation": "EXAM_PREP",
+          "Upskilling": "UPSKILLING",
+          "Study Halls": "STUDY_HALL"
         };
 
-        const toCreate: ProgramPayload[] = courses
-          .map((c) => {
-            const programName = (c.courseName || "").trim();
-            return {
-              institution: String(institutionId),
-              branch: selectedBranchIdForProgram || null, // Allow null for new users without branches
-              // Program-style fields
-              mode: c.mode || "Offline",
-              educationType: c.educationType || undefined,
-              classSize: c.classSize || "",
-              location: c.location || "",
-              state: c.state || undefined,
-              district: c.district || undefined,
-              // Unified Course model expectations for type PROGRAM
-              type: "PROGRAM" as const,
-              courseName: programName,
-              aboutCourse: c.aboutCourse || "",
-              aboutBranch: c.aboutBranch || undefined,
-              courseDuration: c.courseDuration || "",
-              startDate: c.startDate || undefined,
-              endDate: c.endDate || undefined,
-              priceOfCourse: c.priceOfCourse
-                ? Number(c.priceOfCourse)
-                : undefined,
-              // keep location for Course model too
-              // additional optional mirrors
-              graduationType: c.graduationType || undefined,
-              streamType: c.streamType || undefined,
-              selectBranch: c.selectBranch || undefined,
-              imageUrl: c.imageUrl || undefined,
-              brochureUrl: c.brochureUrl || undefined,
-              panAadhaarUrl: c.panAadhaarUrl || undefined,
-              businessProofUrl: c.businessProofUrl || undefined,
-            };
-          })
-          .filter((p) => p.courseName && p.courseName.length > 0);
+        const backendType = typeMapping[institutionType || ""] || institutionType || "PROGRAM";
 
-        for (const payload of toCreate) {
-          if (editMode && existingCourseData) {
-            // Update existing course
-            await programsAPI.update(
-              String(existingCourseData._id || ""),
-              payload
-            );
-          } else {
-            // Create new course
-            await programsAPI.create(payload);
+        // 2. Map Courses to the requested structure
+        // 2. Map Courses to the requested structure
+        const courseList = uploadedCourses.map((c) => {
+          let cleanedData = getCleanedPayload(c);
+
+          // Transformation for Study Abroad: Flat UI fields -> Backend Schema
+          if (institutionType === "Study Abroad") {
+            // No cast needed as Course handles all fields
+            if (
+              c.countriesOffered &&
+              (!c.countries || c.countries.length === 0)
+            ) {
+              cleanedData = {
+                ...cleanedData,
+                countries: [{
+                  country: c.countriesOffered,
+                  academicOffering: c.academicOfferings || "",
+                  budget: c.budget || "",
+                  studentSendTillNow: c.studentsSent || ""
+                }]
+              };
+            }
           }
+
+          // Transformation for Tuition Center: Legacy UI Arrays -> Backend Schema
+          if (institutionType === "Tution Center's") {
+            const subjectList = c.academicDetails?.map((d) => ({
+              subject: d.subject,
+              classTiming: d.classTiming,
+              specialization: d.specialization,
+              fee: d.monthlyFees
+            }));
+
+            const facultyList = c.facultyDetails?.map((f) => ({
+              facultyName: f.name,
+              experience: f.experience,
+              qualifications: f.qualification,
+              subjectYouTeach: f.subjectTeach
+            }));
+
+            cleanedData = {
+              ...cleanedData,
+              ...(subjectList ? { subjectOffer: subjectList } : {}),
+              ...(facultyList ? { faculty: facultyList } : {})
+            };
+          }
+
+          // Transformation for School: Aggregate course tabs into classes array
+          if (institutionType === "School's") {
+            // Build classes array from all course tabs if not already present
+            if (!c.classes || c.classes.length === 0) {
+              const classesFromTabs = uploadedCourses
+                .filter((tab) => tab.classType && tab.priceOfCourse)
+                .map((tab) => ({
+                  classType: tab.classType || "",
+                  priceOfCourse: Number(tab.priceOfCourse) || 0,
+                }));
+              cleanedData = {
+                ...cleanedData,
+                classes: classesFromTabs.length > 0 ? classesFromTabs : [{ classType: c.classType || "", priceOfCourse: Number(c.priceOfCourse) || 0 }],
+                schoolName: c.schoolName || c.courseName || "",
+              };
+            }
+          }
+
+          if (isIntermediateCollege) {
+            // Aggregate year details into array structure required by backend
+            const yearDetails = [{
+              year: c.yearString || "",
+              classType: c.classType || "",
+              specialization: c.specialization || "",
+              fee: Number(c.priceOfCourse) || 0
+            }];
+            cleanedData = {
+              ...cleanedData,
+              year: yearDetails,
+              // Ensure name is mapped from intermediateName
+              name: c.intermediateName || "",
+            } as any;
+          }
+
+          return {
+            ...cleanedData,
+            name: c.courseName || c.schoolName || c.intermediateName, // Explicitly map courseName/schoolName/intermediateName to 'name'
+            branch: selectedBranchIdForProgram || c.createdBranch, // Branch ID
+          };
+        });
+
+        // 3. Construct Unified Payload
+        // STRICTLY matching user request structure: { institutionType, courses: [{name, branch, ...}] }
+        const normalizedPayload = {
+          institution: institutionId,
+          institutionType: backendType,
+          courses: courseList
+        };
+
+        // 4. Send to API
+        const firstCourse = uploadedCourses[0];
+        const res =
+          editMode && firstCourse._id
+            ? await programsAPI.update(firstCourse._id, normalizedPayload)
+            : await programsAPI.create(normalizedPayload);
+
+        if (!res?.success) {
+          throw new Error(res?.message || "Program save failed");
         }
-        try {
-          await persistAdminProgramsToIndexedDb(uploadedCourses);
-        } catch (error) {
-          console.warn(
-            "Failed to persist admin-flow programs locally:",
-            error
-          );
-        }
+
+        toast.success(
+          editMode ? "Program updated successfully" : "Program created successfully"
+        );
+
+        // Update local state if needed
+        // await persistAdminProgramsToIndexedDb(uploadedCourses); 
 
         if (editMode) {
           onEditSuccess?.();
         } else {
+          router.push("/dashboard/subscription?tab=details");
           onSuccess?.();
         }
-        setIsLoading(false);
+
         return;
       }
 
-      // STEP 6: Save to IndexedDB
+      // --- STEP 5: LOCAL DB & REDIRECT (Non-Subscription) ---
       const allBranches = await getAllBranchesFromDB();
-
-      const branchMap = new Map(
+      const branchMap = new Map<string, BranchGroup>(
         allBranches.map((b) => [
           b.branchName.trim().toLowerCase(),
-          { ...b, courses: [] as import("@/lib/localDb").CourseRecord[] },
+          {
+            branchName: b.branchName,
+            branchAddress: b.branchAddress,
+            contactInfo: b.contactInfo,
+            locationUrl: b.locationUrl || "",
+            courses: [],
+          },
         ])
       );
 
-      const sanitizeBranch = (
-        branch: import("@/lib/localDb").BranchCoursesRecord
-      ): import("@/lib/localDb").BranchCoursesRecord => {
-        return branch;
-      };
-
-      const unassignedCourses: import("@/lib/localDb").CourseRecord[] = [];
+      const unassigned: import("@/lib/localDb").CourseRecord[] = [];
       uploadedCourses.forEach((c) => {
         const key = (c.createdBranch || "").trim().toLowerCase();
-        if (!key || !branchMap.has(key)) {
-          unassignedCourses.push(sanitizeCourseForLocalDb(c));
+        const existingBranch = branchMap.get(key);
+        if (existingBranch) {
+          existingBranch.courses.push(sanitizeCourseForLocalDb(c));
         } else {
-          branchMap.get(key)!.courses.push(sanitizeCourseForLocalDb(c));
+          unassigned.push(sanitizeCourseForLocalDb(c));
         }
       });
 
-      const sanitizedPayload = [
-        ...Array.from(branchMap.values())
-          .filter((b) => b.courses.length > 0)
-          .map(sanitizeBranch),
-      ];
+      const payload: BranchGroup[] = Array.from(branchMap.values()).filter((b) => b.courses.length > 0);
 
-      if (unassignedCourses.length > 0) {
-        sanitizedPayload.push({
-          courses: unassignedCourses,
-        } as import("@/lib/localDb").BranchCoursesRecord);
+      if (unassigned.length > 0) {
+        payload.push({
+          branchName: "Main Institution",
+          branchAddress: "Default",
+          contactInfo: "0000000000",
+          locationUrl: "",
+          courses: unassigned,
+        });
       }
 
-      if (!sanitizedPayload.length) {
-        alert(
-          "No valid courses found. Please select a branch or fill valid details."
-        );
-        setIsLoading(false);
-        return;
-      }
-
-      console.log("🧾 Final Payload Ready:", sanitizedPayload);
-
-      // --- 5️⃣ Save Courses in DB ---
-      for (const entry of sanitizedPayload) {
-        const existingGroups = await getCoursesGroupsByBranchName(
-          entry.branchName || ""
-        );
-
-        if (existingGroups.length) {
-          const group = existingGroups[0];
-          const existing = group.courses || [];
-          const incoming = entry.courses || [];
-
-          const keyOf = (c: import("@/lib/localDb").CourseRecord) =>
-            `${(c.courseName || "").trim().toLowerCase()}|${(c.subject || "")
-              .trim()
-              .toLowerCase()}|${(c.mode || "").trim().toLowerCase()}`;
-
-          const existingSet = new Set(existing.map(keyOf));
-          const uniqueIncoming = incoming.filter(
-            (c: import("@/lib/localDb").CourseRecord) =>
-              !existingSet.has(keyOf(c))
-          );
-          const merged = {
-            ...group,
-            branchName: entry.branchName || "",
-            branchAddress: entry.branchAddress || "",
-            contactInfo: entry.contactInfo || "",
-            locationUrl: entry.locationUrl || "",
-            courses: [...existing, ...uniqueIncoming],
-          };
-          await updateCoursesGroupInDB(merged);
-        } else {
-          await addCoursesGroupToDB({
-            branchName: entry.branchName || "",
-            branchAddress: entry.branchAddress || "",
-            contactInfo: entry.contactInfo || "",
-            locationUrl: entry.locationUrl || "",
-            courses: entry.courses || [],
+      for (const entry of payload) {
+        const existingGroups = await getCoursesGroupsByBranchName(entry.branchName);
+        if (existingGroups.length > 0) {
+          const currentGroup = existingGroups[0];
+          await updateCoursesGroupInDB({
+            ...currentGroup,
+            ...entry,
+            courses: [...(currentGroup.courses || []), ...entry.courses],
           });
+        } else {
+          await addCoursesGroupToDB(entry);
         }
       }
-      setSelectedCourseId(1);
 
-      if (shouldSkipL3) {
-        const response = await exportAndUploadInstitutionAndCourses();
-        if (response.success) {
-          router.push("/payment");
-        } else {
-          toast.error(response.message);
-          setDialogOpen(true);
-          localStorage.setItem("signupStep", "2");
-        }
+      const response = (await exportAndUploadInstitutionAndCourses()) as ExportResponse;
+      if (response.success) {
+        router.push("/payment");
+      } else {
+        toast.error(response.message || "Export failed");
       }
 
       onSuccess?.();
     } catch (error) {
-      console.error("❌ Error saving courses:", error);
-      setIsLoading(false);
+      console.error("Error saving:", error);
+      toast.error("An error occurred while saving.");
     } finally {
-      console.log("📍 Finally: Setting loading to false");
       setIsLoading(false);
+      onLoading?.(false);
     }
   };
 
-  // / Helper function to validate a single field using your Joi schema
-  const validateField = (name: string, value: string) => {
-    // Check if the field exists in the branch schema to avoid errors
-    const keyExists = L2Schemas.branch.$_terms.keys?.some(
-      (k: Record<string, unknown>) => k.key === name
-    );
-    if (!keyExists) return "";
-
-    const { error } = L2Schemas.branch.extract(name).validate(value);
-    return error ? error.details[0].message : "";
-  };
-
-  // ✅ 2. Update handleBranchChange to validate as the user types
-  const handleBranchChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >
-  ) => {
+  const handleBranchChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-
-    // First, update the branch state
-    setBranches((prev) =>
-      prev.map((branch) =>
-        branch.id === selectedBranchId ? { ...branch, [name]: value } : branch
-      )
-    );
-
-    // Then, validate the changed field and update the error state
-    const error = validateField(name, value);
-    setBranchErrors((prev) => ({
-      ...prev,
-      [selectedBranchId]: {
-        ...(prev[selectedBranchId] || {}),
-        [name]: error,
-      },
-    }));
+    setBranches((prev) => prev.map((b) => b.id === selectedBranchId ? { ...b, [name]: value } : b));
+    const { error } = L2Schemas.branch.extract(name).validate(value);
+    setBranchErrors((prev) => ({ ...prev, [selectedBranchId]: { ...(prev[selectedBranchId] || {}), [name]: error ? error.details[0].message : "" } }));
   };
 
-  // ✅ 3. Replace your old handleBranchSubmit with this Joi-powered version
   const handleBranchSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -1681,6 +1570,7 @@ export default function L2DialogBox({
 
     // If validation fails...
     if (error) {
+      console.log("❌ Validation Error:", error.details);
       const newErrors: Record<string, string> = {};
       // Collect all error messages
       error.details.forEach((err) => {
@@ -1692,6 +1582,7 @@ export default function L2DialogBox({
         ...prev,
         [selectedBranchId]: newErrors,
       }));
+      toast.error("Please fix the errors: " + error.details[0].message);
       return; // Stop the submission
     }
 
@@ -1703,8 +1594,9 @@ export default function L2DialogBox({
 
     setIsLoading(true);
     try {
-      // Save branch to backend for subscriptions flow (and general use)
+
       const payload = {
+        id: currentBranch.id,
         branchName: currentBranch.branchName,
         branchAddress: currentBranch.branchAddress,
         contactInfo: currentBranch.contactInfo,
@@ -1712,8 +1604,16 @@ export default function L2DialogBox({
         locationUrl: currentBranch.locationUrl,
       };
 
+      const response = await branchAPI.createBranch(payload, institutionId);
+
       if (currentBranch.dbId) {
-        await updateBranchInDB({ id: currentBranch.dbId, ...payload });
+        await updateBranchInDB({
+          id: currentBranch.dbId,
+          branchName: currentBranch.branchName,
+          branchAddress: currentBranch.branchAddress,
+          contactInfo: currentBranch.contactInfo,
+          locationUrl: currentBranch.locationUrl
+        });
       } else {
         const [newId] = await addBranchesToDB([payload]);
         setBranches((prev) =>
@@ -1726,6 +1626,7 @@ export default function L2DialogBox({
       const all = await getAllBranchesFromDB();
       setBranchOptions(all.map((b) => b.branchName).filter(Boolean));
       setShowCourseAfterBranch(true);
+      setIsCourseOrBranch("course");
       // --- END OF YOUR SAVE LOGIC ---
     } catch (err) {
       console.error("Error saving branch:", err);
@@ -1733,827 +1634,445 @@ export default function L2DialogBox({
       setIsLoading(false);
     }
   };
+  // ✅ Updated to accept a parameter: dataToValidate
+  const validateCourses = (dataToValidate: Course[]) => {
+    const requiredFields = getRequiredFields();
+
+    for (let index = 0; index < dataToValidate.length; index++) {
+      const course = dataToValidate[index];
+
+      const courseLabel = course.courseName
+        ? `"${course.courseName}"`
+        : `Program #${index + 1}`;
+
+      // 1. Validate Top-Level Required Fields
+      for (const field of requiredFields) {
+        const value = course[field as keyof Course];
+        if (!value || String(value).trim() === "") {
+          // We convert CamelCase field names to readable strings for the user
+          const readableField = field.replace(/([A-Z])/g, ' $1').toLowerCase();
+          return `Please fill in the ${readableField} for ${courseLabel}.`;
+        }
+      }
+
+      // 2. Specialized Logic for Tuition Centers (Arrays)
+      if (getSchemaKey() === 'tuition') {
+        if (!course.academicDetails || course.academicDetails.length === 0) {
+          return `Please add at least one Subject entry for ${courseLabel}.`;
+        }
+        for (let i = 0; i < course.academicDetails.length; i++) {
+          const detail = course.academicDetails[i];
+          if (!detail.subject?.trim() || !detail.specialization?.trim() || !detail.monthlyFees) {
+            return `Please complete all fields in Subject Tab ${i + 1} for ${courseLabel}.`;
+          }
+        }
+
+        if (!course.facultyDetails || course.facultyDetails.length === 0) {
+          return `Please add at least one Faculty entry for ${courseLabel}.`;
+        }
+      }
+
+      // 3. Image & Brochure Validation
+      const hasImage = course.image instanceof File || (typeof course.imageUrl === 'string' && course.imageUrl.length > 0);
+      const hasBrochure = course.brochure instanceof File || (typeof course.brochureUrl === 'string' && course.brochureUrl.length > 0);
+
+      if (!hasImage) {
+        return `Please upload an image for ${courseLabel}.`;
+      }
+      if (!hasBrochure) {
+        return `Please upload a brochure for ${courseLabel}.`;
+      }
+    }
+
+    return null;
+  };
+
+  const getRequiredFields = () => {
+    // Added "town" and "headquatersAddress" to the required list
+    const locationFields = ["state", "district", "town", "locationURL", "headquatersAddress"];
+    const coachingCommon = ["categoriesType", "domainType", "subDomainType", "courseName", "courseDuration", "startDate", "priceOfCourse", "installments", "emioptions"];
+
+    switch (true) {
+      case isStudyAbroad: return ["consultancyName", "studentAdmissions", "countriesOffered", "academicOfferings"];
+      case isKindergarten:
+        return [
+          ...locationFields,
+          "courseName", "categoriesType", "priceOfCourse",
+          "aboutCourse", "courseDuration", "mode", "curriculumType",
+          "ownershipType",
+          "extendedCare", "mealsProvided", "playground", "pickupDropService", "teacherStudentRatio",
+          "installments", "emioptions"
+        ];
+      case isSchool:
+        return [
+          ...locationFields,
+          "schoolName",
+          "mode",
+          "courseDuration",
+          "classLanguage",
+          "ownershipType",
+          "schoolType",
+          "curriculumType",
+          "openingTime",
+          "closingTime",
+          "classType",
+          "priceOfCourse",
+          "playground",
+          "pickupDropService",
+          "hostelFacility",
+          "emioptions",
+          "partlyPayment",
+        ];
+      case isIntermediateCollege:
+        return [
+          ...locationFields,
+          "intermediateName", "mode", "courseDuration", "startDate", "classlanguage",
+          "ownershipType", "intermediateType", "curriculumType", "openingTime", "closingTime", "yearString", "classType",
+          "specialization", "priceOfCourse", "pickupDropService", "headquatersAddress"
+        ];
+      case isBasicCourseForm: return [...locationFields, "courseName", "courseDuration", "priceOfCourse", "startDate"];
+      case isUnderPostGraduate:
+        return [
+          ...locationFields,
+          "graduationType",
+          "streamType",
+          "selectBranch",
+          "aboutBranch",
+          "courseDuration",
+          "classSize",
+          "eligibilityCriteria",
+          "ownershipType",
+          "collegeCategory",
+          "affiliationType",
+          "placementDrives",
+          "totalNumberRequires",
+          "library",
+          "hostelFacility",
+          "entranceExam",
+          "managementQuota",
+          "playground",
+          "busService",
+          "mockInterviews",
+          "resumeBuilding",
+          "linkedinOptimization",
+          "priceOfCourse",
+          "installments",
+          "emioptions"
+        ];
+
+      case isCoachingCenter:
+      case isExamPrep:
+      case isUpskilling:
+        // Logic split based on category (existing logic handles CoachingCenter, we extend it for new types)
+        const cat = currentCourse.categoriesType || (isExamPrep ? "Exam Preparation" : isUpskilling ? "Upskilling" : "");
+
+        return cat === "Upskilling"
+          ? [...locationFields, ...coachingCommon, "classTiming", "courselanguage", "certification", "placementDrives", "highestPackage", "averagePackage", "totalStudentsPlaced"]
+          : [...locationFields, ...coachingCommon, "classlanguage", "classSize", "mockTests", "libraryFacility", "studyMaterial"];
+
+      case isStudyAbroad:
+        return [
+          ...locationFields,
+          "consultancyName",
+          "studentAdmissions",
+          "headquatersAddress",
+          "countriesOffered",
+          "academicOfferings",
+          "budget",
+          "studentsSent",
+          "applicationAssistance",
+          "visaProcessingSupport",
+          "preDepartureOrientation",
+          "accommodationAssistance",
+          "educationLoans",
+          "postArrivalSupport",
+          "partTimeHelp"
+        ];
+
+      case isTutionCenter:
+        return [
+          ...locationFields,
+          ...locationFields,
+          "tutionCenterName",
+          "mode",
+          "operationalDays",
+          "openingTime",
+          "closingTime",
+          "subject",
+          "classSize",
+          "partlyPayment",
+          "headquatersAddress",
+          "academicDetails",
+          "facultyDetails"
+        ];
+      case isStudyHall: return [...locationFields, "hallName", "seatingOption", "openingTime", "closingTime", "operationalDays", "startDate", "totalSeats", "availableSeats", "pricePerSeat", "hasPersonalLocker", "hasWifi", "hasChargingPoints", "hasAC"];
+      default: return [...locationFields, "courseName", "courseDuration", "priceOfCourse"];
+    }
+  };
+
+  const getSchemaKey = (): keyof typeof L2Schemas => {
+    if (isStudyAbroad) return "studyAbroad";
+    if (isCoachingCenter || isExamPrep || isUpskilling) return "coaching";
+    if (isStudyHall) return "studyHall";
+    if (isTutionCenter) return "tuition";
+    if (isUnderPostGraduate) return "ugpg";
+    if (isKindergarten) return "kindergarten";
+    if (isSchool) return "school";
+    if (isIntermediateCollege) return "college";
+    return "basic";
+  };
+
+  const isFormIncomplete = useMemo(() => {
+    const requiredFields = getRequiredFields();
+
+    // Debug: Check which fields are missing
+    const missingFieldsList = requiredFields.filter((field) => {
+      // Special check for 'yearString' which we use as a proxy for 'year' array validation
+      if (field === "yearString") return !(currentCourse as any).yearString;
+
+      const value = currentCourse[field as keyof Course];
+      if (Array.isArray(value)) return value.length === 0;
+      return !value || String(value).trim() === "";
+    });
+
+    const hasMissingTextFields = missingFieldsList.length > 0;
+
+    const hasMissingFiles = !currentCourse.imagePreviewUrl || !currentCourse.brochurePreviewUrl;
+    let hasMissingCampusImage = false;
+    if (isKindergarten) hasMissingCampusImage = !currentCourse.kindergartenImagePreviewUrl;
+    if (isSchool) hasMissingCampusImage = !currentCourse.schoolImagePreviewUrl;
+    if (isUnderPostGraduate) hasMissingCampusImage = !currentCourse.collegeImagePreviewUrl;
+    if (isCoachingCenter || isExamPrep || isUpskilling) hasMissingCampusImage = !currentCourse.centerImagePreviewUrl;
+    if (isIntermediateCollege) hasMissingCampusImage = !currentCourse.intermediateImagePreviewUrl;
+
+    // Enhanced Debugging
+    /* console.log("--- DEBUG isFormIncomplete ---");
+    console.log("Institution Type:", institutionType);
+    console.log("Required Fields:", requiredFields);
+    console.log("Missing Fields:", missingFieldsList);
+    // ... removed extensive logging
+    */
+
+    return hasMissingTextFields || hasMissingFiles || hasMissingCampusImage;
+  }, [currentCourse, institutionType, isSchool, isKindergarten, isIntermediateCollege, isUnderPostGraduate, isCoachingCenter, isExamPrep, isUpskilling, getRequiredFields]);
 
   const content = (
-    <_Card className="w-full sm:p-6 rounded-[24px] bg-white dark:bg-gray-900 border-0 shadow-none">
-      <_CardContent className="space-y-6 text-gray-900 dark:text-gray-100">
-        {/* Render based on initialSection */}
+    <_Card className="w-full sm:p-6 rounded-[24px] bg-[#F5F6F9] dark:bg-gray-900 border-0 shadow-none">
+      <_CardContent className="space-y-6 text-gray-900 dark:text-gray-100 ">
         {initialSection === "course" ? (
           <div className="space-y-6">
             <div className="space-y-2">
               <h3 className="text-xl md:text-2xl font-bold dark:text-gray-50">
-                {isStudyHall
-                  ? "Study Hall"
-                  : isTutionCenter
-                    ? "Tuition Hall"
-                    : isSubscriptionProgram
-                      ? "Program Details"
-                      : "Course Details"}
+                {isStudyHall ? "Study Hall" : isTutionCenter ? "Tuition Hall" : isSubscriptionProgram ? "Program Details" : "Course Details"}
               </h3>
               <p className="text-[#697282] dark:text-gray-300 text-sm">
-                {isStudyHall
-                  ? "Enter the details of the study hall."
-                  : isTutionCenter
-                    ? "Enter the details of the tuition hall."
-                    : isSubscriptionProgram
-                      ? "Enter the programs your institution offers."
-                      : "Enter the courses your institution offers."}
+                Enter the details of your {isSubscriptionProgram ? "programs" : "courses"}.
               </p>
             </div>
 
-            {/* Course items switching */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 flex-wrap">
-                {courses.map((course) => (
-                  <div key={course.id} className="flex items-center">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => setSelectedCourseId(course.id)}
-                      className={`px-3 py-2 rounded-lg text-sm border transition-colors flex items-center gap-2 ${selectedCourseId === course.id
-                        ? "bg-blue-50 border-blue-200 text-blue-700"
-                        : "bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700"
-                        }`}
-                    >
-                      <span>
-                        {course.courseName ||
-                          (isStudyHall
-                            ? `Hall ${course.id}`
-                            : isTutionCenter
-                              ? `Hall ${course.id}`
-                              : isSubscriptionProgram
-                                ? `Program ${course.id}`
-                                : `Course ${course.id}`)}
-                      </span>
-                      {courses.length > 1 && (
-                        <MoreVertical
-                          size={14}
-                          className="text-gray-400 hover:text-gray-600"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteCourse(course.id);
-                          }}
-                        />
-                      )}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-              <Button
-                type="button"
-                onClick={addNewCourse}
-                className="bg-[#0222D7] hover:bg-[#0222D7]/90 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2"
-              >
-                <Plus size={16} />
-                {isStudyHall
-                  ? "Add Hall"
-                  : isTutionCenter
-                    ? "Add Hall"
-                    : isSubscriptionProgram
-                      ? "Add Program"
-                      : "Add Course"}
-              </Button>
-            </div>
-
-            <form onSubmit={handleCourseSubmit} className="space-y-6">
-              {/* Branch Selection - Only show for subscription programs and when branches exist */}
-              {isSubscriptionProgram && uniqueRemoteBranches.length > 0 && (
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Select Branch
-                  </label>
-                  <AppSelect
+            {/* --- NEW: Branch Selection Dropdown for Admin/Subscription Flow --- */}
+            {isSubscriptionProgram && !editMode && (
+              <div className="bg-white dark:bg-gray-800 p-5 rounded-3xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">
+                  Assign to Branch <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <select
                     value={selectedBranchIdForProgram}
-                    onChange={(val) => {
-                      setSelectedBranchIdForProgram(val);
+                    onChange={(e) => {
+                      setSelectedBranchIdForProgram(e.target.value);
                       setProgramBranchError("");
                     }}
-                    options={uniqueRemoteBranches.map((b) => ({
-                      label: b.branchName,
-                      value: b._id,
-                    }))}
-                    placeholder="Select Branch"
-                    variant="white"
-                    size="md"
-                    rounded="lg"
-                    className="w-full"
-                  />
-                  {programBranchError && (
-                    <p className="text-red-600 text-xs mt-1">
-                      {programBranchError}
-                    </p>
-                  )}
+                    className={`w-full h-12 pl-4 pr-10 rounded-xl border bg-gray-50 dark:bg-gray-900 appearance-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer font-medium ${programBranchError ? "border-red-500" : "border-gray-200 dark:border-gray-700"
+                      }`}
+                  >
+                    <option value="">-- Select Branch --</option>
+                    {uniqueRemoteBranches.map((branch) => (
+                      <option key={branch._id} value={branch._id}>
+                        {branch.branchName}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <svg width="12" height="8" viewBox="0 0 12 8" fill="none" className="stroke-gray-400"><path d="M1 1L6 6L11 1" strokeWidth="2" strokeLinecap="round" /></svg>
+                  </div>
                 </div>
-              )}
-              {/*isSubscriptionProgram && uniqueRemoteBranches.length === 0 && (
-                      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p className="text-sm text-blue-700">
-                          <strong>Note:</strong> You don't have any branches yet. You can add a branch first, or the program will be added to your main institution.
-                        </p>
-                      </div>
-                    )}*/}
+                {programBranchError && <p className="text-red-500 text-xs mt-2 font-semibold">{programBranchError}</p>}
+              </div>
+            )}
 
+            <form id="l2-course-form" onSubmit={handleCourseSubmit} className="space-y-6 ">
+              {/* NOTE: We added `uniqueRemoteBranches` and `selectedBranchId` props 
+                  to each form below to facilitate the autofill logic.
+              */}
               {isStudyAbroad ? (
                 <StudyAbroadForm
-                  currentCourse={currentCourse}
-                  handleCourseChange={handleCourseChange}
-                  handleFileChange={handleFileChange}
-                  setCourses={setCourses}
-                  courses={courses}
-                  selectedCourseId={selectedCourseId}
-                  courseErrors={courseErrorsById[currentCourse.id] || {}}
+                  currentCourse={currentCourse} handleCourseChange={handleCourseChange} handleFileChange={handleFileChange}
+                  setCourses={setCourses} courses={courses} selectedCourseId={selectedCourseId}
+                  courseErrors={courseErrorsById[currentCourse.id] || {}} setSelectedCourseId={setSelectedCourseId}
+                  addNewCourse={addNewCourse} deleteCourse={deleteCourse}
+                  uniqueRemoteBranches={uniqueRemoteBranches}
+                  selectedBranchId={selectedBranchIdForProgram}
+                  isSubscriptionProgram={isSubscriptionProgram}
+                />
+              ) : isExamPrep ? (
+                <ExamPrepCourseForm
+                  currentCourse={currentCourse} handleCourseChange={handleCourseChange} setCourses={setCourses}
+                  courses={courses} selectedCourseId={selectedCourseId} courseErrors={courseErrorsById[currentCourse.id] || {}}
+                  handleFileChange={handleFileChange} setSelectedCourseId={setSelectedCourseId} addNewCourse={addNewCourse}
+                  deleteCourse={deleteCourse}
+                  uniqueRemoteBranches={uniqueRemoteBranches}
+                  selectedBranchId={selectedBranchIdForProgram}
+                  isSubscriptionProgram={isSubscriptionProgram}
+                />
+              ) : isUpskilling ? (
+                <UpskillingCourseForm
+                  currentCourse={currentCourse} handleCourseChange={handleCourseChange} setCourses={setCourses}
+                  courses={courses} selectedCourseId={selectedCourseId} courseErrors={courseErrorsById[currentCourse.id] || {}}
+                  handleFileChange={handleFileChange} setSelectedCourseId={setSelectedCourseId} addNewCourse={addNewCourse}
+                  deleteCourse={deleteCourse}
+                  uniqueRemoteBranches={uniqueRemoteBranches}
+                  selectedBranchId={selectedBranchIdForProgram}
+                  isSubscriptionProgram={isSubscriptionProgram}
                 />
               ) : isCoachingCenter ? (
                 <CoachingCourseForm
-                  currentCourse={currentCourse}
-                  handleCourseChange={handleCourseChange}
-                  setCourses={setCourses}
-                  courses={courses}
-                  selectedCourseId={selectedCourseId}
-                  // ✅ Add this line to pass down the errors
-                  courseErrors={courseErrorsById[currentCourse.id] || {}}
+                  currentCourse={currentCourse} handleCourseChange={handleCourseChange} setCourses={setCourses}
+                  courses={courses} selectedCourseId={selectedCourseId} courseErrors={courseErrorsById[currentCourse.id] || {}}
+                  handleFileChange={handleFileChange} setSelectedCourseId={setSelectedCourseId} addNewCourse={addNewCourse}
+                  deleteCourse={deleteCourse}
+                  uniqueRemoteBranches={uniqueRemoteBranches}
+                  selectedBranchId={selectedBranchIdForProgram}
+                  isSubscriptionProgram={isSubscriptionProgram}
+                />
+              ) : isKindergarten ? (
+                <KindergartenForm
+                  currentCourse={currentCourse} handleCourseChange={handleCourseChange} handleOperationalDayChange={handleOperationalDayChange}
+                  courseErrors={courseErrorsById[currentCourse.id] || {}} labelVariant={isSubscriptionProgram ? "program" : "course"}
+                  setCourses={setCourses} courses={courses} institutionId={institutionId} selectedCourseId={selectedCourseId}
+                  handleFileChange={handleFileChange} setSelectedCourseId={setSelectedCourseId} addNewCourse={addNewCourse} deleteCourse={deleteCourse}
+                  uniqueRemoteBranches={uniqueRemoteBranches}
+                  selectedBranchId={selectedBranchIdForProgram}
+                  isSubscriptionProgram={isSubscriptionProgram}
+                />
+              ) : isSchool ? (
+                <SchoolForm
+                  currentCourse={currentCourse} handleCourseChange={handleCourseChange} courseErrors={courseErrorsById[currentCourse.id] || {}}
+                  setCourses={setCourses} courses={courses} institutionId={institutionId} selectedCourseId={selectedCourseId}
+                  handleFileChange={handleFileChange} setSelectedCourseId={setSelectedCourseId} addNewCourse={addNewCourse} deleteCourse={deleteCourse}
+                  uniqueRemoteBranches={uniqueRemoteBranches}
+                  selectedBranchId={selectedBranchIdForProgram}
+                  isSubscriptionProgram={isSubscriptionProgram}
+                />
+              ) : isIntermediateCollege ? (
+                <CollegeForm
+                  currentCourse={currentCourse} handleCourseChange={handleCourseChange} handleFileChange={handleFileChange}
+                  handleOperationalDayChange={handleOperationalDayChange} courseErrors={courseErrorsById[currentCourse.id] || {}}
+                  setCourses={setCourses} selectedCourseId={selectedCourseId} setSelectedCourseId={setSelectedCourseId}
+                  courses={courses} addNewCourse={addNewCourse} deleteCourse={deleteCourse}
+                  labelVariant={isSubscriptionProgram ? "program" : "course"}
+                  uniqueRemoteBranches={uniqueRemoteBranches}
+                  selectedBranchId={selectedBranchIdForProgram}
+                  isSubscriptionProgram={isSubscriptionProgram}
                 />
               ) : isStudyHall ? (
                 <StudyHallForm
-                  currentCourse={currentCourse}
-                  handleCourseChange={handleCourseChange}
-                  handleOperationalDayChange={handleOperationalDayChange}
-                  handleFileChange={handleFileChange}
-                  setCourses={setCourses}
-                  courses={courses}
-                  selectedCourseId={selectedCourseId}
-                  courseErrors={courseErrorsById[currentCourse.id] || {}}
-                  labelVariant={isSubscriptionProgram ? "program" : "course"}
+                  currentCourse={currentCourse} handleCourseChange={handleCourseChange} handleOperationalDayChange={handleOperationalDayChange}
+                  handleFileChange={handleFileChange} setCourses={setCourses} courses={courses} selectedCourseId={selectedCourseId}
+                  courseErrors={courseErrorsById[currentCourse.id] || {}} labelVariant={isSubscriptionProgram ? "program" : "course"}
                 />
               ) : isTutionCenter ? (
                 <TuitionCenterForm
-                  currentCourse={currentCourse}
-                  handleCourseChange={handleCourseChange}
-                  handleOperationalDayChange={handleOperationalDayChange}
-                  handleFileChange={handleFileChange}
-                  setCourses={setCourses}
-                  courses={courses}
-                  selectedCourseId={selectedCourseId}
-                  // ✅ Pass errors to TuitionCenterForm
-                  courseErrors={courseErrorsById[currentCourse.id] || {}}
-                  labelVariant={isSubscriptionProgram ? "program" : "course"}
+                  currentCourse={currentCourse} handleCourseChange={handleCourseChange} handleOperationalDayChange={handleOperationalDayChange}
+                  handleFileChange={handleFileChange} setCourses={setCourses} courses={courses} selectedCourseId={selectedCourseId}
+                  courseErrors={courseErrorsById[currentCourse.id] || {}} labelVariant={isSubscriptionProgram ? "program" : "course"}
+                  setSelectedCourseId={setSelectedCourseId} addNewCourse={addNewCourse} deleteCourse={deleteCourse}
+                  uniqueRemoteBranches={uniqueRemoteBranches}
+                  selectedBranchId={selectedBranchIdForProgram}
+                  isSubscriptionProgram={isSubscriptionProgram}
                 />
               ) : isUnderPostGraduate ? (
                 <UnderPostGraduateForm
-                  currentCourse={currentCourse}
-                  handleCourseChange={handleCourseChange}
-                  setCourses={setCourses}
-                  courses={courses}
-                  selectedCourseId={selectedCourseId}
-                  // ✅ Add this prop to pass the errors down
-                  courseErrors={courseErrorsById[currentCourse.id] || {}}
+                  currentCourse={currentCourse} handleCourseChange={handleCourseChange} handleFileChange={handleFileChange}
+                  setCourses={setCourses} setSelectedCourseId={setSelectedCourseId} addNewCourse={addNewCourse} deleteCourse={deleteCourse}
+                  courses={courses} selectedCourseId={selectedCourseId} courseErrors={courseErrorsById[currentCourse.id] || {}}
                   labelVariant={isSubscriptionProgram ? "program" : "course"}
-                />
-              ) : isBasicCourseForm ? (
-                <BasicCourseForm
-                  currentCourse={currentCourse}
-                  handleCourseChange={handleCourseChange}
-                  setCourses={setCourses}
-                  courses={courses}
-                  selectedCourseId={selectedCourseId}
-                  // ✅ This line passes the validation errors for the currently selected course
-                  // to the child component. The `|| {}` ensures it's always an object.
-                  courseErrors={courseErrorsById[currentCourse.id] || {}}
-                  labelVariant={isSubscriptionProgram ? "program" : "course"}
+                  uniqueRemoteBranches={uniqueRemoteBranches}
+                  selectedBranchId={selectedBranchIdForProgram}
+                  isSubscriptionProgram={isSubscriptionProgram}
                 />
               ) : (
-                <FallbackCourseForm
-                  currentCourse={currentCourse}
-                  handleCourseChange={handleCourseChange}
-                  setCourses={setCourses}
-                  courses={courses}
-                  selectedCourseId={selectedCourseId}
-                  courseErrors={courseErrorsById[currentCourse.id] || {}}
+                <BasicCourseForm
+                  currentCourse={currentCourse} handleCourseChange={handleCourseChange} setCourses={setCourses}
+                  courses={courses} selectedCourseId={selectedCourseId} courseErrors={courseErrorsById[currentCourse.id] || {}}
                   labelVariant={isSubscriptionProgram ? "program" : "course"}
+
                 />
               )}
-              {!isStudyAbroad && (
-                <StateDistrictFields
-                  currentCourse={currentCourse}
-                  handleCourseChange={handleCourseChange}
-                  courseErrors={courseErrorsById[currentCourse.id] || {}}
-                />
-              )}
-              {!isStudyHall && !isTutionCenter && !isStudyAbroad && (
-                <div className="grid md:grid-cols-2 gap-6">
-                  {uploadFields.map((f) => (
-                    <div key={f.type} className="flex flex-col gap-2">
-                      <label className="font-medium text-[16px]">
-                        {f.label} <span className="text-red-500">*</span>
-                      </label>
 
-                      <label className="relative w-full h-[180px] rounded-[12px] border-2 border-dashed border-[#DADADD] bg-[#F8F9FA] flex flex-col items-center justify-center cursor-pointer hover:bg-[#F0F1F2] transition-colors overflow-hidden">
-                        {/* ✅ Determine which URL to show first */}
-                        {(() => {
-                          const previewUrl = currentCourse[
-                            `${f.type}PreviewUrl`
-                          ] as string;
-                          const uploadedUrl = currentCourse[
-                            `${f.type}Url`
-                          ] as string;
-                          const displayUrl = previewUrl || uploadedUrl;
+              <div className="flex flex-col sm:flex-row justify-center items-center pt-8 gap-4 w-full">
+                {isCoachingOrUGPG && (
+                  <Button
+                    type="button"
+                    disabled={isLoading || isFormIncomplete}
+                    onClick={handleSaveAndAddAnother}
+                    className="w-full sm:w-[280px] h-[48px] border-2 border-[#0222D7] text-[#0222D7] bg-white hover:bg-blue-50 rounded-[12px] font-semibold text-[16px] flex items-center justify-center gap-2 transition-all active:scale-95"
+                  >
+                    <Plus size={18} strokeWidth={3} />
+                    Save & Add Course
+                  </Button>
+                )}
 
-                          if (displayUrl) {
-                            if (f.type === "image") {
-                              return (
-                                <div className="relative">
-                                  <Image
-                                    src={displayUrl}
-                                    width={140}
-                                    height={140}
-                                    alt={`${f.label} Preview`}
-                                    className="w-[140px] h-[140px] object-cover rounded-md shadow-inner"
-                                  />
-                                  <button
-                                    type="button"
-                                    className="absolute bottom-2 right-2 rounded-md bg-black/70 px-3 py-1 text-xs font-semibold text-white"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      setAssetPreview({
-                                        type: "image",
-                                        url: displayUrl,
-                                      });
-                                    }}
-                                  >
-                                    View
-                                  </button>
-                                </div>
-                              );
-                            }
-
-                            return (
-                              <div className="flex flex-col items-center justify-center gap-2 p-4 w-full h-full text-center">
-                                <span className="text-sm text-gray-500 dark:text-gray-300">
-                                  Brochure available
-                                </span>
-                                <button
-                                  type="button"
-                                  className="text-[#0222D7] text-sm underline font-semibold"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    setAssetPreview({
-                                      type: "brochure",
-                                      url: displayUrl,
-                                    });
-                                  }}
-                                >
-                                  View Brochure
-                                </button>
-                              </div>
-                            );
-                          }
-
-                          // 🆕 Default placeholder
-                          return (
-                            <>
-                              <Upload
-                                size={24}
-                                className="text-gray-400 dark:text-gray-300 mb-2"
-                              />
-                              <span className="text-sm text-gray-500 dark:text-gray-300">
-                                {f.type === "image"
-                                  ? isSubscriptionProgram
-                                    ? "Upload Program Image (jpg / jpeg)"
-                                    : "Upload Course Image (jpg / jpeg / png)"
-                                  : isSubscriptionProgram
-                                    ? "Upload Program Brochure (pdf)"
-                                    : "Upload Course Brochure (pdf)"}
-                              </span>
-                            </>
-                          );
-                        })()}
-
-                        {/* Hidden file input */}
-                        <input
-                          type="file"
-                          accept={f.accept}
-                          className="absolute inset-0 opacity-0 cursor-pointer dark:bg-gray-800"
-                          onChange={(e) => handleFileChange(e, f.type)}
-                        />
-                      </label>
-
-                      {/* Show validation error if required */}
-                      {courseErrorsById[currentCourse.id]?.[`${f.type}Url`] && (
-                        <p className="text-red-500 text-sm mt-1">
-                          {courseErrorsById[currentCourse.id][`${f.type}Url`]}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex justify-center gap-10">
-                <button
-                  type="button"
-                  onClick={onPrevious}
-                  className="w-[314px] h-[48px] border border-[#697282] text-[#697282] rounded-[12px] font-semibold text-[18px] leading-[22px] flex items-center justify-center shadow-inner"
-                >
-                  Previous
-                </button>
-
-                <button
+                <Button
                   type="submit"
-                  disabled={isLoading}
-                  className={`w-[314px] h-[48px] rounded-[12px] font-semibold transition-colors 
-            ${isLoading
-                      ? "opacity-50 cursor-not-allowed bg-gray-600"
-                      : "bg-[#6B7280] hover:bg-[#6B7280]/90"
-                    } 
-            text-white flex items-center justify-center`}
+                  disabled={isLoading || isFormIncomplete}
+                  className={`${isCoachingOrUGPG ? 'w-full sm:w-[280px]' : 'w-full sm:w-[400px]'} h-[48px] bg-[#0222D7] hover:bg-[#021bb0] text-white rounded-[12px] font-semibold text-[16px] shadow-md transition-all flex items-center justify-center gap-2 active:scale-95`}
                 >
-                  {isLoading ? "Saving..." : "Save & Next"}
-                </button>
+                  {isLoading ? "Saving..." : <><Upload size={18} /> Save & Listing Now</>}
+                </Button>
               </div>
             </form>
           </div>
         ) : (
-          // Branch section
           <div className="space-y-6">
             <div className="space-y-2">
               <h3 className="text-xl md:text-2xl font-bold">Branch Details</h3>
-              <p className="text-[#697282] text-sm">
-                here information about your institution&apos;s branches.
-              </p>
             </div>
-
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 flex-wrap">
-                {branches.map((branch) => (
-                  <div key={branch.id} className="flex items-center">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => setSelectedBranchId(branch.id)}
-                      className={`px-3 py-2 rounded-lg text-sm border transition-colors flex items-center gap-2 ${selectedBranchId === branch.id
-                        ? "bg-blue-50 border-blue-200 text-blue-700"
-                        : "bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
-                        }`}
-                    >
-                      <span>{branch.branchName || `Branch ${branch.id}`}</span>
-                      {branches.length > 1 && (
-                        <MoreVertical
-                          size={14}
-                          className="text-gray-400 hover:text-gray-600"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteBranch(branch.id);
-                          }}
-                        />
-                      )}
-                    </Button>
-                  </div>
+                {branches.map(b => (
+                  <Button key={b.id} variant="ghost" onClick={() => setSelectedBranchId(b.id)} className={`border ${selectedBranchId === b.id ? "bg-blue-50" : ""}`}>
+                    {b.branchName || `Branch ${b.id}`}
+                    {branches.length > 1 && (
+                      <span onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteBranch(b.id); }} className="ml-1 hover:text-red-500 transition-colors cursor-pointer flex items-center">
+                        <X size={14} />
+                      </span>
+                    )}
+                  </Button>
                 ))}
               </div>
-              <Button
-                type="button"
-                onClick={addNewBranch}
-                className="bg-[#0222D7] hover:bg-[#0222D7]/90 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2"
-              >
-                <Plus size={16} />
-                Add Branch
-              </Button>
+              <Button onClick={addNewBranch} className="bg-[#0222D7] text-white"><Plus size={16} /> Add Branch</Button>
             </div>
-
-            <div className="b p-4 rounded-md">
-              <BranchForm
-                branches={branches}
-                selectedBranchId={selectedBranchId}
-                handleBranchChange={handleBranchChange}
-                handleBranchSubmit={handleBranchSubmit}
-                handlePreviousClick={onPrevious}
-                isLoading={isLoading}
-                errors={branchErrors[selectedBranchId] || {}} // Pass the errors for the selected branch
-              // Pass other necessary props like setBranches, setSelectedBranchId etc.
-              />
-            </div>
-
-            {showCourseAfterBranch && (
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <h3 className="text-xl md:text-2xl font-bold">
-                    {isStudyHall
-                      ? "Study Hall"
-                      : isTutionCenter
-                        ? "Tuition Hall"
-                        : isSubscriptionProgram
-                          ? "Program Details"
-                          : "Course Details"}
-                  </h3>
-                  <p className="text-[#697282] text-sm">
-                    {isStudyHall
-                      ? "Enter the details of the study hall."
-                      : isTutionCenter
-                        ? "Enter the details of the tuition hall."
-                        : isSubscriptionProgram
-                          ? "Enter the programs your institution offers."
-                          : "Enter the courses your institution offers."}
-                  </p>
-                </div>
-
-                {/* Course items switching */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {courses.map((course) => (
-                      <div key={course.id} className="flex items-center">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => setSelectedCourseId(course.id)}
-                          className={`px-3 py-2 rounded-lg text-sm border transition-colors flex items-center gap-2 ${selectedCourseId === course.id
-                            ? "bg-blue-50 border-blue-200 text-blue-700"
-                            : "bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
-                            }`}
-                        >
-                          <span>
-                            {course.courseName ||
-                              (isStudyHall
-                                ? `Hall ${course.id}`
-                                : isTutionCenter
-                                  ? `Hall ${course.id}`
-                                  : isSubscriptionProgram
-                                    ? `Program ${course.id}`
-                                    : `Course ${course.id}`)}
-                          </span>
-                          {courses.length > 1 && (
-                            <MoreVertical
-                              size={14}
-                              className="text-gray-400 hover:text-gray-600"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteCourse(course.id);
-                              }}
-                            />
-                          )}
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                  <Button
-                    type="button"
-                    onClick={addNewCourse}
-                    className="bg-[#0222D7] hover:bg-[#0222D7]/90 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2"
-                  >
-                    <Plus size={16} />
-                    {isStudyHall
-                      ? "Add Hall"
-                      : isTutionCenter
-                        ? "Add Hall"
-                        : isSubscriptionProgram
-                          ? "Add Program"
-                          : "Add Course"}
-                  </Button>
-                </div>
-
-                <form onSubmit={handleCourseSubmit} className="space-y-6">
-                  <InputField
-                    label="Branch"
-                    name="createdBranch"
-                    value={currentCourse.createdBranch}
-                    onChange={handleCourseChange}
-                    isSelect={true}
-                    options={
-                      branchOptions.length
-                        ? branchOptions
-                        : ["No branches saved yet"]
-                    }
-                    placeholder="Select branch"
-                    // ✅ ADD THIS PROP TO DISPLAY THE ERROR
-                    error={courseErrorsById[currentCourse.id]?.createdBranch}
-                  />
-
-                  {/* Branch Selection for Subscription Programs - Only show when branches exist */}
-                  {isSubscriptionProgram && uniqueRemoteBranches.length > 0 && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Select Branch
-                      </label>
-                      <AppSelect
-                        value={selectedBranchIdForProgram}
-                        onChange={(val) => {
-                          setSelectedBranchIdForProgram(val);
-                          setProgramBranchError("");
-                        }}
-                        options={uniqueRemoteBranches.map((b) => ({
-                          label: b.branchName,
-                          value: b._id,
-                        }))}
-                        placeholder="Select Branch"
-                        variant="white"
-                        size="md"
-                        rounded="lg"
-                        className="w-full"
-                      />
-                      {programBranchError && (
-                        <p className="text-red-600 text-xs mt-1">
-                          {programBranchError}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  {isSubscriptionProgram && (
-                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <p className="text-sm text-blue-700">
-                        <strong>Note:</strong> You don&apos;t have any branches
-                        yet. You can add a branch first, or the program will be
-                        added to your main institution.
-                      </p>
-                    </div>
-                  )}
-
-                  {isStudyAbroad ? (
-                    <StudyAbroadForm
-                      currentCourse={currentCourse}
-                      handleCourseChange={handleCourseChange}
-                      handleFileChange={handleFileChange}
-                      setCourses={setCourses}
-                      courses={courses}
-                      selectedCourseId={selectedCourseId}
-                      courseErrors={courseErrorsById[currentCourse.id] || {}}
-                    />
-                  ) : isCoachingCenter ? (
-                    <CoachingCourseForm
-                      currentCourse={currentCourse}
-                      handleCourseChange={handleCourseChange}
-                      setCourses={setCourses}
-                      courses={courses}
-                      selectedCourseId={selectedCourseId}
-                      // ✅ Add this line to pass down the errors
-                      courseErrors={courseErrorsById[currentCourse.id] || {}}
-                    />
-                  ) : isStudyHall ? (
-                    <StudyHallForm
-                      currentCourse={currentCourse}
-                      handleCourseChange={handleCourseChange}
-                      handleOperationalDayChange={handleOperationalDayChange}
-                      handleFileChange={handleFileChange}
-                      setCourses={setCourses}
-                      courses={courses}
-                      selectedCourseId={selectedCourseId}
-                      courseErrors={courseErrorsById[currentCourse.id] || {}}
-                      labelVariant={
-                        isSubscriptionProgram ? "program" : "course"
-                      }
-                    />
-                  ) : isTutionCenter ? (
-                    <TuitionCenterForm
-                      currentCourse={currentCourse}
-                      handleCourseChange={handleCourseChange}
-                      handleOperationalDayChange={handleOperationalDayChange}
-                      handleFileChange={handleFileChange}
-                      setCourses={setCourses}
-                      courses={courses}
-                      selectedCourseId={selectedCourseId}
-                      // ✅ Pass errors to TuitionCenterForm
-                      courseErrors={courseErrorsById[currentCourse.id] || {}}
-                      labelVariant={
-                        isSubscriptionProgram ? "program" : "course"
-                      }
-                    />
-                  ) : isUnderPostGraduate ? (
-                    <UnderPostGraduateForm
-                      currentCourse={currentCourse}
-                      handleCourseChange={handleCourseChange}
-                      setCourses={setCourses}
-                      courses={courses}
-                      selectedCourseId={selectedCourseId}
-                      // ✅ Add this prop to pass the errors down
-                      courseErrors={courseErrorsById[currentCourse.id] || {}}
-                      labelVariant={
-                        isSubscriptionProgram ? "program" : "course"
-                      }
-                    />
-                  ) : isBasicCourseForm ? (
-                    <BasicCourseForm
-                      currentCourse={currentCourse}
-                      handleCourseChange={handleCourseChange}
-                      setCourses={setCourses}
-                      courses={courses}
-                      selectedCourseId={selectedCourseId}
-                      // ✅ This line passes the validation errors for the currently selected course
-                      // to the child component. The `|| {}` ensures it's always an object.
-                      courseErrors={courseErrorsById[currentCourse.id] || {}}
-                      labelVariant={
-                        isSubscriptionProgram ? "program" : "course"
-                      }
-                    />
-                  ) : (
-                    <FallbackCourseForm
-                      currentCourse={currentCourse}
-                      handleCourseChange={handleCourseChange}
-                      setCourses={setCourses}
-                      courses={courses}
-                      selectedCourseId={selectedCourseId}
-                      courseErrors={courseErrorsById[currentCourse.id] || {}}
-                      labelVariant={
-                        isSubscriptionProgram ? "program" : "course"
-                      }
-                    />
-                  )}
-                  {!isStudyAbroad && (
-                    <StateDistrictFields
-                      currentCourse={currentCourse}
-                      handleCourseChange={handleCourseChange}
-                      courseErrors={courseErrorsById[currentCourse.id] || {}}
-                    />
-                  )}
-                  {!isStudyHall && !isTutionCenter && !isStudyAbroad && (
-                    <div className="grid md:grid-cols-2 gap-6">
-                      {uploadFields.map((f) => (
-                        <div key={f.type} className="flex flex-col gap-2">
-                          <label className="font-medium text-[16px]">
-                            {f.label} <span className="text-red-500">*</span>
-                          </label>
-
-                          <label className="relative w-full h-[180px] rounded-[12px] border-2 border-dashed border-[#DADADD] bg-[#F8F9FA] flex flex-col items-center justify-center cursor-pointer hover:bg-[#F0F1F2] transition-colors overflow-hidden">
-                            {/* ✅ Determine which URL to show first */}
-                            {(() => {
-                              const previewUrl = currentCourse[
-                                `${f.type}PreviewUrl`
-                              ] as string;
-                              const uploadedUrl = currentCourse[
-                                `${f.type}Url`
-                              ] as string;
-                              const displayUrl = previewUrl || uploadedUrl;
-
-                              if (displayUrl) {
-                                if (f.type === "image") {
-                                  return (
-                                    <div className="relative w-full h-full flex items-center justify-center">
-                                      <Image
-                                        src={displayUrl}
-                                        alt={`${f.label} Preview`}
-                                        className="object-cover w-full h-full rounded-[12px]"
-                                        width={180}
-                                        height={180}
-                                      />
-                                      <button
-                                        type="button"
-                                        className="absolute bottom-3 right-3 rounded-md bg-black/70 px-3 py-1 text-xs font-semibold text-white"
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          e.stopPropagation();
-                                          setAssetPreview({
-                                            type: "image",
-                                            url: displayUrl,
-                                          });
-                                        }}
-                                      >
-                                        View
-                                      </button>
-                                    </div>
-                                  );
-                                }
-                                return (
-                                  <div className="flex flex-col items-center justify-center gap-2 p-4 w-full h-full text-center">
-                                    <span className="text-sm text-gray-500 dark:text-gray-300">
-                                      Brochure available
-                                    </span>
-                                    <button
-                                      type="button"
-                                      className="text-[#0222D7] text-sm underline font-semibold"
-                                      onClick={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        setAssetPreview({
-                                          type: "brochure",
-                                          url: displayUrl,
-                                        });
-                                      }}
-                                    >
-                                      View Brochure
-                                    </button>
-                                  </div>
-                                );
-                              }
-
-                              // 🆕 Default placeholder
-                              return (
-                                <>
-                                  <Upload
-                                    size={24}
-                                    className="text-gray-400 dark:text-gray-300 mb-2"
-                                  />
-                                  <span className="text-sm text-gray-500 dark:text-gray-300">
-                                    {f.type === "image"
-                                      ? "Upload Course Image (jpg / jpeg / png)"
-                                      : "Upload Course Brochure (pdf)"}
-                                  </span>
-                                </>
-                              );
-                            })()}
-
-                            {/* Hidden file input */}
-                            <input
-                              type="file"
-                              accept={f.accept}
-                              className="absolute inset-0 opacity-0 cursor-pointer dark:bg-gray-800"
-                              onChange={(e) => handleFileChange(e, f.type)}
-                            />
-                          </label>
-
-                          {/* Show validation error if required */}
-                          {courseErrorsById[currentCourse.id]?.[
-                            `${f.type}Url`
-                          ] && (
-                              <p className="text-red-500 text-sm mt-1">
-                                {
-                                  courseErrorsById[currentCourse.id][
-                                  `${f.type}Url`
-                                  ]
-                                }
-                              </p>
-                            )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="flex justify-center gap-10">
-                    <button
-                      type="button"
-                      onClick={onPrevious}
-                      className="w-[314px] h-[48px] border border-[#697282] text-[#697282] rounded-[12px] font-semibold text-[18px] leading-[22px] flex items-center justify-center shadow-inner"
-                    >
-                      Previous
-                    </button>
-
-                    <button
-                      type="submit"
-                      disabled={isLoading}
-                      className={`w-[314px] h-[48px] rounded-[12px] font-semibold transition-colors 
-            ${isLoading
-                          ? "opacity-50 cursor-not-allowed bg-gray-600"
-                          : "bg-[#6B7280] hover:bg-[#6B7280]/90"
-                        } 
-            text-white flex items-center justify-center`}
-                    >
-                      {isLoading ? "Saving..." : "Save & Next"}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
+            <BranchForm branches={branches} selectedBranchId={selectedBranchId} handleBranchChange={handleBranchChange} handleBranchSubmit={handleBranchSubmit} handlePreviousClick={onPrevious} isLoading={isLoading} errors={branchErrors[selectedBranchId] || {}} />
           </div>
         )}
-      </_CardContent >
-    </_Card >
+      </_CardContent>
+    </_Card>
   );
 
-  if (renderMode === "inline") {
-    return content;
-  }
+  if (renderMode === "inline") return content;
 
   return (
     <>
       {assetPreview && (
         <div className="fixed inset-0 z-[100] bg-black/80 flex flex-col items-center justify-center p-6">
-          <button
-            type="button"
-            onClick={() => setAssetPreview(null)}
-            className="absolute top-5 right-5 rounded-full bg-white/90 text-gray-800 p-2 shadow-md hover:bg-white"
-            aria-label="Close preview"
-          >
-            <X size={18} />
-          </button>
-          {assetPreview.type === "image" ? (
-            <div className="max-h-[85vh] max-w-[85vw] overflow-hidden rounded-xl shadow-2xl border border-white/10 bg-black">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={assetPreview.url}
-                alt="Program image preview"
-                className="max-h-[85vh] max-w-[85vw] object-contain"
-              />
-            </div>
-          ) : (
-            <div className="w-[90vw] h-[90vh] bg-white rounded-xl shadow-2xl overflow-hidden">
-              <iframe
-                src={`${assetPreview.url}#toolbar=1`}
-                title="Brochure preview"
-                className="w-full h-full"
-                allow="autoplay"
-              />
-            </div>
-          )}
+          <button onClick={() => setAssetPreview(null)} className="absolute top-5 right-5 bg-white p-2 rounded-full"><X size={18} /></button>
+          {assetPreview.type === "image" ? <img src={assetPreview.url} className="max-h-[85vh] object-contain" alt="Preview" /> : <iframe src={assetPreview.url} className="w-full h-full" />}
         </div>
       )}
       <_Dialog open={DialogOpen} onOpenChange={setDialogOpen}>
         {trigger && <_DialogTrigger asChild>{trigger}</_DialogTrigger>}
-        <_DialogContent
-          className="w-[95vw] sm:w-[90vw] md:w-[800px] lg:w-[900px] xl:max-w-4xl scrollbar-hide top-[65%]"
-          // className="max-w-4xl w-full p-0 overflow-y-auto bg-white dark:bg-gray-900 border-0 rounded-2xl shadow-xl
-          //      top-[60%] -translate-y-1/2 left-1/2 -translate-x-1/2 fixed scrollbar-hide"
-          showCloseButton={false}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-          onInteractOutside={(e) => e.preventDefault()}
-        >
+        <_DialogContent className="w-[95vw] sm:w-[90vw] md:w-[800px] lg:w-[900px] xl:max-w-4xl scrollbar-hide top-[65%]" showCloseButton={false}>
           {content}
         </_DialogContent>
       </_Dialog>

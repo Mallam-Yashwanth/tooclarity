@@ -8,13 +8,14 @@ import { Button } from "@/components/ui/button";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEnvelope } from "@fortawesome/free-regular-svg-icons";
 import { faPhone, faMapMarkerAlt } from "@fortawesome/free-solid-svg-icons";
-import { metricsAPI, enquiriesAPI, programsAPI } from "@/lib/api";
+import { enquiriesAPI } from "@/lib/api";
 import { withAuth } from "@/lib/auth-context";
 import { getSocket } from "@/lib/socket";
 import { motion, AnimatePresence } from "framer-motion";
 import StatCard from "@/components/dashboard/StatCard";
 import TimeRangeToggle, { TimeRangeValue } from "@/components/ui/TimeRangeToggle";
 import { useInfiniteLeads, useInstitution } from "@/lib/hooks/dashboard-hooks";
+import { useAnalyticsContext } from "@/components/providers/AnalyticsProvider";
 import { useQueryClient } from "@tanstack/react-query";
 import Loading from "@/components/ui/loading";
 
@@ -45,60 +46,30 @@ function LeadsPage() {
 
 
 	const normalizeRange = (r: "Weekly"|"Monthly"|"Yearly"): 'weekly'|'monthly'|'yearly' => r.toLowerCase() as 'weekly'|'monthly'|'yearly';
-
-	const fetchKPIs = useCallback(async (rangeLabel: "Weekly"|"Monthly"|"Yearly") => {
-		const range = normalizeRange(rangeLabel);
-		try {
+	
+	// Use shared analytics context (fetched once at layout level)
+	const { weekly, monthly, yearly, isLoading: analyticsLoading } = useAnalyticsContext();
+	const viewsRange = normalizeRange(leadKpiRange);
+	const allAnalytics = viewsRange === 'weekly' ? weekly : viewsRange === 'monthly' ? monthly : yearly;
+	
+	// Update KPI values from unified analytics (views + callback/demo) and program views
+	useEffect(() => {
+		if (analyticsLoading) {
 			setIsKpiLoading(true);
-            const instId = institution?._id || null;
-            const [{ data: viewsNow }, , typeRollups, programViewsSummary] = await Promise.all([
-                metricsAPI.getInstitutionAdminByRange('views', range) as { data?: { totalViews?: number } },
-				metricsAPI.getInstitutionAdminByRange('leads', range) as { data?: { totalLeads?: number } },
-                enquiriesAPI.getTypeSummaryRollups(range) as { data?: { rollups?: Record<string, unknown>[] } },
-                (instId ? programsAPI.summaryViews(String(instId), range) : Promise.resolve(null)) as { success?: boolean; data?: { programs?: Record<string, unknown>[] } } | null
-			]);
-            // Prefer program views if available; fallback to existing course views
-            let pv = 0;
-            if (programViewsSummary && programViewsSummary.success) {
-                const arr = programViewsSummary.data?.programs || [];
-                pv = Array.isArray(arr) ? arr.reduce((s:number,p:Record<string, unknown>)=> s + (Number(p.inRangeViews)||0), 0) : 0;
-            }
-            setKpiViews(pv);
-			// setKpiLeads(leadsNow?.totalLeads || 0);
-			setKpiCallbacks((typeRollups?.data as { callbacks?: number })?.callbacks || 0);
-			setKpiDemos((typeRollups?.data as { demos?: number })?.demos || 0);
-			if ((viewsNow as { trend?: { value: number; isPositive: boolean } })?.trend) setKpiViewsDelta((viewsNow as { trend: { value: number; isPositive: boolean } }).trend);
-		} catch {
-		} finally {
-			setIsKpiLoading(false);
+			return;
 		}
-	}, [institution?._id]);
+		
+		// Program Views KPI → unified views total only (context-driven)
+		const pv = allAnalytics?.views ? allAnalytics.views.totalCount : 0;
+		setKpiViews(pv);
+		setKpiCallbacks(allAnalytics?.callbackRequest?.totalCount || 0);
+		setKpiDemos(allAnalytics?.bookDemoRequest?.totalCount || 0);
+		setIsKpiLoading(analyticsLoading);
+	}, [analyticsLoading, allAnalytics]);
 
-	const fetchList = useCallback(async () => {
-		try {
-			const recent = await enquiriesAPI.getRecentEnquiries();
 
-			if ((recent as { success?: boolean; data?: { enquiries?: unknown[] } })?.success && Array.isArray((recent as { success?: boolean; data?: { enquiries?: unknown[] } }).data?.enquiries)) {
-				const enquiries = (recent as { data: { enquiries: Record<string, unknown>[] } }).data.enquiries;
-				const mapped: StudentItem[] = enquiries.map((enquiry: Record<string, unknown>, idx: number) => ({
-					date: new Date((enquiry.createdAt as string | number) || Date.now() - idx * 86400000).toLocaleDateString('en-GB'),
-					name: (enquiry.student as { name?: string })?.name || `Student ${idx + 1}`,
-					id: String(enquiry._id || idx),
-					status: (enquiry.status as string) || (enquiry.enquiryType as string) || "Requested for callback",
-					program: (enquiry.programInterest as string) || undefined,
-					email: (enquiry.student as { email?: string })?.email || undefined,
-					phone: (enquiry.student as { contactNumber?: string })?.contactNumber || undefined,
-					address: ((enquiry.student as { address?: string })?.address || (enquiry.institution as { headquartersAddress?: string; locationURL?: string; institutionName?: string })?.headquartersAddress || (enquiry.institution as { headquartersAddress?: string; locationURL?: string; institutionName?: string })?.locationURL || (enquiry.institution as { headquartersAddress?: string; locationURL?: string; institutionName?: string })?.institutionName) || undefined,
-					timestampMs: enquiry.createdAt ? new Date((enquiry.createdAt as string | number)).getTime() : (Date.now() - idx * 86400000)
-				}));
-				
-				// Extract unique programs from all enquiries for filter options
-				const programSet = new Set<string>();
-				mapped.forEach(m => { if (m.program) programSet.add(m.program); });
-				setCourseOptions(["Choose Program to see", ...Array.from(programSet)]);
-			}
-		} catch (err) { console.error('Leads: initial fetch failed', err); }
-	}, []);
+	// NOTE: We no longer call getRecentEnquiries here to avoid duplicate "recent" API calls.
+	// Program options are derived from the paginated leads data (useInfiniteLeads) instead.
 
 	const handleStatusChange = useCallback(async (studentId: string, newStatus: string, notes?: string) => {
 		setStatusChangeLoading(studentId);
@@ -260,30 +231,16 @@ function LeadsPage() {
 	}, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
 	useEffect(() => {
-		// let mounted = true;
 		(async () => {
 			try {
 				if (!institution?._id) { setIsLoading(false); return; }
 				setInstitutionId(institution._id);
-				setIsLoading(true);
-				await Promise.all([
-					fetchKPIs(leadKpiRange),
-					fetchList() // Only fetch program options, not base students
-				]);
 				setIsLoading(false);
 			} catch {
 				setIsLoading(false);
 			}
 		})();
-		// return () => { mounted = false; };
-	}, [fetchKPIs, fetchList, institution, leadKpiRange]);
-
-	// When KPI time range changes, refresh only KPIs (do not touch list)
-	useEffect(() => {
-		(async () => {
-			try { await fetchKPIs(leadKpiRange); } catch (err) { console.error('Leads: KPI refresh failed', err); }
-		})();
-	}, [leadKpiRange, fetchKPIs]);
+	}, [institution]);
 
 	// When list program or range changes, re-filter from base
 	useEffect(() => {
@@ -317,24 +274,14 @@ function LeadsPage() {
 					});
 					s.on('courseViewsUpdated', async () => {
                     try {
-                        const instId2 = institutionId;
-                        let newViews = 0;
-                        if (instId2) {
-                            try {
-                                const progSum = await programsAPI.summaryViews(String(instId2), normalizeRange(leadKpiRange)) as { success?: boolean; data?: { programs?: Record<string, unknown>[] } };
-                                if (progSum?.success) {
-                                    const arr = progSum.data?.programs || [];
-                                    newViews = Array.isArray(arr) ? arr.reduce((s:number,p:Record<string, unknown>)=> s + (Number(p.inRangeViews)||0), 0) : 0;
-                                }
-                            } catch {} // _ parameter removed
-                        }
-                        setKpiViews(newViews);
+                        // Invalidate all time ranges since they're all fetched at once
+                        queryClient.invalidateQueries({ queryKey: ['all-unified-analytics'], exact: false });
+                        queryClient.invalidateQueries({ queryKey: ['program-views', institutionId, normalizeRange(leadKpiRange)] });
                     } catch (err) { console.error('Leads: realtime views refresh failed', err); }
                 });
 					s.on('institutionAdminTotalLeads', async () => {
 					try {
-						//const latest = await metricsAPI.getInstitutionAdminByRange('leads', normalizeRange(leadKpiRange));
-						// if ((latest as { success?: boolean; data?: { totalLeads?: number } })?.success) setKpiLeads(((latest as { success?: boolean; data?: { totalLeads?: number } }).data?.totalLeads) || 0);
+						queryClient.invalidateQueries({ queryKey: ['all-unified-analytics', normalizeRange(leadKpiRange), institutionId] });
 					} catch {
 						console.error('Leads: realtime leads refresh failed');
 					}
@@ -342,8 +289,8 @@ function LeadsPage() {
 					s.on('enquiryCreated', async () => {
 					try {
 						await Promise.all([
-							enquiriesAPI.getTypeSummaryRollups(normalizeRange(leadKpiRange)).then((r: unknown)=>{ const data = r as { success?: boolean; data?: { callbacks?: number; demos?: number } }; if (data?.success) { setKpiCallbacks(data.data?.callbacks||0); setKpiDemos(data.data?.demos||0); } }),
-							queryClient.invalidateQueries({ queryKey: ['leads-infinite'] })
+							queryClient.invalidateQueries({ queryKey: ['leads-infinite'] }),
+							queryClient.invalidateQueries({ queryKey: ['all-unified-analytics', normalizeRange(leadKpiRange), institutionId] })
 						]);
 					} catch {
 						console.error('Leads: realtime enquiry refresh failed');

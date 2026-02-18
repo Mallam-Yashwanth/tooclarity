@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 import { motion } from "framer-motion";
 import AdminDashboard from "@/components/dashboard/AdminDashboard";
 import { SearchProvider } from "@/lib/search-context";
+import { AnalyticsProvider } from "@/components/providers/AnalyticsProvider";
 
 export default function DashboardLayout({
   children,
@@ -34,11 +35,10 @@ export default function DashboardLayout({
 
     // 🏫 Institute flow
     if (user.role === "INSTITUTE_ADMIN") {
-      if (!user.isPaymentDone && !user.isProfileCompleted) {
-        router.push("/institute");
-      } else if (!user.isPaymentDone && user.isProfileCompleted) {
-        router.push("/payment");
-      }
+      if (!user.isProfileCompleted) {
+    // If L1 isn't done, send them to the signup/onboarding page
+    router.push("/institute");
+  }
     }
   }, [user, loading, router, pathname]);
 
@@ -57,30 +57,31 @@ export default function DashboardLayout({
 
   if (
     user?.role === "INSTITUTE_ADMIN" &&
-    user.isPaymentDone === true &&
     user.isProfileCompleted === true
   ) {
     return (
       <SearchProvider>
-        <div className="min-h-screen w-full font-[var(--font-Montserrat)]">
-          <div className="flex flex-col lg:flex-row gap-2 lg:gap-6">
-            <Sidebar />
-            <motion.main
-              className="flex-1 max-w-[1900px] mr-0 lg:mr-5 px-2 sm:px-4 lg:px-6 ml-0 h-[100dvh] overflow-y-auto scrollbar-hide pb-20 lg:pb-0"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Topbar
-                userName={user?.name || user?.admin}
-                onSearch={() => {}}
-                onNotificationClick={() => {}}
-                onProfileClick={() => {}}
-              />
-              {children}
-            </motion.main>
+        <AnalyticsProvider>
+          <div className="min-h-screen w-full font-[var(--font-Montserrat)]">
+            <div className="flex flex-col lg:flex-row gap-2 lg:gap-6">
+              <Sidebar />
+              <motion.main
+                className="flex-1 max-w-[1900px] mr-0 lg:mr-5 px-2 sm:px-4 lg:px-6 ml-0 h-[100dvh] overflow-y-auto scrollbar-hide pb-20 lg:pb-0"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.2 }}
+              >
+                <Topbar
+                  userName={user?.name || user?.admin}
+                  onSearch={() => {}}
+                  onNotificationClick={() => {}}
+                  onProfileClick={() => {}}
+                />
+                {children}
+              </motion.main>
+            </div>
           </div>
-        </div>
+        </AnalyticsProvider>
       </SearchProvider>
     );
   }

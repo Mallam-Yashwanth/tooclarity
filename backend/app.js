@@ -34,12 +34,17 @@ const wishlistRoutes = require("./routes/student/wishlist.routes");
 // import global auth middleware
 const globalAuthMiddleware = require("./middleware/globalAuth.middleware");
 
-const studentRoutes = require("./routes/student/student.routes"); 
+const studentRoutes = require("./routes/student/student.routes");
 
 const app = express();
 
 app.use(helmet());
-const pinoMiddleware = pinoHttp({ logger: logger });
+const pinoMiddleware = pinoHttp({
+  logger: logger,
+  autoLogging: {
+    ignore: (req) => req.url.includes('/api/health'),
+  },
+});
 app.use(pinoMiddleware);
 
 const allowedOrigins = [
@@ -48,17 +53,17 @@ const allowedOrigins = [
 ]
 
 const corsOptions = {
-  origin: function(origin, callback){
-    if(!origin){ return callback(null, true)};
-    if(allowedOrigins.includes(origin)){
+  origin: function (origin, callback) {
+    if (!origin) { return callback(null, true) };
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     }
-    else{
+    else {
       console.warn(`Origin ${origin} not allowed by CORS`);
       callback(new Error("CORS policy voilation"))
     }
   },
-  credentials:true,
+  credentials: true,
   optionsSuccessStatus: 200,
 }
 
@@ -95,7 +100,7 @@ const requireAdmin = [authorizeRoles(["ADMIN"])];
 const requireStudent = [authorizeRoles(["STUDENT"])];
 
 app.use("/api/v1/auth", authProtectedRoutes);
-app.use("/api/v1/students", studentRoutes, requireStudent); 
+app.use("/api/v1/students", requireStudent, studentRoutes); 
 
 app.use("/api/v1/public", requireStudent, publicRoutes);
 
@@ -130,7 +135,13 @@ app.use(
 );
 
 app.use(
-  "api/v1/analytics/",
+  "/api/v1/course",
+  requireInstituteAdmin,
+  courseRoutes
+)
+
+app.use(
+  "/api/v1/analytics",
   requireInstituteAdmin,
   analyticsRoutes
 )

@@ -2,6 +2,7 @@
 
 import { useState, ChangeEvent, FormEvent, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
   addInstitutionToDB,
@@ -22,9 +23,12 @@ import {
 import { _Card, _CardContent, _CardFooter } from "@/components/ui/card";
 import InputField from "@/components/ui/InputField";
 import { L1Schema } from "@/lib/validations/L1Schema";
+import { institutionAPI } from "@/lib/api";
 import { toast } from "react-toastify";
 import { Upload } from "lucide-react";
 import { uploadToS3 } from "@/lib/awsUpload";
+import { useAuth } from "@/lib/auth-context";
+
 
 interface FormData {
   instituteType: string;
@@ -63,6 +67,7 @@ export default function L1DialogBox({
   onInstituteTypeChange,
   onSuccess,
 }: L1DialogBoxProps) {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [formData, setFormData] = useState<FormData>({
     instituteType: "",
@@ -79,7 +84,7 @@ export default function L1DialogBox({
     logoUrl: "",
     logoPreviewUrl: "",
   });
-
+  const { updateUser, setProfileCompleted } = useAuth();
   const [errors, setErrors] = useState<Errors>({});
   const [isLoading, setIsLoading] = useState(false);
 
@@ -90,24 +95,40 @@ export default function L1DialogBox({
   const activeSchema = L1Schema;
 
   useEffect(() => {
+    // Only run if the dialog is actually open
     if (!DialogOpen) return;
 
     let isMounted = true;
-    (async () => {
+
+    const fetchInstitutionData = async () => {
       try {
-        const institutions = await getAllInstitutionsFromDB();
+        const token = localStorage.getItem("token");
+        if (!token) return;
+
+        console.log("🔍 Fetching institution details from backend...");
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/institutions/me`, {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+          },
+        });
+
+        const result = await response.json();
+
         if (!isMounted) return;
 
-        if (institutions && institutions.length > 0) {
-          const latest = institutions.sort(
-            (a, b) => (b.createdAt || 0) - (a.createdAt || 0)
-          )[0];
+        // If backend finds an institution (success: true)
+        if (response.ok && result.success && result.data) {
+          const latest = result.data;
+
+          // Sync localStorage ID just in case it's missing
+          localStorage.setItem("institutionId", latest._id);
 
           setFormData({
             instituteType: latest.instituteType || "",
             instituteName: latest.instituteName || "",
             approvedBy: latest.approvedBy || "",
-            establishmentDate: latest.establishmentDate || "",
+            // Format date string for the HTML date input (YYYY-MM-DD)
+            establishmentDate: latest.establishmentDate ? latest.establishmentDate.split('T')[0] : "",
             contactInfo: latest.contactInfo || "",
             additionalContactInfo: latest.additionalContactInfo || "",
             headquartersAddress: latest.headquartersAddress || "",
@@ -115,14 +136,15 @@ export default function L1DialogBox({
             pincode: latest.pincode || "",
             locationURL: latest.locationURL || "",
             logoUrl: latest.logoUrl || "",
-            // Prioritize logoUrl for preview (works for both base64 and future S3)
-            logoPreviewUrl: latest.logoUrl || latest.logoPreviewUrl || "",
+            logoPreviewUrl: latest.logoUrl || "",
           });
         }
       } catch (err) {
-        console.error("Failed to load institutions from IndexedDB", err);
+        console.error("❌ Failed to load institution from backend", err);
       }
-    })();
+    };
+
+    fetchInstitutionData();
 
     return () => {
       isMounted = false;
@@ -266,6 +288,7 @@ export default function L1DialogBox({
     setErrors((prev) => ({ ...prev, logo: undefined }));
   };
 
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
@@ -273,152 +296,81 @@ export default function L1DialogBox({
     try {
       let logoUrl = formData.logoUrl || "";
 
-      // Get latest saved institution to compare
-      const institutions = await getAllInstitutionsFromDB();
-      const latest =
-        institutions && institutions.length > 0
-          ? institutions.sort(
-              (a, b) => (b.createdAt || 0) - (a.createdAt || 0)
-            )[0]
-          : null;
-
-      const latestLogoPreview = latest?.logoPreviewUrl || "";
-
+      // --- 1. AWS S3 UPLOAD ---
       const isLogoChanged =
         formData.logo &&
         formData.logo instanceof File &&
-        formData.logoPreviewUrl !== latestLogoPreview;
+        formData.logoPreviewUrl !== (localStorage.getItem("lastPreviewUrl") || "");
 
       if (isLogoChanged && formData.logo instanceof File) {
         try {
-          console.log("⬆️ Uploading new logo to AWS S3...");
-
           const uploadResult = await uploadToS3(formData.logo);
 
           if (Array.isArray(uploadResult)) {
             const first = uploadResult[0];
-            if (!first?.success)
-              throw new Error(first?.error || "Upload failed");
+            if (!first?.success) throw new Error(first?.error || "Upload failed");
             logoUrl = first.fileUrl || logoUrl;
           } else {
-            if (!uploadResult.success)
-              throw new Error(uploadResult.error || "Upload failed");
+            if (!uploadResult.success) throw new Error(uploadResult.error || "Upload failed");
             logoUrl = uploadResult.fileUrl || logoUrl;
           }
-
-          console.log("✅ Logo uploaded successfully:", logoUrl);
+          localStorage.setItem("lastPreviewUrl", formData.logoPreviewUrl || "");
         } catch (uploadError) {
           console.error("❌ AWS upload failed:", uploadError);
-          setErrors((prev) => ({
+          setErrors?.((prev) => ({
             ...prev,
             logo: "Failed to upload logo. Try again.",
           }));
           setIsLoading(false);
           return;
         }
-      } else {
-        console.log("⚡ Skipping logo upload — same preview detected.");
       }
 
-      // Prepare final data for validation and saving
-      const dataToValidate = { ...formData, logoUrl };
+      // --- 2. NORMALIZATION ---
+      // Clean the formData before sending it to the API
+      const normalizedData = {
+        instituteType: formData.instituteType || "",
+        instituteName: formData.instituteName || "",
+        approvedBy: formData.approvedBy || "",
+        establishmentDate: formData.establishmentDate || "",
+        contactInfo: formData.contactInfo || "",
+        additionalContactInfo: formData.additionalContactInfo || "",
+        headquartersAddress: formData.headquartersAddress || "",
+        state: formData.state || "",
+        pincode: formData.pincode || "",
+        locationURL: formData.locationURL || "",
+        logoPreviewUrl: formData.logoPreviewUrl || "",
+      };
 
-      // Final validation (after logo is processed)
-      const { error } = activeSchema.validate(dataToValidate, {
-        abortEarly: false,
-      });
-      if (error) {
-        const validationErrors: Errors = {};
-        error.details.forEach((err) => {
-          const fieldName = err.path[0] as string;
-          validationErrors[fieldName] = err.message.replace(
-            '"value"',
-            fieldName
-          );
-        });
-        setErrors(validationErrors);
-        setIsLoading(false);
-        return;
+      // --- 3. CALL THE CENTRALIZED API ---
+      // Fixed: Argument 1 is the normalized object, Argument 2 is the logoUrl string
+      const response = await institutionAPI.saveL1Details(normalizedData, logoUrl);
+
+      if (!response.success) {
+        throw new Error(response.message || "Failed to save details");
       }
 
-      setErrors({});
-
-      // ✅ 4) Normalize data before saving
-      const normalize = (
-        x: Partial<FormData> & {
-          id?: string;
-          createdAt?: number;
-          logoUrl?: string;
-          logoPreviewUrl?: string;
-        }
-      ) => ({
-        instituteType: x.instituteType || "",
-        instituteName: x.instituteName || "",
-        approvedBy: x.approvedBy || "",
-        establishmentDate: x.establishmentDate || "",
-        contactInfo: x.contactInfo || "",
-        additionalContactInfo: x.additionalContactInfo || "",
-        headquartersAddress: x.headquartersAddress || "",
-        state: x.state || "",
-        pincode: x.pincode || "",
-        locationURL: x.locationURL || "",
-        logoUrl: x.logoUrl || "",
-        logoPreviewUrl: x.logoPreviewUrl || "",
-      });
-
-      const current = normalize(dataToValidate);
-      let effectiveId: string | null = null;
-
-      const institutionTypeChanged =
-        latest && latest.instituteType !== formData.instituteType;
-
-      if (latest) {
-        const latestNormalized = normalize(latest);
-        const isSame =
-          JSON.stringify(latestNormalized) === JSON.stringify(current);
-
-        if (isSame) {
-          console.log("✅ No changes detected. Skipping DB update.");
-          effectiveId = latest.id || null;
-        } else {
-          await updateInstitutionInDB({
-            ...(latest as Record<string, unknown>),
-            ...current,
-            id: latest.id,
-          });
-          effectiveId = latest.id || null;
-        }
-      } else {
-        const id = await addInstitutionToDB(current);
-        effectiveId = id;
-        console.log("✅ Institution saved locally with id:", id);
+      // --- 4. UI SYNC & REDIRECT ---
+      if (updateUser) {
+        updateUser({ isProfileCompleted: true });
       }
 
-      // Clear dependent data if institute type changed
-      if (institutionTypeChanged) {
-        await updateInstitutionAndTrimExtraFields(
-          formData.instituteType,
-          current
-        );
-        await clearDependentData();
-      }
-
-      // Update localStorage
       if (typeof window !== "undefined") {
-        localStorage.setItem("institutionType", current.instituteType);
-        if (effectiveId !== null)
-          localStorage.setItem("institutionId", String(effectiveId));
-        if (current.logoUrl)
-          localStorage.setItem("institutionLogFileName", current.logoUrl);
-        else localStorage.removeItem("institutionLogFileName");
+        localStorage.setItem("institutionType", normalizedData.instituteType);
+        if (logoUrl) localStorage.setItem("institutionLogFileName", logoUrl);
       }
 
+      toast.success("Details saved successfully!");
       setDialogOpen(false);
-      onSuccess?.();
-      toast.success("Institution details saved successfully!");
+
+      setTimeout(() => {
+        onSuccess?.();
+        router.push("/dashboard");
+      }, 150);
+
     } catch (error) {
-      console.error("Error saving institution:", error);
-      toast.error("Failed to save institution. Please try again.");
+      console.error("Error:", error);
+      toast.error("Something went wrong.");
     } finally {
       setIsLoading(false);
     }
@@ -441,7 +393,7 @@ export default function L1DialogBox({
     <_Dialog open={DialogOpen} onOpenChange={setDialogOpen}>
       {trigger && <_DialogTrigger asChild>{trigger}</_DialogTrigger>}
       <_DialogContent
-        className="w-[95vw] sm:w-[90vw] md:w-[800px] lg:w-[900px] xl:max-w-4xl scrollbar-hide top-[65%]"
+        className="w-[95vw] sm:w-[90vw] md:w-[800px] lg:w-[900px] xl:max-w-4xl scrollbar-hide top-[50%]"
         showCloseButton={false}
         onEscapeKeyDown={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
@@ -466,13 +418,14 @@ export default function L1DialogBox({
                 onChange={handleChange}
                 isSelect
                 options={[
+
                   "Kindergarten/childcare center",
                   "School's",
                   "Intermediate college(K12)",
                   "Under Graduation/Post Graduation",
-                  "Coaching centers",
-                  "Study Halls",
-                  "Tution Center's",
+                  "Exam Preparation",
+                  "Upskilling",
+                  "Tution Center",
                   "Study Abroad",
                 ]}
                 required
@@ -718,11 +671,10 @@ export default function L1DialogBox({
               <Button
                 type="submit"
                 disabled={isLoading}
-                className={`w-full max-w-[500px] h-[48px] mt-5 mx-auto rounded-[12px] font-semibold transition-colors ${
-                  isFormComplete && !isLoading
-                    ? "bg-[#0222D7] text-white"
-                    : "bg-[#697282] text-white"
-                } ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
+                className={`w-full max-w-[500px] h-[48px] mt-5 mx-auto rounded-[12px] font-semibold transition-colors ${isFormComplete && !isLoading
+                  ? "bg-[#0222D7] text-white"
+                  : "bg-[#697282] text-white"
+                  } ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 {isLoading ? "Saving..." : "Save & Next"}
               </Button>

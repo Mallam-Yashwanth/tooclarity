@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useCallback, useMemo } from "react";
-import styles from "./FilterSidebar.module.css";
+import { useRouter, useSearchParams } from "next/navigation";
+
+
 
 export interface ActiveFilters {
-  instituteType?: string; // Mutually exclusive (only one can be selected)
+  instituteType?: string;
   kindergartenLevels?: string[];
   schoolLevels?: string[];
   modes?: string[];
@@ -20,22 +22,9 @@ export interface ActiveFilters {
   operatingHours?: string[];
   duration?: string[];
   subjects?: string[];
-  institutes?: string[];
-  levels?: string[];
 }
 
-interface FilterSidebarProps {
-  activeFilters: ActiveFilters;
-  onFilterChange: (
-    filterType: string,
-    value: string,
-    isChecked: boolean
-  ) => void;
-  // onApplyFilters: (filters: ActiveFilters) => void;
-  onApplyFilters: (filters: ActiveFilters) => void | Promise<void>;
-  onClearFilters?: () => void;
 
-}
 
 const INSTITUTE_TYPES = [
   "Kindergarten",
@@ -188,361 +177,291 @@ const FILTER_CONFIG: Record<
   },
 };
 
-const EMPTY_ARRAY: string[] = [];
+
 
 interface FilterSectionProps {
   title: string;
-  filterType: keyof ActiveFilters;
+  filterKey: string;
   options: string[];
-  isMutuallyExclusive?: boolean;
-  selectedValue?: string;
-  selectedValues?: string[];
-  onFilterChange: (
-    filterType: string,
-    value: string,
-    isChecked: boolean
-  ) => void;
+  isSingle?: boolean;
+  selectedValues: string[];
+  onToggle: (key: string, value: string, checked: boolean) => void;
 }
 
-const areArraysEqual = (a: string[], b: string[]) => {
-  if (a === b) {
-    return true;
-  }
-  if (a.length !== b.length) {
-    return false;
-  }
-  const setA = new Set(a);
-  for (const value of b) {
-    if (!setA.has(value)) {
-      return false;
-    }
-  }
-  return true;
+const FilterSection: React.FC<FilterSectionProps> = ({
+  title,
+  filterKey,
+  options,
+  isSingle = false,
+  selectedValues,
+  onToggle,
+}) => {
+  return (
+    <div className="border-b border-gray-200 pb-3 mb-3">
+      <h3 className="text-xs font-semibold text-gray-700 uppercase mb-2">
+        {title}
+      </h3>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map(option => {
+          const selected = selectedValues.includes(option);
+          return (
+            <button
+              key={option}
+              type="button"
+              onClick={() => onToggle(filterKey, option, !selected)}
+              className={`px-2 py-1 text-xs rounded border transition ${
+                selected
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+              }`}
+            >
+              {option}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 };
 
-const FilterSection = React.memo(
-  function FilterSection({
-    title,
-    filterType,
-    options,
-    isMutuallyExclusive = false,
-    selectedValue,
-    selectedValues = EMPTY_ARRAY,
-    onFilterChange,
-  }: FilterSectionProps) {
-    const handleClick = useCallback(
-      (option: string) => {
-        if (isMutuallyExclusive) {
-          const shouldSelect = selectedValue !== option;
-          onFilterChange(String(filterType), option, shouldSelect);
-        } else {
-          const shouldSelect = !selectedValues.includes(option);
-          onFilterChange(String(filterType), option, shouldSelect);
-        }
-      },
+
+
+const FilterSidebar: React.FC = () => {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const selectedInstituteType = searchParams.get("instituteType") || "";
+
+  const getSelected = (key: string) =>
+  searchParams.get(key)?.split("|") ?? [];
+
+
+
+  const updateQueryParam = useCallback(
+  (key: string, value: string, checked: boolean) => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (key === "instituteType") {
+
       [
-        filterType,
-        isMutuallyExclusive,
-        selectedValue,
-        selectedValues,
-        onFilterChange,
-      ]
-    );
+        "kindergartenLevels",
+        "schoolLevels",
+        "boardType",
+        "programDuration",
+        "ageGroup",
+        "graduationType",
+        "streamType",
+        "educationType",
+        "subjects",
+        "seatingType",
+        "operatingHours",
+        "duration",
+        "classSize",
+        "modes",
+        "priceRange",
+      ].forEach(k => params.delete(k));
 
-    return (
-      <div className={styles.section}>
-        <h3 className={styles.sectionTitle}>{title}</h3>
-        <div className={styles.buttonGroup}>
-          {options.map((option) => {
-            const isSelected = isMutuallyExclusive
-              ? selectedValue === option
-              : selectedValues.includes(option);
+      params.set("instituteType", value);
 
-            return (
-              <button
-                key={option}
-                className={`${styles.filterButton} ${
-                  isSelected ? styles.filterButtonActive : ""
-                }`}
-                onClick={() => handleClick(option)}
-                aria-pressed={isSelected}
-                type="button"
-              >
-                {option}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
+      router.replace(`?${params.toString()}`);
+      return; 
+    }
+
+    const existing = params.get(key)?.split("|") ?? [];
+
+const updated = checked
+  ? Array.from(new Set([...existing, value]))
+  : existing.filter(v => v !== value);
+
+if (updated.length) {
+  params.set(key, updated.join("|"));
+} else {
+  params.delete(key);
+}
+
+
+
+    router.replace(`?${params.toString()}`);
   },
-  (prev, next) => {
-    if (prev.title !== next.title) {
-      return false;
-    }
-    if (prev.filterType !== next.filterType) {
-      return false;
-    }
-    if (prev.isMutuallyExclusive !== next.isMutuallyExclusive) {
-      return false;
-    }
-    if (prev.options !== next.options) {
-      return false;
-    }
-    if (prev.onFilterChange !== next.onFilterChange) {
-      return false;
-    }
-    if (prev.isMutuallyExclusive) {
-      return prev.selectedValue === next.selectedValue;
-    }
-    const prevValues = prev.selectedValues ?? EMPTY_ARRAY;
-    const nextValues = next.selectedValues ?? EMPTY_ARRAY;
-    return areArraysEqual(prevValues, nextValues);
-  }
+  [router, searchParams]
 );
 
-export const FilterSidebar: React.FC<FilterSidebarProps> = ({
-  activeFilters,
-  onFilterChange,
-  onApplyFilters,
-  onClearFilters,
-}) => {
-  const selectedInstituteType = activeFilters.instituteType;
+
   const filterConfig = useMemo(
-    () =>
-      selectedInstituteType
-        ? FILTER_CONFIG[selectedInstituteType] ?? null
-        : null,
+    () => FILTER_CONFIG[selectedInstituteType] ?? null,
     [selectedInstituteType]
   );
 
-  const getSelectedValues = useCallback(
-    (key: keyof ActiveFilters): string[] => {
-      const value = activeFilters[key];
-      return Array.isArray(value) ? value : EMPTY_ARRAY;
-    },
-    [activeFilters]
-  );
-
-  // Check if any filters are active
-  const hasActiveFilters = useMemo(() => {
-    if (activeFilters.instituteType) return true;
-    const arrayKeys: (keyof ActiveFilters)[] = [
-      'kindergartenLevels', 'schoolLevels', 'modes', 'ageGroup', 'programDuration',
-      'priceRange', 'boardType', 'graduationType', 'streamType', 'levels',
-      'classSize', 'seatingType', 'operatingHours', 'duration', 'subjects', 'educationType'
-    ];
-    return arrayKeys.some(key => {
-      const value = activeFilters[key];
-      return Array.isArray(value) && value.length > 0;
-    });
-  }, [activeFilters]);
-
-  // Check if on smaller screens
-  const [isSmallScreen, setIsSmallScreen] = React.useState(false);
-
-  React.useEffect(() => {
-    const checkScreenSize = () => {
-      setIsSmallScreen(window.innerWidth < 1024);
-    };
-    checkScreenSize();
-    window.addEventListener('resize', checkScreenSize);
-    return () => window.removeEventListener('resize', checkScreenSize);
-  }, []);
-
-  // Check if filterInstitutionCoursesOpened (when API filters are applied)
-  const [filterInstitutionCoursesOpened, setFilterInstitutionCoursesOpened] = React.useState(false);
-
-  // For now, we'll assume this is set when onApplyFilters is called with actual filters
-  // This could be passed as a prop or determined by checking if filtered results differ from original
-
-  // Determine if buttons should be shown
-  const shouldShowButtons = hasActiveFilters && !isSmallScreen && !filterInstitutionCoursesOpened;
+  
 
   return (
-    <aside className={styles.sidebar}>
-      <div className={styles.content}>
-        {shouldShowButtons && (
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className={styles.applyButton}
-              onClick={() => {
-                onClearFilters?.();
-                setFilterInstitutionCoursesOpened(false);
-              }}
-            >
-              Clear Filters
-            </button>
-            <button
-              type="button"
-              className={styles.applyButton}
-              onClick={() => {
-                onApplyFilters?.(activeFilters);
-                setFilterInstitutionCoursesOpened(true);
-              }}
-            >
-              Apply Filters
-            </button>
-          </div>
-        )}
+    <aside className="w-full lg:w-64 bg-white border border-gray-200 rounded-md p-3 text-sm">
+      <FilterSection
+        title="Institute Type"
+        filterKey="instituteType"
+        options={INSTITUTE_TYPES}
+        isSingle
+        selectedValues={selectedInstituteType ? [selectedInstituteType] : []}
+        onToggle={updateQueryParam}
+      />
+
+     {/* Levels */}
+      {filterConfig?.levels && (
         <FilterSection
-          title="Institute Type"
-          filterType="instituteType"
-          options={INSTITUTE_TYPES}
-          isMutuallyExclusive={true}
-          selectedValue={selectedInstituteType}
-          onFilterChange={onFilterChange}
+          title={
+            selectedInstituteType === "Kindergarten"
+              ? "Kindergarten Levels"
+              : selectedInstituteType === "School's"
+              ? "School Levels"
+              : "Levels"
+          }
+          filterKey={
+            selectedInstituteType === "Kindergarten"
+              ? "kindergartenLevels"
+              : "schoolLevels"
+          }
+          options={filterConfig.levels}
+          selectedValues={getSelected(
+            selectedInstituteType === "Kindergarten"
+              ? "kindergartenLevels"
+              : "schoolLevels"
+          )}
+          onToggle={updateQueryParam}
         />
+      )}
 
-        {filterConfig && (
-          <>
-            {filterConfig.levels && (
-              <FilterSection
-                title={
-                  selectedInstituteType === "Kindergarten"
-                    ? "Kindergarten Levels"
-                    : selectedInstituteType === "School's"
-                    ? "School Levels"
-                    : "Levels"
-                }
-                filterType={
-                  selectedInstituteType === "Kindergarten"
-                    ? "kindergartenLevels"
-                    : "schoolLevels"
-                }
-                options={filterConfig.levels}
-                selectedValues={
-                  selectedInstituteType === "Kindergarten"
-                    ? getSelectedValues("kindergartenLevels")
-                    : getSelectedValues("schoolLevels")
-                }
-                onFilterChange={onFilterChange}
-              />
-            )}
+      {/* Mode */}
+      {filterConfig?.modes && (
+        <FilterSection
+          title="Mode"
+          filterKey="modes"
+          options={filterConfig.modes}
+          selectedValues={getSelected("modes")}
+          onToggle={updateQueryParam}
+        />
+      )}
 
-            {filterConfig.modes && (
-              <FilterSection
-                title="Mode"
-                filterType="modes"
-                options={filterConfig.modes}
-                selectedValues={getSelectedValues("modes")}
-                onFilterChange={onFilterChange}
-              />
-            )}
+      {/* Board Type */}
+      {filterConfig?.boardType && (
+        <FilterSection
+          title="Board Type"
+          filterKey="boardType"
+          options={filterConfig.boardType}
+          selectedValues={getSelected("boardType")}
+          onToggle={updateQueryParam}
+        />
+      )}
 
-            {filterConfig.boardType && (
-              <FilterSection
-                title="Board type"
-                filterType="boardType"
-                options={filterConfig.boardType}
-                selectedValues={getSelectedValues("boardType")}
-                onFilterChange={onFilterChange}
-              />
-            )}
+      {/* Graduation Type */}
+      {filterConfig?.graduationType && (
+        <FilterSection
+          title="Graduation Type"
+          filterKey="graduationType"
+          options={filterConfig.graduationType}
+          selectedValues={getSelected("graduationType")}
+          onToggle={updateQueryParam}
+        />
+      )}
 
-            {filterConfig.graduationType && (
-              <FilterSection
-                title="Graduation type"
-                filterType="graduationType"
-                options={filterConfig.graduationType}
-                selectedValues={getSelectedValues("graduationType")}
-                onFilterChange={onFilterChange}
-              />
-            )}
+      {/* Stream Type */}
+      {filterConfig?.streamType && (
+        <FilterSection
+          title="Stream Type"
+          filterKey="streamType"
+          options={filterConfig.streamType}
+          selectedValues={getSelected("streamType")}
+          onToggle={updateQueryParam}
+        />
+      )}
 
-            {filterConfig.streamType && (
-              <FilterSection
-                title="Stream type"
-                filterType="streamType"
-                options={filterConfig.streamType}
-                selectedValues={getSelectedValues("streamType")}
-                onFilterChange={onFilterChange}
-              />
-            )}
+      {/* Education Type */}
+      {filterConfig?.educationType && (
+        <FilterSection
+          title="Education Type"
+          filterKey="educationType"
+          options={filterConfig.educationType}
+          selectedValues={getSelected("educationType")}
+          onToggle={updateQueryParam}
+        />
+      )}
 
-            {filterConfig.educationType && (
-              <FilterSection
-                title="Education type"
-                filterType="educationType"
-                options={filterConfig.educationType}
-                selectedValues={getSelectedValues("educationType")}
-                onFilterChange={onFilterChange}
-              />
-            )}
+      {/* Program Duration */}
+      {filterConfig?.programDuration && (
+        <FilterSection
+          title="Program Duration"
+          filterKey="programDuration"
+          options={filterConfig.programDuration}
+          selectedValues={getSelected("programDuration")}
+          onToggle={updateQueryParam}
+        />
+      )}
 
-            {filterConfig.programDuration && (
-              <FilterSection
-                title="Program Duration"
-                filterType="programDuration"
-                options={filterConfig.programDuration}
-                selectedValues={getSelectedValues("programDuration")}
-                onFilterChange={onFilterChange}
-              />
-            )}
+      {/* Age Group */}
+      {filterConfig?.ageGroup && (
+        <FilterSection
+          title="Age Group"
+          filterKey="ageGroup"
+          options={filterConfig.ageGroup}
+          selectedValues={getSelected("ageGroup")}
+          onToggle={updateQueryParam}
+        />
+      )}
 
-            {filterConfig.ageGroup && (
-              <FilterSection
-                title="Age Group"
-                filterType="ageGroup"
-                options={filterConfig.ageGroup}
-                selectedValues={getSelectedValues("ageGroup")}
-                onFilterChange={onFilterChange}
-              />
-            )}
+      {/* Seating Type */}
+      {filterConfig?.seatingType && (
+        <FilterSection
+          title="Seating Type"
+          filterKey="seatingType"
+          options={filterConfig.seatingType}
+          selectedValues={getSelected("seatingType")}
+          onToggle={updateQueryParam}
+        />
+      )}
 
-            {filterConfig.seatingType && (
-              <FilterSection
-                title="Seating type"
-                filterType="seatingType"
-                options={filterConfig.seatingType}
-                selectedValues={getSelectedValues("seatingType")}
-                onFilterChange={onFilterChange}
-              />
-            )}
+      {/* Operating Hours */}
+      {filterConfig?.operatingHours && (
+        <FilterSection
+          title="Operating Hours"
+          filterKey="operatingHours"
+          options={filterConfig.operatingHours}
+          selectedValues={getSelected("operatingHours")}
+          onToggle={updateQueryParam}
+        />
+      )}
 
-            {filterConfig.priceRange && (
-              <FilterSection
-                title="Price Range"
-                filterType="priceRange"
-                options={filterConfig.priceRange}
-                selectedValues={getSelectedValues("priceRange")}
-                onFilterChange={onFilterChange}
-              />
-            )}
+      {/* Duration */}
+      {filterConfig?.duration && (
+        <FilterSection
+          title="Duration"
+          filterKey="duration"
+          options={filterConfig.duration}
+          selectedValues={getSelected("duration")}
+          onToggle={updateQueryParam}
+        />
+      )}
 
-            {filterConfig.operatingHours && (
-              <FilterSection
-                title="Operating Hours"
-                filterType="operatingHours"
-                options={filterConfig.operatingHours}
-                selectedValues={getSelectedValues("operatingHours")}
-                onFilterChange={onFilterChange}
-              />
-            )}
+      {/* Subjects */}
+      {filterConfig?.subjects && (
+        <FilterSection
+          title="Subjects"
+          filterKey="subjects"
+          options={filterConfig.subjects}
+          selectedValues={getSelected("subjects")}
+          onToggle={updateQueryParam}
+        />
+      )}
 
-            {filterConfig.duration && (
-              <FilterSection
-                title="Duration"
-                filterType="duration"
-                options={filterConfig.duration}
-                selectedValues={getSelectedValues("duration")}
-                onFilterChange={onFilterChange}
-              />
-            )}
+      {/* Price Range */}
+      {filterConfig?.priceRange && (
+        <FilterSection
+          title="Price Range"
+          filterKey="priceRange"
+          options={filterConfig.priceRange}
+          selectedValues={getSelected("priceRange")}
+          onToggle={updateQueryParam}
+        />
+      )}
 
-            {filterConfig.subjects && (
-              <FilterSection
-                title="Subjects"
-                filterType="subjects"
-                options={filterConfig.subjects}
-                selectedValues={getSelectedValues("subjects")}
-                onFilterChange={onFilterChange}
-              />
-            )}
-          </>
-        )}
-      </div>
     </aside>
   );
 };

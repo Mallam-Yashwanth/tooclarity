@@ -86,7 +86,7 @@ exports.addToWishlist = async (req, res) => {
 
   try {
     const userId = new mongoose.Types.ObjectId(req.userId);
-    const { courseId, isWishlisted } = req.body;
+    const { courseId, isWishlisted, institutionType } = req.body;
 
     if (!courseId) {
       return res.status(400).json({

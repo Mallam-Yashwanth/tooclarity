@@ -3,6 +3,7 @@ const { Institution } = require("../models/Institution");
 const InstituteAdminModel = require("../models/InstituteAdmin");
 const AppError = require("../utils/appError");
 const asyncHandler = require("express-async-handler");
+const COURSE_MODEL_MAP = require("../utils/CourseMap");
 
 async function getInstitutionAdminLeadsTotal(institutionAdminId) {
   const institutions = await Institution.find({ institutionAdmin: institutionAdminId }).select("_id");
@@ -283,122 +284,226 @@ exports.updateEnquiryStatus = asyncHandler(async (req, res, next) => {
   });
 });
 
+// exports.createEnquiry = asyncHandler(async (req, res, next) => {
+//   const { institution, programInterest, enquiryType, courseId, listingType } = req.body;
+
+//   // If the caller is an authenticated student, always use their id
+//   let studentId = req.body.student;
+//   if (req.userRole === 'STUDENT') {
+//     studentId = req.userId;
+//   }
+//   if (!studentId) {
+//     return res.status(400).json({ success: false, message: 'student id is required' });
+//   }
+//   if (!institution) {
+//     return res.status(400).json({ success: false, message: 'institution id is required' });
+//   }
+//   if (!programInterest || !enquiryType) {
+//     return res.status(400).json({ success: false, message: 'programInterest and enquiryType are required' });
+//   }
+
+//   const enquiry = await Enquiries.create({
+//     student: studentId,
+//     institution,
+//     programInterest,
+//     enquiryType,
+//     // Add new fields
+//     courseId,
+//     listingType: listingType || 'paid', // Default to paid if not provided
+//     status: enquiryType, // Set initial status from enquiryType
+//     statusHistory: [{
+//       status: enquiryType,
+//       changedBy: studentId, // Student who created the enquiry
+//       changedAt: new Date(),
+//       notes: 'Initial enquiry created'
+//     }]
+//   });
+
+//   // No longer push enquiry into student's enquiries array (field removed)
+
+//   try {
+//     const io = req.app.get("io");
+//     if (io) {
+//       io.to(`institution:${institution}`).emit("enquiryCreated", { enquiry });
+
+//       // Update Institution rollups for callback/demo
+//       try {
+//         const { Institution } = require("../models/Institution");
+//         const instDoc = await Institution.findById(institution).select('_id institutionAdmin callbackLeadsTotal demoLeadsTotal callbackRollups demoRollups');
+//         if (instDoc) {
+//           const now = new Date();
+//           const yyyy = now.getUTCFullYear();
+//           const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
+//           const dd = String(now.getUTCDate()).padStart(2, '0');
+//           const dayKey = `${yyyy}-${mm}-${dd}`;
+//           const isCallback = /callback/i.test(enquiryType || '');
+//           const isDemo = /demo/i.test(enquiryType || '');
+//           const updates = {};
+//           if (isCallback) updates['callbackLeadsTotal'] = (instDoc.callbackLeadsTotal || 0) + 1;
+//           if (isDemo) updates['demoLeadsTotal'] = (instDoc.demoLeadsTotal || 0) + 1;
+//           // rollups
+//           if (isCallback) {
+//             const idx = (instDoc.callbackRollups || []).findIndex(r => r.day === dayKey);
+//             if (idx >= 0) instDoc.callbackRollups[idx].count += 1; else instDoc.callbackRollups.push({ day: dayKey, count: 1 });
+//           }
+//           if (isDemo) {
+//             const idx = (instDoc.demoRollups || []).findIndex(r => r.day === dayKey);
+//             if (idx >= 0) instDoc.demoRollups[idx].count += 1; else instDoc.demoRollups.push({ day: dayKey, count: 1 });
+//           }
+//           if (Object.keys(updates).length > 0) {
+//             Object.assign(instDoc, updates);
+//             await instDoc.save();
+//           }
+//         }
+//       } catch (err) {
+//         console.error('EnquiriesController: update institution rollups failed', err?.message || err);
+//       }
+
+//       const inst = await Institution.findById(institution).select("institutionAdmin");
+//       if (inst?.institutionAdmin) {
+//         const adminId = String(inst.institutionAdmin);
+//         io.to(`institutionAdmin:${adminId}`).emit("enquiryCreated", {
+//           enquiry,
+//           // Include new fields for realtime clients
+//           courseId: enquiry.courseId,
+//           listingType: enquiry.listingType
+//         });
+//         // Notify institution admin via notifications channel
+//         try {
+//           const { addNotificationJob } = require('../jobs/notification.job');
+//           await addNotificationJob({
+//             title: 'Callback/Demo requested',
+//             description: `${enquiry.enquiryType} - ${enquiry.programInterest}`,
+//             category: 'user',
+//             recipientType: 'ADMIN',
+//             institutionAdmin: adminId,
+//             metadata: {
+//               enquiryId: String(enquiry._id),
+//               institution: String(institution),
+//               courseId: enquiry.courseId ? String(enquiry.courseId) : undefined,
+//               listingType: enquiry.listingType
+//             }
+//           });
+//         } catch (_) { }
+
+//         // Emit updated leads total (based on students now)
+//         const totalLeads = await getInstitutionAdminLeadsTotal(adminId);
+//         io.to(`institutionAdmin:${adminId}`).emit("institutionAdminTotalLeads", { totalLeads });
+//       }
+//     }
+//   } catch (err) {
+//     console.error('EnquiriesController: create enquiry handler failed', err?.message || err);
+//   }
+
+//   res.status(201).json({
+//     success: true,
+//     data: enquiry
+//   });
+// });
+
 exports.createEnquiry = asyncHandler(async (req, res, next) => {
-  const { institution, programInterest, enquiryType, courseId, listingType } = req.body;
+  const { programInterest, enquiryType, courseId, listingType, institutionType } = req.body;
 
-  // If the caller is an authenticated student, always use their id
-  let studentId = req.body.student;
-  if (req.userRole === 'STUDENT') {
-    studentId = req.userId;
+  if (!institutionType || !COURSE_MODEL_MAP[institutionType]) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid institution type",
+    });
   }
-  if (!studentId) {
-    return res.status(400).json({ success: false, message: 'student id is required' });
+
+  if (!courseId) {
+    return res.status(400).json({
+      success: false,
+      message: "courseId is required",
+    });
   }
-  if (!institution) {
-    return res.status(400).json({ success: false, message: 'institution id is required' });
+
+  const CourseModel = COURSE_MODEL_MAP[institutionType];
+
+  // 🔹 Get institution directly from course
+  const course = await CourseModel.findById(courseId).select("institution");
+  if (!course) {
+    return res.status(404).json({
+      success: false,
+      message: "Course not found",
+    });
   }
+
+  const institution = course.institution;
+
+  // 🔹 Determine studentId
+  // let studentId = req.body.student;
+  // if (req.userRole === "STUDENT") {
+  //   studentId = req.userId;
+  // }
+
+  // if (!studentId) {
+  //   return res.status(400).json({
+  //     success: false,
+  //     message: "student id is required",
+  //   });
+  // }
+
   if (!programInterest || !enquiryType) {
-    return res.status(400).json({ success: false, message: 'programInterest and enquiryType are required' });
+    return res.status(400).json({
+      success: false,
+      message: "programInterest and enquiryType are required",
+    });
   }
 
+  // 🔹 Create enquiry
   const enquiry = await Enquiries.create({
-    student: studentId,
+    student: req.userId,
     institution,
     programInterest,
     enquiryType,
-    // Add new fields
     courseId,
-    listingType: listingType || 'paid', // Default to paid if not provided
-    status: enquiryType, // Set initial status from enquiryType
-    statusHistory: [{
-      status: enquiryType,
-      changedBy: studentId, // Student who created the enquiry
-      changedAt: new Date(),
-      notes: 'Initial enquiry created'
-    }]
+    listingType: listingType || "paid",
+    status: enquiryType,
+    statusHistory: [
+      {
+        status: enquiryType,
+        changedBy: studentId,
+        changedAt: new Date(),
+        notes: "Initial enquiry created",
+      },
+    ],
   });
 
-  // No longer push enquiry into student's enquiries array (field removed)
-
+  // 🔹 Realtime + rollups logic remains same (no need to change)
   try {
     const io = req.app.get("io");
+
     if (io) {
       io.to(`institution:${institution}`).emit("enquiryCreated", { enquiry });
 
-      // Update Institution rollups for callback/demo
-      try {
-        const { Institution } = require("../models/Institution");
-        const instDoc = await Institution.findById(institution).select('_id institutionAdmin callbackLeadsTotal demoLeadsTotal callbackRollups demoRollups');
-        if (instDoc) {
-          const now = new Date();
-          const yyyy = now.getUTCFullYear();
-          const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
-          const dd = String(now.getUTCDate()).padStart(2, '0');
-          const dayKey = `${yyyy}-${mm}-${dd}`;
-          const isCallback = /callback/i.test(enquiryType || '');
-          const isDemo = /demo/i.test(enquiryType || '');
-          const updates = {};
-          if (isCallback) updates['callbackLeadsTotal'] = (instDoc.callbackLeadsTotal || 0) + 1;
-          if (isDemo) updates['demoLeadsTotal'] = (instDoc.demoLeadsTotal || 0) + 1;
-          // rollups
-          if (isCallback) {
-            const idx = (instDoc.callbackRollups || []).findIndex(r => r.day === dayKey);
-            if (idx >= 0) instDoc.callbackRollups[idx].count += 1; else instDoc.callbackRollups.push({ day: dayKey, count: 1 });
-          }
-          if (isDemo) {
-            const idx = (instDoc.demoRollups || []).findIndex(r => r.day === dayKey);
-            if (idx >= 0) instDoc.demoRollups[idx].count += 1; else instDoc.demoRollups.push({ day: dayKey, count: 1 });
-          }
-          if (Object.keys(updates).length > 0) {
-            Object.assign(instDoc, updates);
-            await instDoc.save();
-          }
-        }
-      } catch (err) {
-        console.error('EnquiriesController: update institution rollups failed', err?.message || err);
-      }
-
       const inst = await Institution.findById(institution).select("institutionAdmin");
+
       if (inst?.institutionAdmin) {
         const adminId = String(inst.institutionAdmin);
+
         io.to(`institutionAdmin:${adminId}`).emit("enquiryCreated", {
           enquiry,
-          // Include new fields for realtime clients
           courseId: enquiry.courseId,
-          listingType: enquiry.listingType
+          listingType: enquiry.listingType,
         });
-        // Notify institution admin via notifications channel
-        try {
-          const { addNotificationJob } = require('../jobs/notification.job');
-          await addNotificationJob({
-            title: 'Callback/Demo requested',
-            description: `${enquiry.enquiryType} - ${enquiry.programInterest}`,
-            category: 'user',
-            recipientType: 'ADMIN',
-            institutionAdmin: adminId,
-            metadata: {
-              enquiryId: String(enquiry._id),
-              institution: String(institution),
-              courseId: enquiry.courseId ? String(enquiry.courseId) : undefined,
-              listingType: enquiry.listingType
-            }
-          });
-        } catch (_) { }
 
-        // Emit updated leads total (based on students now)
         const totalLeads = await getInstitutionAdminLeadsTotal(adminId);
-        io.to(`institutionAdmin:${adminId}`).emit("institutionAdminTotalLeads", { totalLeads });
+        io.to(`institutionAdmin:${adminId}`).emit("institutionAdminTotalLeads", {
+          totalLeads,
+        });
       }
     }
   } catch (err) {
-    console.error('EnquiriesController: create enquiry handler failed', err?.message || err);
+    console.error("EnquiriesController: create enquiry handler failed", err?.message || err);
   }
 
   res.status(201).json({
     success: true,
-    data: enquiry
+    data: enquiry,
   });
 });
+
 
 // New: summary by type in a range
 exports.getInstitutionAdminEnquiryTypeSummary = asyncHandler(async (req, res, next) => {

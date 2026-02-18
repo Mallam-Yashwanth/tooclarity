@@ -27,7 +27,7 @@ const PAYMENT_CONTEXT_TTL = 60 * 60; // 60 minutes to survive delayed webhooks
 
 
 exports.createOrder = asyncHandler(async (req, res, next) => {
-  const { planType, couponCode, courseIds = [], listingType, noOfMonths, institutionType, } = req.body;
+  const { planType, couponCode, courseIds = [], listingType, noOfMonths, institutionType } = req.body;
   const userId = req.userId;
   const isFreeListingRequest = listingType === "free" || req.body.amount === 0;
 
@@ -262,6 +262,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
         couponCode: couponCode || null,
         couponCode: couponCode || null,
         institutionType: resolvedInstitutionType,
+        noOfMonths: noOfMonths,
       },
       PAYMENT_CONTEXT_TTL
     );

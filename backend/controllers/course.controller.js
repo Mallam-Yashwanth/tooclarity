@@ -635,7 +635,7 @@ exports.getCourseById = asyncHandler(async (req, res, next) => {
   }
 
   const CourseModel = COURSE_MODEL_MAP[institutionType];
-  const CACHE_KEY = `course:${institutionType}:${courseId}`;
+  const CACHE_KEY = `course:${institutionType}:${courseId}`; // include institutionType in cache key
 
   try {
     // 1️⃣ CHECK GLOBAL CACHE
@@ -663,53 +663,35 @@ exports.getCourseById = asyncHandler(async (req, res, next) => {
       return res.status(200).json(parsed);
     }
 
-    // 2️⃣ IF NOT IN CACHE, FETCH FROM DB
+    // 2️⃣ FETCH COURSE DIRECTLY (no aggregation)
     console.log("⚙️ No cache — fetching course from DB");
 
-    // Simple fetch + populate (robust)
-    const course = await CourseModel.findById(courseId).populate({
-      path: "institution",
-      select: "institutionName instituteType locationURL headquatersAddress"
-    }).lean();
+    const course = await CourseModel.findById(courseId).lean();
 
-    if (!course || (course.status !== "Active" && !isInstitutionSide)) {
-      // Allow inactive if institution side? Or strict? 
-      // Original code checked status !== "Active".
-      // Assuming strict "Active" requirement for public view.
-      if (!isInstitutionSide) {
-        return res.status(404).json({
-          success: true,
-          message: "Course not found or inactive",
-          data: null,
-        });
-      }
-      if (!course) {
-        return next(new AppError("Course not found", 404));
-      }
+    if (!course || course.status !== "Active") {
+      return res.status(404).json({
+        success: true,
+        message: "Course not found or inactive",
+        data: null,
+      });
     }
 
-    // MAP NAME
-    const name = course.courseName ||
-      course.tutionCenterName ||
-      course.schoolName ||
-      course.intermediateName ||
-      course.consultancyName ||
-      course.selectBranch ||
-      "Untitled Course";
-    course.courseName = name;
-
-    const finalResponse = { success: true, data: course };
+    // Prepare final response
+    const finalResponse = {
+      course,
+      institution: course.institution ? course.institution : null,
+    };
 
     // 3️⃣ CACHE THE COURSE
     await RedisUtil.cacheCourse(CACHE_KEY, finalResponse, 600);
     console.log("🟢 Cached globally:", CACHE_KEY);
 
-    // 4️⃣ UNIQUE VIEW TRACKING
+    // 4️⃣ UNIQUE VIEW TRACKING (skip if isInstitutionSide is true)
     if (!isInstitutionSide && userId && course.institution) {
       await RedisUtil.trackUniqueCourseViewOrImpression(
         "viewCourse",
         courseId,
-        course.institution._id,
+        course.institution,
         userId
       );
     }

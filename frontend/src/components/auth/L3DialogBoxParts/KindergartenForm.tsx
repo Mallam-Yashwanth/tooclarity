@@ -182,7 +182,7 @@ export default function KindergartenForm({
         <InputField
           label="Name of Course"
           name="courseName"
-          value={currentCourse.courseName}
+          value={currentCourse.courseName || ""}
           onChange={handleCourseChange}
           placeholder="Enter the course"
           required
@@ -250,7 +250,7 @@ export default function KindergartenForm({
           <InputField
             label="Fee's"
             name="priceOfCourse"
-            value={currentCourse.priceOfCourse}
+            value={currentCourse.priceOfCourse || ""}
             onChange={handleCourseChange}
             placeholder="Enter Fee's"
             type="number"
@@ -310,7 +310,7 @@ export default function KindergartenForm({
           <SearchableSelect
             label="State"
             name="state"
-            value={currentCourse.state}
+            value={currentCourse.state || ""}
             onChange={handleCourseChange}
             options={STATE_OPTIONS}
             placeholder="Select state"
@@ -321,7 +321,7 @@ export default function KindergartenForm({
           <SearchableSelect
             label="District"
             name="district"
-            value={currentCourse.district}
+            value={currentCourse.district || ""}
             onChange={handleCourseChange}
             options={districtOptions}
             placeholder={
@@ -335,7 +335,7 @@ export default function KindergartenForm({
           <InputField
             label="Town"
             name="town"
-            value={currentCourse.town}
+            value={currentCourse.town || ""}
             onChange={handleCourseChange}
             placeholder="Medchal"
             error={courseErrors.town}

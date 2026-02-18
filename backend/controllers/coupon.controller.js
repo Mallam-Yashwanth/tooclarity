@@ -7,6 +7,7 @@ const asyncHandler = require("express-async-handler");
 const InstitutionAdmin = require("../models/InstituteAdmin");
 const { Institution } = require("../models/Institution");
 const Course = require("../models/Course");
+const COURSE_MODEL_MAP = require("../utils/CourseMap")
 
 const PLANS = require("../config/plans");
 
@@ -70,21 +71,95 @@ exports.createCoupon = asyncHandler(async (req, res, next) => {
  * @access  Private/InstitutionAdmin
  */
 
+// exports.applyCoupon = asyncHandler(async (req, res, next) => {
+//   const { code, planType = "yearly" } = req.body;
+//   const userId = req.userId;
+
+//   if (!userId) {
+//     return next(new AppError("Missing userId in request", 400));
+//   }
+
+//   // ✅ Step 1: Get institution from InstituteAdmin
+//   const admin = await InstitutionAdmin.findById(userId).select("institution");
+//   if (!admin || !admin.institution) {
+//     return next(new AppError("Institution not found for this user", 404));
+//   }
+
+//   const institutionId = admin.institution;
+
+//   // ✅ Step 2: Find and validate coupon
+//   const coupon = await Coupon.findOne({ code });
+//   if (!coupon) {
+//     return next(new AppError("Invalid or expired coupon", 404));
+//   }
+
+//   if (coupon.validTill && new Date(coupon.validTill) < new Date()) {
+//     return next(new AppError("Coupon has expired", 400));
+//   }
+
+//   // ✅ Step 3: Count total inactive courses for that institution
+//   const totalInactiveCourses = await Course.countDocuments({
+//     institution: institutionId,
+//     status: "Inactive",
+//   });
+
+//   // ✅ Step 4: Calculate plan price
+//   const planPrice = PLANS[planType];
+//   if (!planPrice) {
+//     return next(new AppError("Invalid plan type specified", 400));
+//   }
+
+//   // ✅ Step 5: Compute total amount and apply discount
+//   const totalBeforeDiscount = totalInactiveCourses * planPrice;
+//   const discountAmount = (totalBeforeDiscount * coupon.discountPercentage) / 100;
+//   const totalAfterDiscount = Math.max(totalBeforeDiscount - discountAmount, 0);
+
+//   // ✅ Step 6: Send clean, idempotent response (no DB writes)
+//   return res.status(200).json({
+//     success: true,
+//     message: "Coupon applied successfully",
+//     data: {
+//       discountAmount: discountAmount,
+//     },
+//   });
+// });
+
 exports.applyCoupon = asyncHandler(async (req, res, next) => {
-  const { code, planType = "yearly" } = req.body;
+  const { code, planType = "yearly", institutionType } = req.body;
   const userId = req.userId;
 
-  if (!userId) {
-    return next(new AppError("Missing userId in request", 400));
-  }
-
-  // ✅ Step 1: Get institution from InstituteAdmin
-  const admin = await InstitutionAdmin.findById(userId).select("institution");
+  // ✅ Step 1: Get institution from InstituteAdmin (and populate to get type)
+  const admin = await InstitutionAdmin.findById(userId).populate("institution");
   if (!admin || !admin.institution) {
     return next(new AppError("Institution not found for this user", 404));
   }
+  const institutionId = admin.institution._id || admin.institution;
 
-  const institutionId = admin.institution;
+  // Helper Map (inline for now)
+  const INSTITUTION_TYPE_MAP = {
+    "Kindergarten/childcare center": "KINDERGARTEN",
+    "School's": "SCHOOL",
+    "Intermediate college(K12)": "INTERMEDIATE",
+    "Under Graduation/Post Graduation": "UG_PG",
+    "Exam Preparation": "EXAM_PREP",
+    "Upskilling": "UPSKILLING",
+    "Tution Center's": "TUTION_CENTER",
+    "Study Abroad": "STUDY_ABROAD",
+    "Coaching centers": "EXAM_PREP",
+    "Study Halls": "UPSKILLING",
+  };
+
+  // Resolve Institution Type
+  let resolvedInstitutionType = institutionType;
+  if (!resolvedInstitutionType && admin.institution.instituteType) {
+    resolvedInstitutionType = INSTITUTION_TYPE_MAP[admin.institution.instituteType];
+  }
+
+  if (!resolvedInstitutionType || !COURSE_MODEL_MAP[resolvedInstitutionType]) {
+    return next(new AppError("Invalid institution type", 400));
+  }
+
+  const CourseModel = COURSE_MODEL_MAP[resolvedInstitutionType];
 
   // ✅ Step 2: Find and validate coupon
   const coupon = await Coupon.findOne({ code });
@@ -97,12 +172,12 @@ exports.applyCoupon = asyncHandler(async (req, res, next) => {
   }
 
   // ✅ Step 3: Count total inactive courses for that institution
-  const totalInactiveCourses = await Course.countDocuments({
+  const totalInactiveCourses = await CourseModel.countDocuments({
     institution: institutionId,
     status: "Inactive",
   });
 
-  // ✅ Step 4: Calculate plan price
+  // ✅ Step 4: Validate plan price
   const planPrice = PLANS[planType];
   if (!planPrice) {
     return next(new AppError("Invalid plan type specified", 400));
@@ -113,15 +188,17 @@ exports.applyCoupon = asyncHandler(async (req, res, next) => {
   const discountAmount = (totalBeforeDiscount * coupon.discountPercentage) / 100;
   const totalAfterDiscount = Math.max(totalBeforeDiscount - discountAmount, 0);
 
-  // ✅ Step 6: Send clean, idempotent response (no DB writes)
+  // ✅ Step 6: Return idempotent response
   return res.status(200).json({
     success: true,
     message: "Coupon applied successfully",
     data: {
-      discountAmount: discountAmount,
+      discountAmount,
+      totalAfterDiscount,
     },
   });
 });
+
 
 exports.listInstitutions = async (req, res, next) => {
   try {

@@ -10,11 +10,13 @@ import PaymentSuccess from "@/components/payment/PaymentSuccess";
 import PaymentProcessing from "@/components/payment/PaymentProcessing";
 import PaymentFailed from "@/components/payment/PaymentFailed";
 import { useAuth } from "@/lib/auth-context";
+import { useInstitution } from "@/lib/hooks/dashboard-hooks";
 
 export default function PaymentPage() {
 
   const router = useRouter();
   const { user, isAuthenticated, loading } = useAuth();
+  const { data: institution } = useInstitution();
 
   // ✅ Hooks must always run before any return
   const [processing, setProcessing] = React.useState<{
@@ -52,16 +54,16 @@ export default function PaymentPage() {
     }
   }, [loading, isAuthenticated, isAllowed, router]);
 
-  
+
   const phoneDisplay = "+91 9391160205";
   const phoneHref = "+919391160205";
-  
+
   const clearStatuses = () => {
     setProcessing(null);
     setSuccess(null);
     setFailed(null);
   };
-  
+
   // ✅ Loader stays after hooks
   if (loading || !isAuthenticated || !isAllowed) {
     return (
@@ -152,6 +154,7 @@ export default function PaymentPage() {
           />
         ) : (
           <PaymentCheckout
+            institutionType={institution?.institutionType}
             onProcessing={(d) => {
               clearStatuses();
               setProcessing(d);

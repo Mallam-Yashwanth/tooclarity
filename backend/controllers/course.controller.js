@@ -1,14 +1,14 @@
-const  Course  = require("../models/Course");
+const Course = require("../models/Course");
 const { Institution } = require("../models/Institution");
 const InstituteAdminModel = require("../models/InstituteAdmin");
 const AppError = require("../utils/appError");
 const asyncHandler = require("express-async-handler");
-const { uploadStream } = require("../services/upload.service");
 const RedisUtil = require("../utils/redis.util");
 const mongoose = require("mongoose");
 const { esClient } = require("../config/elasticsearch");
 const ObjectId = mongoose.Types.ObjectId;
 const redisClient = require("../config/redisConfig");
+const COURSE_MODEL_MAP = require("../utils/CourseMap");
 // Generic helpers
 async function incrementMetricGeneric(req, res, next, cfg) {
   const { institutionId, courseId } = req.params;
@@ -295,93 +295,47 @@ const checkOwnership = async (institutionId, userId) => {
 
 exports.createCourse = asyncHandler(async (req, res, next) => {
   const userId = req.userId;
-  const { courses } = req.body;
+  const { courses, institutionType } = req.body;
 
   if (!Array.isArray(courses) || courses.length === 0) {
     return next(new AppError("No courses provided", 400));
   }
 
-  const pipeline = [
-    /* ----------------------------------------------------
-       1. Match Institute Admin
-    ---------------------------------------------------- */
-    {
-      $match: {
-        _id: new mongoose.Types.ObjectId(userId),
-        role: "INSTITUTE_ADMIN",
-      },
-    },
+  if (!institutionType || !COURSE_MODEL_MAP[institutionType]) {
+    return next(new AppError("Invalid institution type", 400));
+  }
 
-    /* ----------------------------------------------------
-       2. Attach institution + defaults to each course
-    ---------------------------------------------------- */
-    {
-      $project: {
-        courses: {
-          $map: {
-            input: courses,
-            as: "course",
-            in: {
-              $mergeObjects: [
-                "$$course",
-                {
-                  institution: "$institution",
-                  branch: {
-                    $cond: [
-                      {
-                        $regexMatch: {
-                          input: "$$course.branch",
-                          regex: /^[0-9a-fA-F]{24}$/,
-                        },
-                      },
-                      { $toObjectId: "$$course.branch" },
-                      null,
-                    ],
-                  },
-                  
-                  status: "Inactive",
-                  createdAt: new Date(),
-                  updatedAt: new Date(),
-                },
-              ],
-            },
-          },
-        },
-      },
-    },
+  const CourseModel = COURSE_MODEL_MAP[institutionType];
 
-    /* ----------------------------------------------------
-       3. One document per course
-    ---------------------------------------------------- */
-    { $unwind: "$courses" },
+  // Verify admin
+  const admin = await InstituteAdminModel.findOne({
+    _id: userId,
+    role: "INSTITUTE_ADMIN",
+  });
 
-    /* ----------------------------------------------------
-       4. Replace root with course document
-    ---------------------------------------------------- */
-    {
-      $replaceRoot: {
-        newRoot: "$courses",
-      },
-    },
+  if (!admin) {
+    return next(new AppError("Unauthorized", 403));
+  }
 
-    /* ----------------------------------------------------
-       5. Insert into courses collection
-    ---------------------------------------------------- */
-    {
-      $merge: {
-        into: "courses",
-        whenMatched: "fail",
-        whenNotMatched: "insert",
-      },
-    },
-  ];
+  // Prepare course data
+  const preparedCourses = courses.map((course) => ({
+    ...course,
+    institution: admin.institution,
+    branch: mongoose.Types.ObjectId.isValid(course.branch)
+      ? new mongoose.Types.ObjectId(course.branch)
+      : null,
+    status: "Inactive",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    listingType: "free",
+  }));
 
-  await InstituteAdminModel.aggregate(pipeline);
+  await CourseModel.insertMany(preparedCourses);
 
   res.status(201).json({
     success: true,
     message: "Courses created successfully",
-    count: courses.length,
+    count: preparedCourses.length,
   });
 });
 
@@ -390,113 +344,124 @@ exports.getAllCoursesForInstitution = asyncHandler(async (req, res, next) => {
   const limit = parseInt(req.query.limit, 10) || 10;
   const cursor = req.query.cursor;
 
-  const matchQuery = {
-    institution: null,
-  };
-  if (cursor) {
-    matchQuery._id = { $lt: new mongoose.Types.ObjectId(cursor) };
+  // 🔹 Find institution using institutionAdmin = userId
+  const institution = await Institution.findOne({
+    institutionAdmin: userId,
+  });
+
+  if (!institution) {
+    return next(new AppError("Institution not found or unauthorized", 404));
   }
 
-  const pipeline = [
-    {
-      $match: {
-        _id: new mongoose.Types.ObjectId(userId),
-        role: "INSTITUTE_ADMIN",
-      },
-    },
-    {
-      $lookup: {
-        from: "courses",
-        let: { instId: "$institution" },
-        pipeline: [
-          { $match: { $expr: { $eq: ["$institution", "$$instId"] } } },
-          ...(cursor
-            ? [
-                {
-                  $match: { _id: { $lt: new mongoose.Types.ObjectId(cursor) } },
-                },
-              ]
-            : []),
-          { $sort: { _id: -1 } },
-          { $limit: limit + 1 },
-        ],
-        as: "courses",
-      },
-    },
-  ];
+  const INSTITUTION_TYPE_MAP = {
+    "Kindergarten/childcare center": "KINDERGARTEN",
+    "School's": "SCHOOL",
+    "Intermediate college(K12)": "INTERMEDIATE",
+    "Under Graduation/Post Graduation": "UG_PG",
+    "Exam Preparation": "EXAM_PREP",
+    "Upskilling": "UPSKILLING",
+    "Tution Center's": "TUTION_CENTER",
+    "Study Abroad": "STUDY_ABROAD",
+  };
 
-  const result = await InstituteAdminModel.aggregate(pipeline);
-  const courses = result[0]?.courses || [];
+  const mappedType =
+    INSTITUTION_TYPE_MAP[institution.instituteType];
+
+  if (!mappedType || !COURSE_MODEL_MAP[mappedType]) {
+    return next(new AppError("Unsupported institution type", 400));
+  }
+
+  const CourseModel = COURSE_MODEL_MAP[mappedType];
+
+  const query = {
+    institution: institution._id,
+  };
+
+  if (cursor) {
+    query._id = { $lt: new mongoose.Types.ObjectId(cursor) };
+  }
+
+  const courses = await CourseModel.find(query)
+    .sort({ _id: -1 })
+    .limit(limit + 1);
 
   let nextCursor = null;
+
   if (courses.length > limit) {
     const nextItem = courses.pop();
     nextCursor = nextItem._id;
   }
 
+  // Map diverse name fields to standard courseName
+  const mappedCourses = courses.map(course => {
+    const courseObj = course.toObject ? course.toObject() : course;
+    // Map specific fields based on detected keys if courseName is missing
+    const name = courseObj.courseName ||
+      courseObj.tutionCenterName ||
+      courseObj.schoolName ||
+      courseObj.intermediateName ||
+      courseObj.consultancyName ||
+      courseObj.selectBranch || // For UG_PG
+      "Untitled Course";
+    return { ...courseObj, courseName: name };
+  });
+
   res.status(200).json({
     success: true,
-    data: courses,
+    data: mappedCourses,
     nextCursor,
   });
 });
 
-exports.getCourseById = asyncHandler(async (req, res) => {
+exports.getCourseById = asyncHandler(async (req, res, next) => {
   const { courseId } = req.params;
+  const { institutionType, isInstitutionSide } = req.body;
   const userId = req.userId;
 
   console.log(`📘 [getCourseById] Request received for Course ID: ${courseId}`);
 
-  try {
-    const CACHE_KEY = `course:${courseId}`;
+  if (!institutionType || !COURSE_MODEL_MAP[institutionType]) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid institution type",
+    });
+  }
 
+  const CourseModel = COURSE_MODEL_MAP[institutionType];
+  const CACHE_KEY = `course:${institutionType}:${courseId}`; // include institutionType in cache key
+
+  try {
     // 1️⃣ CHECK GLOBAL CACHE
     const cached = await RedisUtil.getCachedCourses(CACHE_KEY);
 
     if (cached) {
       console.log("✅ Global cache hit");
-      const parsed = JSON.parse(cached);
+      let parsed = JSON.parse(cached);
+      // Ensure cached data has courseName
+      if (parsed.data && !parsed.data.courseName) {
+        const d = parsed.data;
+        const n = d.courseName || d.tutionCenterName || d.schoolName || d.intermediateName || d.consultancyName || d.selectBranch || "Untitled Course";
+        d.courseName = n;
+      }
 
-      // 🔥 UNIQUE VIEW TRACKING (Redis SET)
-      if (userId && parsed.course?.institution) {
+      // 🔥 UNIQUE VIEW TRACKING (skip if isInstitutionSide is true)
+      if (!isInstitutionSide && userId && parsed.data?.institution?._id) {
         await RedisUtil.trackUniqueCourseViewOrImpression(
           "viewCourse",
           courseId,
-          parsed.course.institution,
-          userId,
+          parsed.data.institution._id,
+          userId
         );
       }
-
-      return res.status(200).json({
-        success: true,
-        data: parsed,
-      });
+      return res.status(200).json(parsed);
     }
 
-    // 2️⃣ RUN FULL AGGREGATION (from DB)
-    console.log("⚙️ No cache — running full aggregation");
+    // 2️⃣ FETCH COURSE DIRECTLY (no aggregation)
+    console.log("⚙️ No cache — fetching course from DB");
 
-    const courseData = await Course.aggregate([
-      {
-        $match: {
-          _id: new mongoose.Types.ObjectId(courseId),
-          status: "Active",
-        },
-      },
+    const course = await CourseModel.findById(courseId).lean();
 
-      // Join institution
-      {
-        $lookup: {
-          from: "institutions",
-          localField: "institution",
-          foreignField: "_id",
-          as: "institution",
-        },
-      },
-      { $unwind: "$institution" },
-    ]);
-
-    if (!courseData.length) {
+    if (!course || course.status !== "Active") {
       return res.status(404).json({
         success: true,
         message: "Course not found or inactive",
@@ -504,77 +469,79 @@ exports.getCourseById = asyncHandler(async (req, res) => {
       });
     }
 
-    const raw = courseData[0];
-
-    // Prepare the final response
+    // Prepare final response
     const finalResponse = {
-      course: {
-        ...raw,
-        institution: raw.institution?._id, // store only ID inside course
-      },
-      institution: raw.institution
-        ? (() => {
-            const { _id, ...rest } = raw.institution;
-            return { id: _id, ...rest };
-          })()
-        : null,
+      course,
+      institution: course.institution ? course.institution : null,
     };
 
-    // 3️⃣ CACHE THE GLOBAL COURSE
+    // 3️⃣ CACHE THE COURSE
     await RedisUtil.cacheCourse(CACHE_KEY, finalResponse, 600);
     console.log("🟢 Cached globally:", CACHE_KEY);
 
-    // 4️⃣ UNIQUE VIEW TRACKING
-    if (userId && raw.institution?._id) {
+    // 4️⃣ UNIQUE VIEW TRACKING (skip if isInstitutionSide is true)
+    if (!isInstitutionSide && userId && course.institution) {
       await RedisUtil.trackUniqueCourseViewOrImpression(
         "viewCourse",
         courseId,
-        raw.institution._id,
-        userId,
+        course.institution,
+        userId
       );
     }
 
-    console.log("✅ Returning fresh DB data");
-    return res.status(200).json({
-      success: true,
-      data: finalResponse,
-    });
-  } catch (error) {
-    console.error("❌ getCourseById Error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Error fetching course data.",
-      error: error.message,
-    });
+    return res.status(200).json(finalResponse);
+
+  } catch (err) {
+    console.error("❌ getCourseById Error:", err);
+    return next(new AppError("Error fetching course data", 500));
   }
 });
 
+
 exports.updateCourse = asyncHandler(async (req, res, next) => {
   const { institutionId, courseId } = req.params;
+  const { institutionType } = req.body;
 
-  // Check ownership
-  await checkOwnership(institutionId, req.userId);
+  if (!institutionType || !COURSE_MODEL_MAP[institutionType]) {
+    return next(new AppError("Invalid institution type", 400));
+  }
 
-  // Find course
-  const course = await Course.findById(courseId);
-  if (!course || course.institution.toString() !== institutionId) {
+  const CourseModel = COURSE_MODEL_MAP[institutionType];
+
+  const admin = await InstituteAdminModel.findOne({
+    _id: req.userId,
+    role: "INSTITUTE_ADMIN",
+    institution: institutionId,
+  });
+
+  if (!admin) {
+    return next(new AppError("Unauthorized", 403));
+  }
+
+  const updateData = { ...req.body };
+
+  if (updateData.branch) {
+    updateData.branch = mongoose.Types.ObjectId.isValid(updateData.branch)
+      ? new mongoose.Types.ObjectId(updateData.branch)
+      : null;
+  }
+
+  updateData.updatedAt = new Date();
+
+  const updatedCourse = await CourseModel.findOneAndUpdate(
+    { _id: courseId, institution: institutionId },
+    { $set: updateData },
+    { new: true, runValidators: false, strict: false }
+  );
+
+  if (!updatedCourse) {
     return next(
       new AppError(
         "Course not found or does not belong to this institution",
-        404,
-      ),
+        404
+      )
     );
   }
-
-  const updatedCourse = await Course.findByIdAndUpdate(
-  courseId,
-  { $set: req.body },
-  {
-    new: true,
-    runValidators: false,  
-    strict: false,         
-  }
-);
 
   res.status(200).json({
     success: true,
@@ -585,26 +552,46 @@ exports.updateCourse = asyncHandler(async (req, res, next) => {
 
 exports.deleteCourse = asyncHandler(async (req, res, next) => {
   const { institutionId, courseId } = req.params;
+  const { institutionType } = req.body; // expecting institutionType in body
 
-  await checkOwnership(institutionId, req.userId);
+  if (!institutionType || !COURSE_MODEL_MAP[institutionType]) {
+    return next(new AppError("Invalid institution type", 400));
+  }
 
-  const course = await Course.findById(courseId);
-  if (!course || course.institution.toString() !== institutionId) {
+  const CourseModel = COURSE_MODEL_MAP[institutionType];
+
+  // Verify admin/ownership
+  const admin = await InstituteAdminModel.findOne({
+    _id: req.userId,
+    role: "INSTITUTE_ADMIN",
+    institution: institutionId, // ensures admin belongs to this institution
+  });
+
+  if (!admin) {
+    return next(new AppError("Unauthorized", 403));
+  }
+
+  // Delete course in a single DB call while verifying ownership
+  const deletedCourse = await CourseModel.findOneAndDelete({
+    _id: courseId,
+    institution: institutionId,
+  });
+
+  if (!deletedCourse) {
     return next(
       new AppError(
         "Course not found or does not belong to this institution",
-        404,
-      ),
+        404
+      )
     );
   }
-
-  await Course.deleteOne({ _id: courseId });
 
   res.status(204).json({
     success: true,
     data: {},
   });
 });
+
 
 // Unified metric increment: /:courseId/metrics?metric=views|comparisons|leads
 exports.incrementMetricUnified = asyncHandler(async (req, res, next) => {
@@ -623,24 +610,24 @@ exports.incrementMetricUnified = asyncHandler(async (req, res, next) => {
 
   const cfg = isViews
     ? {
-        metricField: "courseViews",
-        rollupField: "viewsRollups",
-        updatedEvent: "courseViewsUpdated",
-        institutionAdminTotalEvent: "institutionAdminTotalViews",
-      }
+      metricField: "courseViews",
+      rollupField: "viewsRollups",
+      updatedEvent: "courseViewsUpdated",
+      institutionAdminTotalEvent: "institutionAdminTotalViews",
+    }
     : isComparisons
       ? {
-          metricField: "comparisons",
-          rollupField: "comparisonRollups",
-          updatedEvent: "comparisonsUpdated",
-          institutionAdminTotalEvent: "institutionAdminTotalComparisons",
-        }
+        metricField: "comparisons",
+        rollupField: "comparisonRollups",
+        updatedEvent: "comparisonsUpdated",
+        institutionAdminTotalEvent: "institutionAdminTotalComparisons",
+      }
       : {
-          metricField: "leadsGenerated",
-          rollupField: "leadsRollups",
-          updatedEvent: "leadsUpdated",
-          institutionAdminTotalEvent: "institutionAdminTotalLeads",
-        };
+        metricField: "leadsGenerated",
+        rollupField: "leadsRollups",
+        updatedEvent: "leadsUpdated",
+        institutionAdminTotalEvent: "institutionAdminTotalLeads",
+      };
 
   return incrementMetricGeneric(req, res, next, cfg);
 });
@@ -1002,12 +989,12 @@ exports.searchCourses = asyncHandler(async (req, res) => {
   // 🔍 Elasticsearch query
   const esQuery = q
     ? {
-        multi_match: {
-          query: q,
-          fields: ["courseName", "selectBranch"],
-          fuzziness: "AUTO",
-        },
-      }
+      multi_match: {
+        query: q,
+        fields: ["courseName", "selectBranch"],
+        fuzziness: "AUTO",
+      },
+    }
     : { match_all: {} };
 
   // 🧠 Search in Elasticsearch

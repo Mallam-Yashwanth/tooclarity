@@ -32,7 +32,7 @@ exports.getInstitutionAnalytics = asyncHandler(async (req, res) => {
   if (type === "weekly") rangeStart.setDate(today.getDate() - 7);
 
   if (type === "monthly") {
-    groupFormat = "%Y-%m";
+    groupFormat = "%Y-%m-%d";
     rangeStart.setMonth(today.getMonth() - 1);
   }
 

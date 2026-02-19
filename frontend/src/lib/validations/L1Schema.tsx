@@ -9,8 +9,8 @@ export const L1Schema = Joi.object({
   instituteType: Joi.string()
     .valid(
       "Kindergarten/childcare center", "School's", "Intermediate college(K12)",
-      "Under Graduation/Post Graduation", "Coaching centers", "Study Halls",
-      "Tution Center's", "Study Abroad"
+      "Under Graduation/Post Graduation", "Exam Preparation", "Upskilling",
+      "Tution Center", "Study Abroad", "Study Halls"
     )
     .empty("")
     .required()

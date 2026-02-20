@@ -339,104 +339,6 @@ exports.createCourse = asyncHandler(async (req, res, next) => {
   });
 });
 
-// exports.getAllCoursesForInstitution = asyncHandler(async (req, res, next) => {
-//   const userId = req.userId;
-//   const limit = parseInt(req.query.limit, 10) || 10;
-//   const cursor = req.query.cursor;
-
-//   const matchQuery = {
-//     institution: null,
-//   };
-//   if (cursor) {
-//     matchQuery._id = { $lt: new mongoose.Types.ObjectId(cursor) };
-//   }
-
-//   const pipeline = [
-//     {
-//       $match: {
-//         _id: new mongoose.Types.ObjectId(userId),
-//         role: "INSTITUTE_ADMIN",
-//       },
-//     },
-//     {
-//       $lookup: {
-//         from: "courses",
-//         let: { instId: "$institution" },
-//         pipeline: [
-//           { $match: { $expr: { $eq: ["$institution", "$$instId"] } } },
-//           ...(cursor
-//             ? [
-//               {
-//                 $match: { _id: { $lt: new mongoose.Types.ObjectId(cursor) } },
-//               },
-//             ]
-//             : []),
-//           { $sort: { _id: -1 } },
-//           { $limit: limit + 1 },
-//         ],
-//         as: "courses",
-//       },
-//     },
-//   ];
-
-//   const result = await InstituteAdminModel.aggregate(pipeline);
-//   const courses = result[0]?.courses || [];
-
-//   let nextCursor = null;
-//   if (courses.length > limit) {
-//     const nextItem = courses.pop();
-//     nextCursor = nextItem._id;
-//   }
-
-//   res.status(200).json({
-//     success: true,
-//     data: courses,
-//     nextCursor,
-//   });
-// });
-// exports.getAllCoursesForInstitution = asyncHandler(async (req, res, next) => {
-//   const userId = req.userId;
-//   const { institutionType, } = req.body;
-//   const limit = parseInt(req.query.limit, 10) || 10;
-//   const cursor = req.query.cursor;
-
-//   if (!institutionType || !COURSE_MODEL_MAP[institutionType]) {
-//     return next(new AppError("Invalid institution type", 400));
-//   }
-
-//   // 🔥 Lazy load model (works for both lazy + normal map)
-//   const CourseModel =
-//     typeof COURSE_MODEL_MAP[institutionType] === "function"
-//       ? COURSE_MODEL_MAP[institutionType]()
-//       : COURSE_MODEL_MAP[institutionType];
-
-//   // 🔹 Build query
-//   const query = {
-//     institution: admin.institution,
-//   };
-
-//   if (cursor) {
-//     query._id = { $lt: new mongoose.Types.ObjectId(cursor) };
-//   }
-
-//   // 🔹 Fetch courses with cursor pagination
-//   const courses = await CourseModel.find(query)
-//     .sort({ _id: -1 })
-//     .limit(limit + 1);
-
-//   let nextCursor = null;
-
-//   if (courses.length > limit) {
-//     const nextItem = courses.pop();
-//     nextCursor = nextItem._id;
-//   }
-
-//   res.status(200).json({
-//     success: true,
-//     data: courses,
-//     nextCursor,
-//   });
-// });
 exports.getAllCoursesForInstitution = asyncHandler(async (req, res, next) => {
   const userId = req.userId;
   const limit = parseInt(req.query.limit, 10) || 10;
@@ -511,115 +413,6 @@ exports.getAllCoursesForInstitution = asyncHandler(async (req, res, next) => {
   });
 });
 
-// exports.getCourseById = asyncHandler(async (req, res) => {
-//   const { courseId } = req.params;
-//   const userId = req.userId;
-
-//   console.log(`📘 [getCourseById] Request received for Course ID: ${courseId}`);
-
-//   try {
-//     const CACHE_KEY = `course:${courseId}`;
-
-//     // 1️⃣ CHECK GLOBAL CACHE
-//     const cached = await RedisUtil.getCachedCourses(CACHE_KEY);
-
-//     if (cached) {
-//       console.log("✅ Global cache hit");
-//       const parsed = JSON.parse(cached);
-
-//       // 🔥 UNIQUE VIEW TRACKING (Redis SET)
-//       if (userId && parsed.course?.institution) {
-//         await RedisUtil.trackUniqueCourseViewOrImpression(
-//           "viewCourse",
-//           courseId,
-//           parsed.course.institution,
-//           userId,
-//         );
-//       }
-
-//       return res.status(200).json({
-//         success: true,
-//         data: parsed,
-//       });
-//     }
-
-//     // 2️⃣ RUN FULL AGGREGATION (from DB)
-//     console.log("⚙️ No cache — running full aggregation");
-
-//     const courseData = await Course.aggregate([
-//       {
-//         $match: {
-//           _id: new mongoose.Types.ObjectId(courseId),
-//           status: "Active",
-//         },
-//       },
-
-//       // Join institution
-//       {
-//         $lookup: {
-//           from: "institutions",
-//           localField: "institution",
-//           foreignField: "_id",
-//           as: "institution",
-//         },
-//       },
-//       { $unwind: "$institution" },
-//     ]);
-
-//     if (!courseData.length) {
-//       return res.status(404).json({
-//         success: true,
-//         message: "Course not found or inactive",
-//         data: null,
-//       });
-//     }
-
-//     const raw = courseData[0];
-
-//     // Prepare the final response
-//     const finalResponse = {
-//       course: {
-//         ...raw,
-//         institution: raw.institution?._id, // store only ID inside course
-//       },
-//       institution: raw.institution
-//         ? (() => {
-//             const { _id, ...rest } = raw.institution;
-//             return { id: _id, ...rest };
-//           })()
-//         : null,
-//     };
-
-//     // 3️⃣ CACHE THE GLOBAL COURSE
-//     await RedisUtil.cacheCourse(CACHE_KEY, finalResponse, 600);
-//     console.log("🟢 Cached globally:", CACHE_KEY);
-
-//     // 4️⃣ UNIQUE VIEW TRACKING
-//     if (userId && raw.institution?._id) {
-//       await RedisUtil.trackUniqueCourseViewOrImpression(
-//         "viewCourse",
-//         courseId,
-//         raw.institution._id,
-//         userId,
-//       );
-//     }
-
-//     console.log("✅ Returning fresh DB data");
-//     return res.status(200).json({
-//       success: true,
-//       data: finalResponse,
-//     });
-//   } catch (error) {
-//     console.error("❌ getCourseById Error:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Error fetching course data.",
-//       error: error.message,
-//     });
-//   }
-// });
-
-
 exports.getCourseById = asyncHandler(async (req, res, next) => {
   const { courseId } = req.params;
   const { institutionType, isInstitutionSide } = req.body;
@@ -635,7 +428,7 @@ exports.getCourseById = asyncHandler(async (req, res, next) => {
   }
 
   const CourseModel = COURSE_MODEL_MAP[institutionType];
-  const CACHE_KEY = `course:${institutionType}:${courseId}`;
+  const CACHE_KEY = `course:${institutionType}:${courseId}`; // include institutionType in cache key
 
   try {
     // 1️⃣ CHECK GLOBAL CACHE
@@ -663,53 +456,35 @@ exports.getCourseById = asyncHandler(async (req, res, next) => {
       return res.status(200).json(parsed);
     }
 
-    // 2️⃣ IF NOT IN CACHE, FETCH FROM DB
+    // 2️⃣ FETCH COURSE DIRECTLY (no aggregation)
     console.log("⚙️ No cache — fetching course from DB");
 
-    // Simple fetch + populate (robust)
-    const course = await CourseModel.findById(courseId).populate({
-      path: "institution",
-      select: "institutionName instituteType locationURL headquatersAddress"
-    }).lean();
+    const course = await CourseModel.findById(courseId).lean();
 
-    if (!course || (course.status !== "Active" && !isInstitutionSide)) {
-      // Allow inactive if institution side? Or strict? 
-      // Original code checked status !== "Active".
-      // Assuming strict "Active" requirement for public view.
-      if (!isInstitutionSide) {
-        return res.status(404).json({
-          success: true,
-          message: "Course not found or inactive",
-          data: null,
-        });
-      }
-      if (!course) {
-        return next(new AppError("Course not found", 404));
-      }
+    if (!course || course.status !== "Active") {
+      return res.status(404).json({
+        success: true,
+        message: "Course not found or inactive",
+        data: null,
+      });
     }
 
-    // MAP NAME
-    const name = course.courseName ||
-      course.tutionCenterName ||
-      course.schoolName ||
-      course.intermediateName ||
-      course.consultancyName ||
-      course.selectBranch ||
-      "Untitled Course";
-    course.courseName = name;
-
-    const finalResponse = { success: true, data: course };
+    // Prepare final response
+    const finalResponse = {
+      course,
+      institution: course.institution ? course.institution : null,
+    };
 
     // 3️⃣ CACHE THE COURSE
     await RedisUtil.cacheCourse(CACHE_KEY, finalResponse, 600);
     console.log("🟢 Cached globally:", CACHE_KEY);
 
-    // 4️⃣ UNIQUE VIEW TRACKING
+    // 4️⃣ UNIQUE VIEW TRACKING (skip if isInstitutionSide is true)
     if (!isInstitutionSide && userId && course.institution) {
       await RedisUtil.trackUniqueCourseViewOrImpression(
         "viewCourse",
         courseId,
-        course.institution._id,
+        course.institution,
         userId
       );
     }

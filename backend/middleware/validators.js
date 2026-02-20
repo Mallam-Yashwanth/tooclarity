@@ -1501,6 +1501,8 @@ exports.validateL1Creation = [
       "Tution Center's",
       "Study Halls",
       "Study Abroad",
+      "Exam Preparation",
+      "Upskilling",
     ])
     .withMessage("A valid institute type is required."),
 

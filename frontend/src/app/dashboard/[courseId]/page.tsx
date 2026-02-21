@@ -76,6 +76,7 @@ const CourseDetailsPage: React.FC = () => {
   const handleNotificationClick = () => {
     router.push("/student/notifications");
   };
+  console.log("courseData", courseData);
 
   const handleWishlistClick = () => {
     router.push("/dashboard"); // Navigate back to dashboard

@@ -91,14 +91,14 @@ export type AcademicProfileDetails =
 
 export interface UpdateAcademicProfilePayload {
   profileType:
-    | "KINDERGARTEN"
-    | "SCHOOL"
-    | "INTERMEDIATE"
-    | "GRADUATION"
-    | "COACHING_CENTER"
-    | "STUDY_HALLS"
-    | "TUITION_CENTER"
-    | "STUDY_ABROAD";
+  | "KINDERGARTEN"
+  | "SCHOOL"
+  | "INTERMEDIATE"
+  | "GRADUATION"
+  | "COACHING_CENTER"
+  | "STUDY_HALLS"
+  | "TUITION_CENTER"
+  | "STUDY_ABROAD";
   details: AcademicProfileDetails;
 }
 
@@ -152,6 +152,7 @@ export interface DashboardCourse {
     instituteName: string;
     logoUrl?: string;
     locationURL?: string;
+    instituteType?: string;
   };
 }
 
@@ -230,7 +231,7 @@ export const studentDashboardAPI = {
         params.set(key, value);
       }
     });
-    
+
 
     const qs = params.toString();
 
@@ -252,10 +253,14 @@ export const studentDashboardAPI = {
 
 
   getCoursebyId: async (
-    course_id: string
+    course_id: string,
+    instituteType?: string
   ): Promise<StudentApiResponse<coursePageData>> => {
+    const params = new URLSearchParams();
+    if (instituteType) params.set("institutionType", instituteType);
+    const qs = params.toString();
     return studentApiRequest<coursePageData>(
-      `/v1/student/course/${course_id}`,
+      `/v1/student/course/${course_id}${qs ? `?${qs}` : ""}`,
       {
         method: "GET",
       }

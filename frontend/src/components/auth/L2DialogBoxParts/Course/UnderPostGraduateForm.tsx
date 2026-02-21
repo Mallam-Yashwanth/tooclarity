@@ -2749,7 +2749,7 @@ export default function UnderPostGraduateForm({
           <SearchableSelect
             label="State"
             name="state"
-            value={currentCourse.state}
+            value={currentCourse.state || ""}
             onChange={handleCourseChange}
             options={STATE_OPTIONS}
             placeholder="Select state"
@@ -2760,7 +2760,7 @@ export default function UnderPostGraduateForm({
           <SearchableSelect
             label="District"
             name="district"
-            value={currentCourse.district}
+            value={currentCourse.district || ""}
             onChange={handleCourseChange}
             options={districtOptions}
             placeholder={
@@ -2774,7 +2774,7 @@ export default function UnderPostGraduateForm({
           <InputField
             label="Town"
             name="town"
-            value={currentCourse.town}
+            value={currentCourse.town || ""}
             onChange={handleCourseChange}
             placeholder="Medchal"
             error={courseErrors.town}
@@ -3102,7 +3102,7 @@ export default function UnderPostGraduateForm({
         <InputField
           label="Price of Course"
           name="priceOfCourse"
-          value={currentCourse.priceOfCourse}
+          value={currentCourse.priceOfCourse || ""}
           onChange={handleCourseChange}
           placeholder="1,05,000/-"
           type="number"

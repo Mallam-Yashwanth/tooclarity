@@ -130,9 +130,12 @@ exports.validateL1Creation = [
       "Intermediate college(K12)",
       "Under Graduation/Post Graduation",
       "Coaching centers",
-      "Tuition Center's", // Corrected spelling
+      "Tuition Center's",
       "Study Halls",
       "Study Abroad",
+      "Exam Preparation",
+      "Upskilling",
+      "Tution Center",
     ])
     .withMessage("A valid institute type is required."),
   // body('establishmentDate').optional({ checkFalsy: true }).isISO8601().toDate().withMessage('Establishment date must be a valid date.'),

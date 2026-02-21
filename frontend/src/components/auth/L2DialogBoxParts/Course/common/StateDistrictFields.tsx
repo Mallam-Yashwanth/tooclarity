@@ -30,7 +30,7 @@ const StateDistrictFields: React.FC<StateDistrictFieldsProps> = ({
       <SearchableSelect
         label="State"
         name="state"
-        value={currentCourse.state}
+        value={currentCourse.state || ""}
         onChange={handleCourseChange as React.ChangeEventHandler<HTMLSelectElement>}
         options={STATE_OPTIONS}
         placeholder="Select state"
@@ -41,7 +41,7 @@ const StateDistrictFields: React.FC<StateDistrictFieldsProps> = ({
       <SearchableSelect
         label="District"
         name="district"
-        value={currentCourse.district}
+        value={currentCourse.district || ""}
         onChange={handleCourseChange as React.ChangeEventHandler<HTMLSelectElement>}
         options={districtOptions}
         placeholder={

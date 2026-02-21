@@ -222,7 +222,7 @@ export default function InstituteDashboard() {
 
                 setChartValues(viewsArr);
                 setLeadsChartValues(leadsArr);
-                setXLabels(labels.map((l, i) => i % 5 === 0 ? l : ''));
+                setXLabels(labels);
 
             } else {
                 // YEARLY

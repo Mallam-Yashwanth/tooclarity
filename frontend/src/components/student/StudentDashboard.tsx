@@ -12,7 +12,7 @@ import { DashboardCourse, studentDashboardAPI } from "@/lib/students-api";
 import { useAuth } from "@/lib/auth-context";
 import { useNotifications } from "@/lib/hooks/notifications-hooks";
 import { useRouter, useSearchParams } from "next/navigation";
-import {ActiveFilters} from './home/FilterSidebar'
+import { ActiveFilters } from './home/FilterSidebar'
 import NotificationPane from "./notificationpane/NotificationPane";
 
 
@@ -70,57 +70,57 @@ const getPriceRange = (price: number): string => {
 const transformApiCourse = (apiCourse: DashboardCourse): Course => {
 
   const price = apiCourse.priceOfCourse || 0;
-  
-  return {
-  id: apiCourse._id || "",
-  title: apiCourse.courseName || "Untitled Course",
-  institution: apiCourse.institutionDetails?.instituteName || "Unknown Institution",
-  image: apiCourse.imageUrl || "/course-placeholder.jpg",
-  // rating: apiCourse.rating || 4.5,
-  // reviews: apiCourse.reviews || 0,
-  // students: apiCourse.studentsEnrolled || 0,
-  price: price,
-  // level: "Lower kindergarten", // Default level if not provided
-  // mode: modeMap[apiCourse.mode || "Online"] || apiCourse.mode || "Online",
-  iswishlisted : apiCourse.isWishlisted,
-  // Kindergarten-specific fields with defaults
-  // ageGroup: "3 - 4 Yrs", // Default age group
-  // programDuration: "Academic Year", // Default program duration
-  priceRange: getPriceRange(price),
-  instituteType: "Kindergarten", // Default to Kindergarten
-  boardType: "CBSE", // Default board type for schools
 
-  // Graduation-specific fields with defaults
-  // graduationType: "Under Graduation", // Default graduation type
-  // streamType: "Engineering and Technology (B.E./B.Tech.)", // Default stream
-  // educationType: "Full time", // Default education type
-  // Store original API data for course details page
-  apiData: apiCourse,
-  rating: 0,
-  reviews: 0,
-  students: 0,
-  level: "",
-  mode: "",
-};
+  return {
+    id: apiCourse._id || "",
+    title: apiCourse.courseName || "Untitled Course",
+    institution: apiCourse.institutionDetails?.instituteName || "Unknown Institution",
+    image: apiCourse.imageUrl || "/course-placeholder.jpg",
+    // rating: apiCourse.rating || 4.5,
+    // reviews: apiCourse.reviews || 0,
+    // students: apiCourse.studentsEnrolled || 0,
+    price: price,
+    // level: "Lower kindergarten", // Default level if not provided
+    // mode: modeMap[apiCourse.mode || "Online"] || apiCourse.mode || "Online",
+    iswishlisted: apiCourse.isWishlisted,
+    // Kindergarten-specific fields with defaults
+    // ageGroup: "3 - 4 Yrs", // Default age group
+    // programDuration: "Academic Year", // Default program duration
+    priceRange: getPriceRange(price),
+    instituteType: "Kindergarten", // Default to Kindergarten
+    boardType: "CBSE", // Default board type for schools
+
+    // Graduation-specific fields with defaults
+    // graduationType: "Under Graduation", // Default graduation type
+    // streamType: "Engineering and Technology (B.E./B.Tech.)", // Default stream
+    // educationType: "Full time", // Default education type
+    // Store original API data for course details page
+    apiData: apiCourse,
+    rating: 0,
+    reviews: 0,
+    students: 0,
+    level: "",
+    mode: "",
+  };
 };
 
 const StudentDashboard: React.FC = () => {
   const searchParams = useSearchParams();
   const INSTITUTE_TO_CATEGORY: Record<string, string> = {
-  Kindergarten: "Kindergarten",
-  "School's": "School",
-  Intermediate: "Intermediate",
-  Graduation: "Graduation",
-  Coaching: "Upskilling",
-  "Exam Preparation": "Coaching",
-  "Tuition Center's": "Tuition Center",
-  "Study Abroad": "Study Abroad",
-};
-const instituteTypeFromURL = searchParams.get("instituteType");
+    Kindergarten: "Kindergarten",
+    "School's": "School",
+    Intermediate: "Intermediate",
+    Graduation: "Graduation",
+    Coaching: "Upskilling",
+    "Exam Preparation": "Coaching",
+    "Tuition Center's": "Tuition Center",
+    "Study Abroad": "Study Abroad",
+  };
+  const instituteTypeFromURL = searchParams.get("instituteType");
 
-const activeCategory = instituteTypeFromURL
-  ? INSTITUTE_TO_CATEGORY[instituteTypeFromURL] ?? null
-  : null;
+  const activeCategory = instituteTypeFromURL
+    ? INSTITUTE_TO_CATEGORY[instituteTypeFromURL] ?? null
+    : null;
 
 
 
@@ -137,70 +137,70 @@ const activeCategory = instituteTypeFromURL
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [activePane, setActivePane] = useState<"notifications" | "wishlist" | null>(null);
   const [isFilterBottomSheetOpen, setIsFilterBottomSheetOpen] = useState(false);
 
   const notificationsQuery = useNotifications();
   const notifications = notificationsQuery.data ?? [];
   const notificationsLoading = notificationsQuery.isLoading;
-  
-  
+
+
   const getFiltersFromURL = useCallback((): ActiveFilters => {
-  const filters: ActiveFilters = {};
+    const filters: ActiveFilters = {};
 
-  searchParams.forEach((value, key) => {
-    const values = value.includes(",") ? value.split(",") : [value];
+    searchParams.forEach((value, key) => {
+      const values = value.includes(",") ? value.split(",") : [value];
 
-    (filters as any)[key] = values.length === 1 ? values[0] : values;
-  });
+      (filters as any)[key] = values.length === 1 ? values[0] : values;
+    });
 
-  return filters;
-}, [searchParams]);
+    return filters;
+  }, [searchParams]);
 
 
-useEffect(() => {
-  const fetchFilteredCourses = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  useEffect(() => {
+    const fetchFilteredCourses = async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-      const filters = getFiltersFromURL();
+        const filters = getFiltersFromURL();
 
-      // If no filters → show all courses
-      if (Object.keys(filters).length === 0) {
-        setFilteredCourses(courses);
-        setDisplayedCourses(courses.slice(0, COURSES_PER_PAGE));
+        // If no filters → show all courses
+        if (Object.keys(filters).length === 0) {
+          setFilteredCourses(courses);
+          setDisplayedCourses(courses.slice(0, COURSES_PER_PAGE));
+          setCurrentPage(1);
+          return;
+        }
+
+        const response =
+          await studentDashboardAPI.filterInstitutionCourses(filters);
+
+        if (!response.success || !response.data) {
+          setFilteredCourses([]);
+          setDisplayedCourses([]);
+          return;
+        }
+
+        const transformed = (response.data as DashboardCourse[]).map(
+          transformApiCourse
+        );
+
+        setFilteredCourses(transformed);
+        setDisplayedCourses(transformed.slice(0, COURSES_PER_PAGE));
         setCurrentPage(1);
-        return;
+      } catch (err) {
+        console.error(err);
+        setError("Failed to apply filters");
+      } finally {
+        setLoading(false);
       }
+    };
 
-      const response =
-        await studentDashboardAPI.filterInstitutionCourses(filters);
-
-      if (!response.success || !response.data) {
-        setFilteredCourses([]);
-        setDisplayedCourses([]);
-        return;
-      }
-
-      const transformed = (response.data as DashboardCourse[]).map(
-        transformApiCourse
-      );
-
-      setFilteredCourses(transformed);
-      setDisplayedCourses(transformed.slice(0, COURSES_PER_PAGE));
-      setCurrentPage(1);
-    } catch (err) {
-      console.error(err);
-      setError("Failed to apply filters");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  fetchFilteredCourses();
-}, [searchParams, courses, getFiltersFromURL]);
+    fetchFilteredCourses();
+  }, [searchParams, courses, getFiltersFromURL]);
 
   useEffect(() => {
     const fetchCourses = async () => {
@@ -319,20 +319,23 @@ useEffect(() => {
     setActivePane(null);
   };
 
-  const handleViewCourseDetails = (courseId: string) => {
-    router.push(`/dashboard/${courseId}`);
+  const handleViewCourseDetails = (courseId: string, instituteType?: string) => {
+    const params = new URLSearchParams();
+    if (instituteType) params.set("instituteType", instituteType);
+    const qs = params.toString();
+    router.push(`/dashboard/${courseId}${qs ? `?${qs}` : ""}`);
   };
 
 
   const handleSearchChange = useCallback((value: string) => {
-  setSearchQuery(value);
+    setSearchQuery(value);
 
-  if (!value.trim()) {
-    setSearchResults(null);
-    setFilteredCourses(courses);
-    setDisplayedCourses(courses.slice(0, COURSES_PER_PAGE));
-  }
-}, [courses]);
+    if (!value.trim()) {
+      setSearchResults(null);
+      setFilteredCourses(courses);
+      setDisplayedCourses(courses.slice(0, COURSES_PER_PAGE));
+    }
+  }, [courses]);
 
 
   const handleSearchResults = useCallback(
@@ -355,12 +358,12 @@ useEffect(() => {
 
       const transformed = results.map(transformApiCourse);
 
-        setSearchResults(transformed);
-        setFilteredCourses(transformed);
-        setDisplayedCourses(transformed.slice(0, COURSES_PER_PAGE));
-      },
-      [courses]
-    );
+      setSearchResults(transformed);
+      setFilteredCourses(transformed);
+      setDisplayedCourses(transformed.slice(0, COURSES_PER_PAGE));
+    },
+    [courses]
+  );
 
 
   const handleCategorySelect = (categoryKey: string) => {
@@ -377,21 +380,21 @@ useEffect(() => {
 
   const handleWishlistToggle = (courseId: string) => {
 
-  const updatedCourses = courses.map((course) =>
-    course.id === courseId
-      ? { ...course, iswishlisted: !course.iswishlisted }
-      : course
-  );
-  setCourses(updatedCourses);
+    const updatedCourses = courses.map((course) =>
+      course.id === courseId
+        ? { ...course, iswishlisted: !course.iswishlisted }
+        : course
+    );
+    setCourses(updatedCourses);
 
-  // Update filtered list
-  const updatedFiltered = filteredCourses.map((course) =>
-    course.id === courseId
-      ? { ...course, iswishlisted: !course.iswishlisted }
-      : course
-  );
-  setFilteredCourses(updatedFiltered);
-};
+    // Update filtered list
+    const updatedFiltered = filteredCourses.map((course) =>
+      course.id === courseId
+        ? { ...course, iswishlisted: !course.iswishlisted }
+        : course
+    );
+    setFilteredCourses(updatedFiltered);
+  };
 
 
   useEffect(() => {
@@ -403,7 +406,7 @@ useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
-  
+
   const wishlistCourses = courses.filter((course) => course.iswishlisted);
 
   const handleFilterToggle = () => {
@@ -419,7 +422,7 @@ useEffect(() => {
 
   const shouldShowFooter = !isFilterBottomSheetOpen;
 
-    return (
+  return (
     <div className="w-full min-h-screen flex flex-col bg-white max-lg:pb-20">
       <StudentNavbar
         userName={user?.name || 'Student'}
@@ -576,7 +579,7 @@ useEffect(() => {
       ) : (
         <div className="flex flex-1 w-full relative ">
           <div className="hidden lg:block">
-          <FilterSidebar/>
+            <FilterSidebar />
           </div>
           <main className="flex-1 p-7 md:p-6 lg:p-8 overflow-y-auto">
             <section className="w-full">
@@ -612,7 +615,7 @@ useEffect(() => {
                           imageUrl: course.apiData?.imageUrl || '',
                         }}
                         onWishlistToggle={handleWishlistToggle}
-                        onViewDetails={handleViewCourseDetails}
+                        onViewDetails={(id) => handleViewCourseDetails(id, course.apiData?.institutionDetails?.instituteType)}
                       />
                     ))}
                   </div>
@@ -636,25 +639,25 @@ useEffect(() => {
 
       {isFilterBottomSheetOpen && (
         <>
-          <div className="fixed inset-0 bg-black/50 z-[998]" onClick={() => setIsFilterBottomSheetOpen(false)}/>
+          <div className="fixed inset-0 bg-black/50 z-[998]" onClick={() => setIsFilterBottomSheetOpen(false)} />
           <div className="fixed bottom-0 inset-x-0 bg-[#F5F6F9] rounded-t-3xl z-[999] max-h-[85vh] flex flex-col shadow-xl transition-transform duration-300 translate-y-0">
             <div className="flex justify-center py-3">
               <svg width="134" height="5" viewBox="0 0 134 5" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect width="134" height="5" rx="2.5" fill="#B0B1B3"/>
+                <rect width="134" height="5" rx="2.5" fill="#B0B1B3" />
               </svg>
             </div>
             <div className="flex items-center gap-3 px-6 py-4 border-b">
               <button className="bg-transparent border-0 text-[32px] leading-none cursor-pointer text-[#666] p-0 w-8 h-8 flex items-center justify-center mr-[10px] hover:text-[#222] transition-colors" onClick={() => setIsFilterBottomSheetOpen(false)} aria-label="Close filters">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M6.96939 12.531L14.4694 20.031C14.5391 20.1007 14.6218 20.156 14.7128 20.1937C14.8039 20.2314 14.9015 20.2508 15 20.2508C15.0986 20.2508 15.1961 20.2314 15.2872 20.1937C15.3782 20.156 15.461 20.1007 15.5306 20.031C15.6003 19.9614 15.6556 19.8786 15.6933 19.7876C15.731 19.6965 15.7504 19.599 15.7504 19.5004C15.7504 19.4019 15.731 19.3043 15.6933 19.2132C15.6556 19.1222 15.6003 19.0395 15.5306 18.9698L8.56032 12.0004L15.5306 5.03104C15.6714 4.89031 15.7504 4.69944 15.7504 4.50042C15.7504 4.30139 15.6714 4.11052 15.5306 3.96979C15.3899 3.82906 15.199 3.75 15 3.75C14.801 3.75 14.6101 3.82906 14.4694 3.96979L6.96939 11.4698C6.89965 11.5394 6.84433 11.6222 6.80659 11.7132C6.76885 11.8043 6.74942 11.9019 6.74942 12.0004C6.74942 12.099 6.76885 12.1966 6.80659 12.2876C6.84433 12.3787 6.89965 12.4614 6.96939 12.531Z" fill="#060B13"/>
+                  <path d="M6.96939 12.531L14.4694 20.031C14.5391 20.1007 14.6218 20.156 14.7128 20.1937C14.8039 20.2314 14.9015 20.2508 15 20.2508C15.0986 20.2508 15.1961 20.2314 15.2872 20.1937C15.3782 20.156 15.461 20.1007 15.5306 20.031C15.6003 19.9614 15.6556 19.8786 15.6933 19.7876C15.731 19.6965 15.7504 19.599 15.7504 19.5004C15.7504 19.4019 15.731 19.3043 15.6933 19.2132C15.6556 19.1222 15.6003 19.0395 15.5306 18.9698L8.56032 12.0004L15.5306 5.03104C15.6714 4.89031 15.7504 4.69944 15.7504 4.50042C15.7504 4.30139 15.6714 4.11052 15.5306 3.96979C15.3899 3.82906 15.199 3.75 15 3.75C14.801 3.75 14.6101 3.82906 14.4694 3.96979L6.96939 11.4698C6.89965 11.5394 6.84433 11.6222 6.80659 11.7132C6.76885 11.8043 6.74942 11.9019 6.74942 12.0004C6.74942 12.099 6.76885 12.1966 6.80659 12.2876C6.84433 12.3787 6.89965 12.4614 6.96939 12.531Z" fill="#060B13" />
                 </svg>
               </button>
               <h2 className="text-lg font-medium">Filter&apos;s</h2>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-4">
-              <FilterSidebar  />
+              <FilterSidebar />
             </div>
-            
+
           </div>
         </>
       )}

@@ -415,20 +415,90 @@ exports.getAllCoursesForInstitution = asyncHandler(async (req, res, next) => {
 
 exports.getCourseById = asyncHandler(async (req, res, next) => {
   const { courseId } = req.params;
-  const { institutionType, isInstitutionSide } = req.body;
+  // Support both body (POST from institution side) and query params (GET from student side)
+  const institutionType = req.body?.institutionType || req.query?.institutionType;
+  const isInstitutionSide = req.body?.isInstitutionSide || req.query?.isInstitutionSide;
   const userId = req.userId;
 
   console.log(`📘 [getCourseById] Request received for Course ID: ${courseId}`);
 
-  if (!institutionType || !COURSE_MODEL_MAP[institutionType]) {
-    return res.status(400).json({
+  let CourseModel = null;
+  let resolvedInstitutionType = institutionType;
+
+  // Map raw instituteType values to COURSE_MODEL_MAP keys
+  const INSTITUTION_TYPE_MAP = {
+    "Kindergarten/childcare center": "KINDERGARTEN",
+    "Kindergarten": "KINDERGARTEN",
+    "School's": "SCHOOL",
+    "Intermediate college(K12)": "INTERMEDIATE",
+    "Intermediate": "INTERMEDIATE",
+    "Under Graduation/Post Graduation": "UG_PG",
+    "Graduation": "UG_PG",
+    "Exam Preparation": "EXAM_PREP",
+    "Upskilling": "UPSKILLING",
+    "Coaching": "UPSKILLING",
+    "Tution Center's": "TUTION_CENTER",
+    "Tuition Center's": "TUTION_CENTER",
+    "Study Abroad": "STUDY_ABROAD",
+    "Study Hall's": "TUTION_CENTER",
+  };
+
+  // Resolve the mapped type for cache key purposes
+  if (institutionType) {
+    resolvedInstitutionType = INSTITUTION_TYPE_MAP[institutionType] || institutionType;
+  }
+
+  // 1️⃣ Always check the generic Course model first (dashboard courses live here)
+  try {
+    const found = await Course.findById(courseId).lean();
+    if (found) {
+      CourseModel = Course;
+      if (!resolvedInstitutionType) resolvedInstitutionType = "GENERIC";
+      console.log("✅ Found course in generic Course model");
+    }
+  } catch (e) {
+    // skip
+  }
+
+  // 2️⃣ If not in generic model, try the type-specific model (if institutionType was provided)
+  if (!CourseModel && resolvedInstitutionType && COURSE_MODEL_MAP[resolvedInstitutionType]) {
+    try {
+      const found = await COURSE_MODEL_MAP[resolvedInstitutionType].findById(courseId).lean();
+      if (found) {
+        CourseModel = COURSE_MODEL_MAP[resolvedInstitutionType];
+        console.log(`✅ Found course in ${resolvedInstitutionType} model`);
+      }
+    } catch (e) {
+      // skip
+    }
+  }
+
+  // 3️⃣ Last resort: search all type-specific models
+  if (!CourseModel) {
+    for (const [type, Model] of Object.entries(COURSE_MODEL_MAP)) {
+      try {
+        const found = await Model.findById(courseId).lean();
+        if (found) {
+          CourseModel = Model;
+          resolvedInstitutionType = type;
+          console.log(`✅ Found course in ${type} model`);
+          break;
+        }
+      } catch (e) {
+        // skip
+      }
+    }
+  }
+
+  if (!CourseModel) {
+    return res.status(404).json({
       success: false,
-      message: "Invalid institution type",
+      message: "Course not found",
+      data: null,
     });
   }
 
-  const CourseModel = COURSE_MODEL_MAP[institutionType];
-  const CACHE_KEY = `course:${institutionType}:${courseId}`; // include institutionType in cache key
+  const CACHE_KEY = `course:${resolvedInstitutionType}:${courseId}`; // include institutionType in cache key
 
   try {
     // 1️⃣ CHECK GLOBAL CACHE
@@ -459,7 +529,7 @@ exports.getCourseById = asyncHandler(async (req, res, next) => {
     // 2️⃣ FETCH COURSE DIRECTLY (no aggregation)
     console.log("⚙️ No cache — fetching course from DB");
 
-    const course = await CourseModel.findById(courseId).lean();
+    const course = await CourseModel.findById(courseId).populate('institution').lean();
 
     if (!course || course.status !== "Active") {
       return res.status(404).json({
@@ -469,10 +539,33 @@ exports.getCourseById = asyncHandler(async (req, res, next) => {
       });
     }
 
-    // Prepare final response
+    // Populate institution if it's still just an ObjectId
+    let institutionData = course.institution;
+    if (institutionData && typeof institutionData === 'string' || (institutionData && !institutionData.instituteName)) {
+      const instId = typeof institutionData === 'object' ? institutionData._id : institutionData;
+      institutionData = await Institution.findById(instId).lean();
+    }
+
+    // Check wishlist status for this user
+    let isWishlisted = false;
+    if (userId) {
+      try {
+        const Wishlist = mongoose.model('Wishlist');
+        const wishlistEntry = await Wishlist.findOne({ courseId: courseId, userId: userId }).lean();
+        isWishlisted = !!wishlistEntry;
+      } catch (e) {
+        // Wishlist model may not exist, skip
+      }
+    }
+
+    // Prepare final response matching what the frontend expects
     const finalResponse = {
-      course,
-      institution: course.institution ? course.institution : null,
+      success: true,
+      data: {
+        course,
+        institution: institutionData || null,
+        isWishlisted,
+      },
     };
 
     // 3️⃣ CACHE THE COURSE
@@ -480,11 +573,12 @@ exports.getCourseById = asyncHandler(async (req, res, next) => {
     console.log("🟢 Cached globally:", CACHE_KEY);
 
     // 4️⃣ UNIQUE VIEW TRACKING (skip if isInstitutionSide is true)
-    if (!isInstitutionSide && userId && course.institution) {
+    const instIdForTracking = institutionData?._id || course.institution?._id || course.institution;
+    if (!isInstitutionSide && userId && instIdForTracking) {
       await RedisUtil.trackUniqueCourseViewOrImpression(
         "viewCourse",
         courseId,
-        course.institution,
+        instIdForTracking,
         userId
       );
     }

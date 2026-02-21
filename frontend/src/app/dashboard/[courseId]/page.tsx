@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 // import CoursePage from "@/components/student/home/CoursePage";
 import InstituteCoursePage from "@/components/student/home/InstituteCoursePage";
 import HomeHeader from "@/components/student/home/HomeHeader";
@@ -15,6 +15,8 @@ const CourseDetailsPage: React.FC = () => {
   const router = useRouter();
   const { user } = useAuth();
   const courseId = params.courseId as string;
+  const searchParams = useSearchParams();
+  const instituteType = searchParams.get("instituteType") || undefined;
 
   const [courseData, setCourseData] = useState<coursePageData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,7 +35,7 @@ const CourseDetailsPage: React.FC = () => {
         setError(null);
 
         // Fetch all courses and find the specific one
-        const response = await studentDashboardAPI.getCoursebyId(courseId);
+        const response = await studentDashboardAPI.getCoursebyId(courseId, instituteType);
         if (!response.success || !response.data) {
           throw new Error(response.message || "Failed to fetch course details");
         }

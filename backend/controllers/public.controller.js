@@ -70,6 +70,7 @@ exports.getAllVisibleCourses = asyncHandler(async (req, res, next) => {
           "institutionDetails.instituteName": 1,
           "institutionDetails.logoUrl": 1,
           "institutionDetails.locationURL": 1,
+          "institutionDetails.instituteType": 1,
 
           isWishlisted: 1,
         },
